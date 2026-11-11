@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>{{LABEL}}</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>{{KAIROS_BIN}}</string>
+    <string>collect</string>
+  </array>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PATH</key>
+    <string>{{PATH}}</string>
+    <key>LANG</key>
+    <string>en_US.UTF-8</string>
+    <key>KAIROS_HOME</key>
+    <string>{{KAIROS_HOME}}</string>
+    <key>KAIROS_CLAUDE</key>
+    <string>{{CLAUDE}}</string>
+    <key>KAIROS_GH</key>
+    <string>{{GH}}</string>
+    <key>KAIROS_PLUGIN_DIR</key>
+    <string>{{PLUGIN_DIR}}</string>
+  </dict>
+  <key>StartCalendarInterval</key>
+  <array>
+    <dict><key>Minute</key><integer>0</integer></dict>
+    <dict><key>Minute</key><integer>3</integer></dict>
+    <dict><key>Minute</key><integer>6</integer></dict>
+    <dict><key>Minute</key><integer>9</integer></dict>
+    <dict><key>Minute</key><integer>12</integer></dict>
+    <dict><key>Minute</key><integer>15</integer></dict>
+    <dict><key>Minute</key><integer>18</integer></dict>
+    <dict><key>Minute</key><integer>21</integer></dict>
+    <dict><key>Minute</key><integer>24</integer></dict>
+    <dict><key>Minute</key><integer>27</integer></dict>
+    <dict><key>Minute</key><integer>30</integer></dict>
+    <dict><key>Minute</key><integer>33</integer></dict>
+    <dict><key>Minute</key><integer>36</integer></dict>
+    <dict><key>Minute</key><integer>39</integer></dict>
+    <dict><key>Minute</key><integer>42</integer></dict>
+    <dict><key>Minute</key><integer>45</integer></dict>
+    <dict><key>Minute</key><integer>48</integer></dict>
+    <dict><key>Minute</key><integer>51</integer></dict>
+    <dict><key>Minute</key><integer>54</integer></dict>
+    <dict><key>Minute</key><integer>57</integer></dict>
+  </array>
+  <key>Umask</key>
+  <integer>63</integer>
+  <key>RunAtLoad</key>
+  <false/>
+  <key>ProcessType</key>
+  <string>Background</string>
+  <key>StandardOutPath</key>
+  <string>{{LOG_DIR}}/collect.log</string>
+  <key>StandardErrorPath</key>
+  <string>{{LOG_DIR}}/collect.log</string>
+</dict>
+</plist>

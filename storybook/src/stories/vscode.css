@@ -1,0 +1,8 @@
+.vs-tree { width: 320px; font: 13px -apple-system, sans-serif; color: #ccc; background: #181818; padding: 6px 0; border: 1px solid #333 }
+.vs-title { font-size: 11px; letter-spacing: .05em; padding: 2px 10px 6px; color: #bbb }
+.vs-group { padding: 2px 10px; font-weight: 600 }
+.vs-row summary { list-style: none; padding: 2px 10px 2px 24px; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis }
+.vs-row summary:hover { background: #2a2d2e } .vs-desc { color: #888; font-size: 12px }
+.vs-menu { display: flex; flex-wrap: wrap; gap: 4px; padding: 4px 10px 6px 24px } .vs-menu span { border: 1px solid #444; border-radius: 3px; padding: 0 6px; font-size: 11px }
+.vs-empty { padding: 8px 10px; color: #888 }
+.sb-missing { width: 320px; padding: 12px; border: 1px dashed #888; font-size: 12px }

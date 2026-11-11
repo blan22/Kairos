@@ -1,0 +1,5 @@
+{
+  "name": "kairos",
+  "version": "0.3.0",
+  "description": "kairos의 지금 볼 일과 목록을 Claude Code에서 보고, 켠 동작만 처리한다. kairos mcp serve를 MCP 서버로 붙인다."
+}

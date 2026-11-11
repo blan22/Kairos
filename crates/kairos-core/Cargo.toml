@@ -1,0 +1,26 @@
+[package]
+name = "kairos-core"
+description = "kairos 도메인 어휘: 값 객체, 모델, 포트, JS 호환 유틸"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+chrono.workspace = true
+chrono-tz.workspace = true
+regex.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+
+[features]
+# 시험 빌드에서 설정 없이 읽는 프로필을 합성 프로필로 바꾼다. 배포 빌드에서는 켜지 않는다.
+test-profile = []
+
+[lints]
+workspace = true
+
+[dev-dependencies]
+chrono-tz.workspace = true

@@ -1,0 +1,29 @@
+[package]
+name = "kairos-sessions"
+description = "수락 세션: Orca, run 수명, 세션 프로필"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+kairos-agenda = { path = "../kairos-agenda" }
+kairos-core.workspace = true
+kairos-ledger = { path = "../kairos-ledger" }
+kairos-source-github = { path = "../kairos-source-github" }
+kairos-store.workspace = true
+libc.workspace = true
+regex.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+signal-hook.workspace = true
+uuid.workspace = true
+
+[dev-dependencies]
+kairos-core = { workspace = true, features = ["test-profile"] }
+tempfile.workspace = true
+
+[lints]
+workspace = true

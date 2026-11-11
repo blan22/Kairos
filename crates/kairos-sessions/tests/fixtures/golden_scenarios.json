@@ -1,0 +1,2183 @@
+{
+ "defaults": {
+  "reference find": {
+   "ok": {
+    "kind": "reference_matches",
+    "matches": [],
+    "truncated": false
+   }
+  },
+  "worktree create": {
+   "ok": {
+    "worktree": {
+     "id": "repo-synth::/synthetic/worktrees/t-1",
+     "identity": {
+      "key": "wt-synth-key"
+     },
+     "path": "/synthetic/worktrees/t-1",
+     "head": "abc123",
+     "branch": "synthetic"
+    }
+   }
+  },
+  "worktree show": {
+   "ok": {
+    "worktree": {
+     "id": "repo-synth::/synthetic/worktrees/t-1",
+     "identity": {
+      "key": "wt-synth-key"
+     },
+     "path": "/synthetic/worktrees/t-1",
+     "head": "abc123",
+     "branch": "synthetic"
+    }
+   }
+  },
+  "terminal create": {
+   "ok": {
+    "terminal": {
+     "handle": "term_made",
+     "tabId": "tab-synth",
+     "paneKey": "tab-synth:leaf-synth",
+     "worktreeId": "repo-synth::/synthetic/worktrees/t-1",
+     "surface": "background"
+    }
+   }
+  },
+  "terminal list": {
+   "ok": {
+    "terminals": [
+     {
+      "handle": "term_now",
+      "tabId": "tab-synth",
+      "leafId": "leaf-synth",
+      "connected": true,
+      "title": "합성 제목"
+     }
+    ],
+    "totalCount": 1,
+    "truncated": false
+   }
+  },
+  "worktree ps": {
+   "ok": {
+    "worktrees": [],
+    "truncated": false
+   }
+  },
+  "terminal switch": {
+   "ok": {
+    "focus": {
+     "handle": "term_now",
+     "tabId": "tab-synth"
+    }
+   }
+  }
+ },
+ "scenarios": [
+  {
+   "name": "정상 수명",
+   "steps": [
+    {
+     "op": "accept",
+     "id": 1,
+     "run": "00000000-0000-4000-8000-000000000001",
+     "at": 0
+    },
+    {
+     "op": "sync",
+     "at": 5000,
+     "orca": {
+      "worktree ps": {
+       "ok": {
+        "worktrees": [
+         {
+          "worktreeId": "repo-synth::/synthetic/worktrees/t-1",
+          "agents": [
+           {
+            "paneKey": "tab-synth:leaf-synth",
+            "state": "working"
+           }
+          ]
+         }
+        ],
+        "truncated": false
+       }
+      }
+     }
+    },
+    {
+     "op": "sync",
+     "at": 6000,
+     "orca": {
+      "worktree ps": {
+       "ok": {
+        "worktrees": [
+         {
+          "worktreeId": "repo-synth::/synthetic/worktrees/t-1",
+          "agents": [
+           {
+            "paneKey": "tab-synth:leaf-synth",
+            "state": "blocked"
+           }
+          ]
+         }
+        ],
+        "truncated": false
+       }
+      }
+     }
+    },
+    {
+     "op": "sync",
+     "at": 7000,
+     "orca": {
+      "worktree ps": {
+       "ok": {
+        "worktrees": [
+         {
+          "worktreeId": "repo-synth::/synthetic/worktrees/t-1",
+          "agents": [
+           {
+            "paneKey": "tab-synth:leaf-synth",
+            "state": "working"
+           }
+          ]
+         }
+        ],
+        "truncated": false
+       }
+      }
+     }
+    },
+    {
+     "op": "sync",
+     "at": 8000,
+     "orca": {
+      "worktree ps": {
+       "ok": {
+        "worktrees": [
+         {
+          "worktreeId": "repo-synth::/synthetic/worktrees/t-1",
+          "agents": [
+           {
+            "paneKey": "tab-synth:leaf-synth",
+            "state": "waiting"
+           }
+          ]
+         }
+        ],
+        "truncated": false
+       }
+      }
+     }
+    },
+    {
+     "op": "sync",
+     "at": 9000,
+     "orca": {
+      "worktree ps": {
+       "ok": {
+        "worktrees": [
+         {
+          "worktreeId": "repo-synth::/synthetic/worktrees/t-1",
+          "agents": [
+           {
+            "paneKey": "tab-synth:leaf-synth",
+            "state": "done"
+           }
+          ]
+         }
+        ],
+        "truncated": false
+       }
+      }
+     }
+    },
+    {
+     "op": "move",
+     "id": 1,
+     "at": 10000
+    },
+    {
+     "op": "cancel",
+     "id": 1,
+     "at": 11000
+    },
+    {
+     "op": "cancel",
+     "id": 1,
+     "at": 12000
+    },
+    {
+     "op": "cancel",
+     "id": 9,
+     "at": 12000
+    }
+   ]
+  },
+  {
+   "name": "경고",
+   "steps": [
+    {
+     "op": "accept",
+     "id": 1,
+     "run": "00000000-0000-4000-8000-000000000001",
+     "at": 0,
+     "orca": {
+      "worktree ps": {
+       "ok": {
+        "worktrees": [
+         {
+          "worktreeId": "repo-synth::/synthetic/worktrees/t-1",
+          "agents": [
+           {
+            "paneKey": "tab-synth:leaf-synth",
+            "state": "working"
+           },
+           {
+            "paneKey": "tab-other:leaf-1",
+            "state": "working"
+           },
+           {
+            "paneKey": "tab-other:leaf-2",
+            "state": "working"
+           },
+           {
+            "paneKey": "tab-other:leaf-3",
+            "state": "working"
+           },
+           {
+            "paneKey": "tab-other:leaf-4",
+            "state": "done"
+           }
+          ]
+         }
+        ],
+        "truncated": false
+       }
+      }
+     }
+    }
+   ]
+  },
+  {
+   "name": "재수락",
+   "steps": [
+    {
+     "op": "accept",
+     "id": 1,
+     "run": "00000000-0000-4000-8000-000000000001",
+     "at": 0
+    },
+    {
+     "op": "accept",
+     "id": 1,
+     "run": "00000000-0000-4000-8000-000000000002",
+     "at": 0
+    },
+    {
+     "op": "sync",
+     "at": 1000
+    }
+   ]
+  },
+  {
+   "name": "같은 이슈의 다른 항목",
+   "steps": [
+    {
+     "op": "accept",
+     "id": 1,
+     "run": "00000000-0000-4000-8000-000000000001",
+     "at": 0
+    },
+    {
+     "op": "sql",
+     "text": "INSERT INTO items (object_key, reason, tier, opened_at) SELECT object_key, 'assigned', 'P1', opened_at FROM items WHERE id = 1"
+    },
+    {
+     "op": "accept",
+     "id": 2,
+     "run": "00000000-0000-4000-8000-000000000002",
+     "at": 0
+    },
+    {
+     "op": "move",
+     "id": 2,
+     "at": 0
+    }
+   ]
+  },
+  {
+   "name": "기존 세션",
+   "steps": [
+    {
+     "op": "accept",
+     "id": 1,
+     "run": "00000000-0000-4000-8000-000000000001",
+     "at": 0,
+     "orca": {
+      "reference find": {
+       "ok": {
+        "matches": [
+         {
+          "workspace": {
+           "id": "repo-synth::/synthetic/worktrees/t-1",
+           "name": "synthetic"
+          },
+          "agents": [
+           {
+            "agent": "claude",
+            "liveness": "exited",
+            "paneKey": "tab-old:leaf-old",
+            "linked": true
+           },
+           {
+            "agent": "claude",
+            "liveness": "live",
+            "paneKey": "tab-un:leaf-un",
+            "terminal": "term_un"
+           },
+           {
+            "agent": "claude",
+            "liveness": "live",
+            "paneKey": "tab-synth:leaf-synth",
+            "terminal": "term_live",
+            "linked": true
+           }
+          ]
+         }
+        ]
+       }
+      }
+     }
+    },
+    {
+     "op": "move",
+     "id": 1,
+     "at": 100
+    },
+    {
+     "op": "sync",
+     "at": 1000,
+     "orca": {
+      "worktree ps": {
+       "ok": {
+        "worktrees": [
+         {
+          "worktreeId": "repo-synth::/synthetic/worktrees/t-1",
+          "agents": [
+           {
+            "paneKey": "tab-synth:leaf-synth",
+            "state": "working"
+           }
+          ]
+         }
+        ],
+        "truncated": false
+       }
+      }
+     }
+    },
+    {
+     "op": "sync",
+     "at": 2000,
+     "orca": {
+      "worktree ps": {
+       "ok": {
+        "worktrees": [],
+        "truncated": false
+       }
+      }
+     }
+    }
+   ]
+  },
+  {
+   "name": "터미널 응답 잃음 제목",
+   "steps": [
+    {
+     "op": "accept",
+     "id": 1,
+     "run": "00000000-0000-4000-8000-000000000001",
+     "at": 0,
+     "orca": {
+      "terminal create": "lost",
+      "terminal list": {
+       "ok": {
+        "terminals": [],
+        "visualLayouts": [
+         {
+          "worktreeId": "repo-synth::/synthetic/worktrees/t-1",
+          "root": {
+           "type": "split",
+           "first": {
+            "type": "group",
+            "tabs": [
+             {
+              "tabId": "tab-a",
+              "title": "다른 탭",
+              "panes": {
+               "type": "pane",
+               "handle": "term_x",
+               "tabId": "tab-a",
+               "leafId": "leaf-a"
+              }
+             }
+            ]
+           },
+           "second": {
+            "type": "group",
+            "tabs": [
+             {
+              "tabId": "tab-synth",
+              "title": "kairos-00000000",
+              "panes": {
+               "type": "pane-split",
+               "first": {
+                "type": "pane",
+                "handle": "term_found",
+                "leafId": "leaf-synth"
+               },
+               "second": {
+                "type": "pane",
+                "handle": "term_y",
+                "tabId": "tab-synth",
+                "leafId": "leaf-y"
+               }
+              }
+             }
+            ]
+           }
+          }
+         }
+        ]
+       }
+      }
+     }
+    }
+   ]
+  },
+  {
+   "name": "터미널 응답 잃음 ps",
+   "steps": [
+    {
+     "op": "accept",
+     "id": 1,
+     "run": "00000000-0000-4000-8000-000000000001",
+     "at": 0,
+     "orca": {
+      "terminal create": "lost",
+      "terminal list": {
+       "ok": {
+        "terminals": []
+       }
+      },
+      "worktree ps": {
+       "ok": {
+        "worktrees": [
+         {
+          "worktreeId": "repo-synth::/synthetic/worktrees/t-1",
+          "agents": [
+           {
+            "paneKey": "tab-synth:leaf-synth",
+            "state": "working"
+           }
+          ]
+         }
+        ],
+        "truncated": false
+       }
+      }
+     }
+    },
+    {
+     "op": "sync",
+     "at": 1000
+    }
+   ]
+  },
+  {
+   "name": "터미널 깨진 응답",
+   "steps": [
+    {
+     "op": "accept",
+     "id": 1,
+     "run": "00000000-0000-4000-8000-000000000001",
+     "at": 0,
+     "orca": {
+      "terminal create": {
+       "ok": {
+        "terminal": {
+         "handle": "--bad"
+        }
+       }
+      },
+      "terminal list": {
+       "ok": {
+        "terminals": []
+       }
+      }
+     }
+    },
+    {
+     "op": "sync",
+     "at": 1000,
+     "orca": {
+      "terminal list": {
+       "ok": {
+        "terminals": [],
+        "visualLayouts": [
+         {
+          "worktreeId": "repo-synth::/synthetic/worktrees/t-1",
+          "root": {
+           "type": "split",
+           "first": {
+            "type": "group",
+            "tabs": [
+             {
+              "tabId": "tab-a",
+              "title": "다른 탭",
+              "panes": {
+               "type": "pane",
+               "handle": "term_x",
+               "tabId": "tab-a",
+               "leafId": "leaf-a"
+              }
+             }
+            ]
+           },
+           "second": {
+            "type": "group",
+            "tabs": [
+             {
+              "tabId": "tab-synth",
+              "title": "kairos-00000000",
+              "panes": {
+               "type": "pane-split",
+               "first": {
+                "type": "pane",
+                "handle": "term_found",
+                "leafId": "leaf-synth"
+               },
+               "second": {
+                "type": "pane",
+                "handle": "term_y",
+                "tabId": "tab-synth",
+                "leafId": "leaf-y"
+               }
+              }
+             }
+            ]
+           }
+          }
+         }
+        ]
+       }
+      },
+      "worktree ps": {
+       "ok": {
+        "worktrees": [
+         {
+          "worktreeId": "repo-synth::/synthetic/worktrees/t-1",
+          "agents": [
+           {
+            "paneKey": "tab-synth:leaf-synth",
+            "state": "working"
+           }
+          ]
+         }
+        ],
+        "truncated": false
+       }
+      }
+     }
+    }
+   ]
+  },
+  {
+   "name": "늦게 뜬 세션",
+   "steps": [
+    {
+     "op": "accept",
+     "id": 1,
+     "run": "00000000-0000-4000-8000-000000000001",
+     "at": 0,
+     "orca": {
+      "terminal create": "lost",
+      "terminal list": {
+       "ok": {
+        "terminals": []
+       }
+      }
+     }
+    },
+    {
+     "op": "sync",
+     "at": 10000,
+     "orca": {
+      "terminal list": {
+       "ok": {
+        "terminals": [],
+        "visualLayouts": [
+         {
+          "worktreeId": "repo-synth::/synthetic/worktrees/t-1",
+          "root": {
+           "type": "split",
+           "first": {
+            "type": "group",
+            "tabs": [
+             {
+              "tabId": "tab-a",
+              "title": "다른 탭",
+              "panes": {
+               "type": "pane",
+               "handle": "term_x",
+               "tabId": "tab-a",
+               "leafId": "leaf-a"
+              }
+             }
+            ]
+           },
+           "second": {
+            "type": "group",
+            "tabs": [
+             {
+              "tabId": "tab-synth",
+              "title": "kairos-00000000",
+              "panes": {
+               "type": "pane-split",
+               "first": {
+                "type": "pane",
+                "handle": "term_found",
+                "leafId": "leaf-synth"
+               },
+               "second": {
+                "type": "pane",
+                "handle": "term_y",
+                "tabId": "tab-synth",
+                "leafId": "leaf-y"
+               }
+              }
+             }
+            ]
+           }
+          }
+         }
+        ]
+       }
+      },
+      "worktree ps": {
+       "ok": {
+        "worktrees": [
+         {
+          "worktreeId": "repo-synth::/synthetic/worktrees/t-1",
+          "agents": [
+           {
+            "paneKey": "tab-synth:leaf-synth",
+            "state": "working"
+           }
+          ]
+         }
+        ],
+        "truncated": false
+       }
+      }
+     }
+    }
+   ]
+  },
+  {
+   "name": "세션 분실",
+   "steps": [
+    {
+     "op": "accept",
+     "id": 1,
+     "run": "00000000-0000-4000-8000-000000000001",
+     "at": 0,
+     "orca": {
+      "terminal create": "lost",
+      "terminal list": {
+       "ok": {
+        "terminals": []
+       }
+      }
+     }
+    },
+    {
+     "op": "sync",
+     "at": 299999
+    },
+    {
+     "op": "sync",
+     "at": 300000
+    },
+    {
+     "op": "accept",
+     "id": 1,
+     "run": "00000000-0000-4000-8000-000000000002",
+     "at": 300001,
+     "orca": {
+      "terminal create": {
+       "ok": {
+        "terminal": {
+         "handle": "term_made",
+         "tabId": "tab-synth",
+         "paneKey": "tab-synth:leaf-synth",
+         "worktreeId": "repo-synth::/synthetic/worktrees/t-1",
+         "surface": "background"
+        }
+       }
+      }
+     }
+    }
+   ]
+  },
+  {
+   "name": "터미널 거절",
+   "steps": [
+    {
+     "op": "accept",
+     "id": 1,
+     "run": "00000000-0000-4000-8000-000000000001",
+     "at": 0,
+     "orca": {
+      "terminal create": {
+       "refused": "runtime_unavailable"
+      },
+      "terminal list": {
+       "ok": {
+        "terminals": []
+       }
+      }
+     }
+    },
+    {
+     "op": "accept",
+     "id": 1,
+     "run": "00000000-0000-4000-8000-000000000002",
+     "at": 0,
+     "orca": {
+      "terminal create": {
+       "ok": {
+        "terminal": {
+         "handle": "term_made",
+         "tabId": "tab-synth",
+         "paneKey": "tab-synth:leaf-synth",
+         "worktreeId": "repo-synth::/synthetic/worktrees/t-1",
+         "surface": "background"
+        }
+       }
+      },
+      "terminal list": {
+       "ok": {
+        "terminals": [
+         {
+          "handle": "term_now",
+          "tabId": "tab-synth",
+          "leafId": "leaf-synth",
+          "connected": true,
+          "title": "합성 제목"
+         }
+        ],
+        "totalCount": 1,
+        "truncated": false
+       }
+      }
+     }
+    }
+   ]
+  },
+  {
+   "name": "터미널 missing 찾음",
+   "steps": [
+    {
+     "op": "accept",
+     "id": 1,
+     "run": "00000000-0000-4000-8000-000000000001",
+     "at": 0,
+     "orca": {
+      "terminal create": "missing",
+      "terminal list": {
+       "ok": {
+        "visualLayouts": [
+         {
+          "worktreeId": "repo-synth::/synthetic/worktrees/t-1",
+          "root": {
+           "type": "split",
+           "first": {
+            "type": "group",
+            "tabs": [
+             {
+              "tabId": "tab-a",
+              "title": "다른 탭",
+              "panes": {
+               "type": "pane",
+               "handle": "term_x",
+               "tabId": "tab-a",
+               "leafId": "leaf-a"
+              }
+             }
+            ]
+           },
+           "second": {
+            "type": "group",
+            "tabs": [
+             {
+              "tabId": "tab-synth",
+              "title": "kairos-00000000",
+              "panes": {
+               "type": "pane-split",
+               "first": {
+                "type": "pane",
+                "handle": "term_found",
+                "leafId": "leaf-synth"
+               },
+               "second": {
+                "type": "pane",
+                "handle": "term_y",
+                "tabId": "tab-synth",
+                "leafId": "leaf-y"
+               }
+              }
+             }
+            ]
+           }
+          }
+         }
+        ]
+       }
+      }
+     }
+    }
+   ]
+  },
+  {
+   "name": "reference 실패",
+   "steps": [
+    {
+     "op": "accept",
+     "id": 1,
+     "run": "00000000-0000-4000-8000-000000000001",
+     "at": 0,
+     "orca": {
+      "reference find": "lost"
+     }
+    },
+    {
+     "op": "accept",
+     "id": 1,
+     "run": "00000000-0000-4000-8000-000000000002",
+     "at": 0,
+     "orca": {
+      "reference find": "missing"
+     }
+    },
+    {
+     "op": "accept",
+     "id": 1,
+     "run": "00000000-0000-4000-8000-000000000003",
+     "at": 0,
+     "orca": {
+      "reference find": {
+       "refused": "x"
+      }
+     }
+    }
+   ]
+  },
+  {
+   "name": "worktree 거절",
+   "steps": [
+    {
+     "op": "accept",
+     "id": 1,
+     "run": "00000000-0000-4000-8000-000000000001",
+     "at": 0,
+     "orca": {
+      "worktree create": {
+       "refused": "selector_not_found"
+      }
+     }
+    }
+   ]
+  },
+  {
+   "name": "worktree missing",
+   "steps": [
+    {
+     "op": "accept",
+     "id": 1,
+     "run": "00000000-0000-4000-8000-000000000001",
+     "at": 0,
+     "orca": {
+      "worktree create": "missing"
+     }
+    }
+   ]
+  },
+  {
+   "name": "worktree 응답 잃고 찾음",
+   "steps": [
+    {
+     "op": "accept",
+     "id": 1,
+     "run": "00000000-0000-4000-8000-000000000001",
+     "at": 0,
+     "orca": {
+      "worktree create": "lost",
+      "reference find": [
+       {
+        "ok": {
+         "matches": []
+        }
+       },
+       {
+        "ok": {
+         "matches": [
+          {
+           "workspace": {
+            "id": "repo-synth::/synthetic/worktrees/t-1",
+            "name": "t-00000000"
+           },
+           "agents": []
+          }
+         ]
+        }
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "name": "worktree 응답 잃고 못 찾음",
+   "steps": [
+    {
+     "op": "accept",
+     "id": 1,
+     "run": "00000000-0000-4000-8000-000000000001",
+     "at": 0,
+     "orca": {
+      "worktree create": "lost"
+     }
+    }
+   ]
+  },
+  {
+   "name": "worktree 모양 다름",
+   "steps": [
+    {
+     "op": "accept",
+     "id": 1,
+     "run": "00000000-0000-4000-8000-000000000001",
+     "at": 0,
+     "orca": {
+      "worktree create": {
+       "ok": {
+        "worktree": {
+         "id": "a\u0007b"
+        }
+       }
+      }
+     }
+    }
+   ]
+  },
+  {
+   "name": "선택자 id",
+   "steps": [
+    {
+     "op": "accept",
+     "id": 1,
+     "run": "00000000-0000-4000-8000-000000000001",
+     "at": 0,
+     "orca": {
+      "worktree create": {
+       "ok": {
+        "worktree": {
+         "id": "repo-synth::/synthetic/worktrees/t-1"
+        }
+       }
+      },
+      "worktree show": {
+       "ok": {
+        "worktree": {
+         "id": "repo-synth::/synthetic/worktrees/t-1",
+         "identity": {
+          "key": "a\nb"
+         },
+         "path": "/p",
+         "head": "h"
+        }
+       }
+      }
+     }
+    },
+    {
+     "op": "move",
+     "id": 1,
+     "at": 0
+    }
+   ]
+  },
+  {
+   "name": "체크아웃 실패",
+   "steps": [
+    {
+     "op": "accept",
+     "id": 1,
+     "run": "00000000-0000-4000-8000-000000000001",
+     "at": 0,
+     "orca": {
+      "worktree show": {
+       "refused": "selector_not_found"
+      }
+     }
+    },
+    {
+     "op": "accept",
+     "id": 1,
+     "run": "00000000-0000-4000-8000-000000000002",
+     "at": 0,
+     "orca": {
+      "worktree show": {
+       "ok": {
+        "worktree": {
+         "id": "repo-synth::/synthetic/worktrees/t-1",
+         "path": "/synthetic"
+        }
+       }
+      }
+     }
+    }
+   ]
+  },
+  {
+   "name": "잠금",
+   "steps": [
+    {
+     "op": "accept",
+     "id": 1,
+     "run": "00000000-0000-4000-8000-000000000001",
+     "at": 0,
+     "refusal": {
+      "status": "not_eligible",
+      "message": "차단 시험 전"
+     }
+    },
+    {
+     "op": "accept",
+     "id": 1,
+     "run": "00000000-0000-4000-8000-000000000001",
+     "at": 0,
+     "refusal": {
+      "status": "gate_closed",
+      "message": "표시 꺼짐"
+     }
+    },
+    {
+     "op": "accept",
+     "id": 9,
+     "run": "00000000-0000-4000-8000-000000000001",
+     "at": 0,
+     "refusal": {
+      "status": "gate_closed",
+      "message": "표시 꺼짐"
+     }
+    }
+   ]
+  },
+  {
+   "name": "대상 아님",
+   "steps": [
+    {
+     "op": "sql",
+     "text": "UPDATE objects SET trust_tier = 'T3'"
+    },
+    {
+     "op": "accept",
+     "id": 1,
+     "run": "00000000-0000-4000-8000-000000000001",
+     "at": 0
+    },
+    {
+     "op": "sql",
+     "text": "UPDATE objects SET trust_tier = 'T1', permalink = 'https://github.com/acme/widget/issues/1'"
+    },
+    {
+     "op": "accept",
+     "id": 1,
+     "run": "00000000-0000-4000-8000-000000000001",
+     "at": 0
+    },
+    {
+     "op": "sql",
+     "text": "UPDATE objects SET permalink = 'https://github.com/contoso/atlas/issues/1; rm -rf ~'"
+    },
+    {
+     "op": "accept",
+     "id": 1,
+     "run": "00000000-0000-4000-8000-000000000001",
+     "at": 0
+    },
+    {
+     "op": "sql",
+     "text": "UPDATE objects SET permalink = NULL"
+    },
+    {
+     "op": "accept",
+     "id": 1,
+     "run": "00000000-0000-4000-8000-000000000001",
+     "at": 0
+    }
+   ]
+  },
+  {
+   "name": "항목 상태",
+   "steps": [
+    {
+     "op": "accept",
+     "id": 9,
+     "run": "00000000-0000-4000-8000-000000000001",
+     "at": 0
+    },
+    {
+     "op": "sql",
+     "text": "UPDATE items SET state = 'parked', park_trigger = 'kept' WHERE id = 1"
+    },
+    {
+     "op": "accept",
+     "id": 1,
+     "run": "00000000-0000-4000-8000-000000000001",
+     "at": 0
+    },
+    {
+     "op": "cancel",
+     "id": 1,
+     "at": 0
+    },
+    {
+     "op": "sql",
+     "text": "UPDATE items SET state = 'closed', park_trigger = NULL, closed_at = 'x', close_reason = 'user_done' WHERE id = 1"
+    },
+    {
+     "op": "accept",
+     "id": 1,
+     "run": "00000000-0000-4000-8000-000000000001",
+     "at": 0
+    },
+    {
+     "op": "cancel",
+     "id": 1,
+     "at": 0
+    }
+   ]
+  },
+  {
+   "name": "끝난 세션의 재수락",
+   "steps": [
+    {
+     "op": "accept",
+     "id": 1,
+     "run": "00000000-0000-4000-8000-000000000001",
+     "at": 0
+    },
+    {
+     "op": "sql",
+     "text": "UPDATE runs SET state = 'ended', ended_at = 'x'"
+    },
+    {
+     "op": "accept",
+     "id": 1,
+     "run": "00000000-0000-4000-8000-000000000002",
+     "at": 0
+    },
+    {
+     "op": "move",
+     "id": 1,
+     "at": 0
+    }
+   ]
+  },
+  {
+   "name": "수락 도중 취소 worktree 전",
+   "steps": [
+    {
+     "op": "accept",
+     "id": 1,
+     "run": "00000000-0000-4000-8000-000000000001",
+     "at": 0,
+     "during": {
+      "command": "reference find",
+      "op": "cancel"
+     }
+    }
+   ]
+  },
+  {
+   "name": "수락 도중 취소 터미널 전",
+   "steps": [
+    {
+     "op": "accept",
+     "id": 1,
+     "run": "00000000-0000-4000-8000-000000000001",
+     "at": 0,
+     "during": {
+      "command": "worktree show",
+      "op": "cancel"
+     }
+    }
+   ]
+  },
+  {
+   "name": "수락 도중 취소 터미널 뒤",
+   "steps": [
+    {
+     "op": "accept",
+     "id": 1,
+     "run": "00000000-0000-4000-8000-000000000001",
+     "at": 0,
+     "during": {
+      "command": "terminal create",
+      "op": "cancel"
+     }
+    },
+    {
+     "op": "sync",
+     "at": 1000
+    }
+   ]
+  },
+  {
+   "name": "수락 도중 끝",
+   "steps": [
+    {
+     "op": "accept",
+     "id": 1,
+     "run": "00000000-0000-4000-8000-000000000001",
+     "at": 0,
+     "during": {
+      "command": "worktree show",
+      "op": "close"
+     }
+    }
+   ]
+  },
+  {
+   "name": "확인 필요 전환",
+   "steps": [
+    {
+     "op": "accept",
+     "id": 1,
+     "run": "00000000-0000-4000-8000-000000000001",
+     "at": 0
+    },
+    {
+     "op": "sync",
+     "at": 29999
+    },
+    {
+     "op": "sync",
+     "at": 30000
+    },
+    {
+     "op": "sync",
+     "at": 31000,
+     "orca": {
+      "worktree ps": {
+       "ok": {
+        "worktrees": [
+         {
+          "worktreeId": "repo-synth::/synthetic/worktrees/t-1",
+          "agents": [
+           {
+            "paneKey": "tab-synth:leaf-synth",
+            "state": "done"
+           }
+          ]
+         }
+        ],
+        "truncated": false
+       }
+      }
+     }
+    }
+   ]
+  },
+  {
+   "name": "잘린 ps",
+   "steps": [
+    {
+     "op": "accept",
+     "id": 1,
+     "run": "00000000-0000-4000-8000-000000000001",
+     "at": 0
+    },
+    {
+     "op": "sync",
+     "at": 60000,
+     "orca": {
+      "worktree ps": "lost"
+     }
+    },
+    {
+     "op": "sync",
+     "at": 90000,
+     "orca": {
+      "worktree ps": {
+       "ok": {
+        "worktrees": [],
+        "truncated": true
+       }
+      }
+     }
+    }
+   ]
+  },
+  {
+   "name": "본 뒤 사라짐",
+   "steps": [
+    {
+     "op": "accept",
+     "id": 1,
+     "run": "00000000-0000-4000-8000-000000000001",
+     "at": 0
+    },
+    {
+     "op": "sync",
+     "at": 1000,
+     "orca": {
+      "worktree ps": {
+       "ok": {
+        "worktrees": [
+         {
+          "worktreeId": "repo-synth::/synthetic/worktrees/t-1",
+          "agents": [
+           {
+            "paneKey": "tab-synth:leaf-synth",
+            "state": "working"
+           }
+          ]
+         }
+        ],
+        "truncated": false
+       }
+      }
+     }
+    },
+    {
+     "op": "sync",
+     "at": 2000,
+     "orca": {
+      "worktree ps": {
+       "ok": {
+        "worktrees": [],
+        "truncated": false
+       }
+      }
+     }
+    },
+    {
+     "op": "sync",
+     "at": 3000,
+     "orca": {
+      "terminal list": {
+       "ok": {
+        "terminals": [
+         {
+          "handle": "term_now",
+          "tabId": "tab-synth",
+          "leafId": "leaf-synth",
+          "connected": false,
+          "title": "합성 제목"
+         }
+        ]
+       }
+      }
+     }
+    }
+   ]
+  },
+  {
+   "name": "worktree 지워짐",
+   "steps": [
+    {
+     "op": "accept",
+     "id": 1,
+     "run": "00000000-0000-4000-8000-000000000001",
+     "at": 0
+    },
+    {
+     "op": "sync",
+     "at": 1000,
+     "orca": {
+      "worktree ps": {
+       "ok": {
+        "worktrees": [
+         {
+          "worktreeId": "repo-synth::/synthetic/worktrees/t-1",
+          "agents": [
+           {
+            "paneKey": "tab-synth:leaf-synth",
+            "state": "working"
+           }
+          ]
+         }
+        ],
+        "truncated": false
+       }
+      }
+     }
+    },
+    {
+     "op": "sync",
+     "at": 2000,
+     "orca": {
+      "worktree ps": {
+       "ok": {
+        "worktrees": [],
+        "truncated": false
+       }
+      },
+      "terminal list": {
+       "refused": "selector_not_found"
+      }
+     }
+    }
+   ]
+  },
+  {
+   "name": "터미널 조회 실패",
+   "steps": [
+    {
+     "op": "accept",
+     "id": 1,
+     "run": "00000000-0000-4000-8000-000000000001",
+     "at": 0
+    },
+    {
+     "op": "sync",
+     "at": 1000,
+     "orca": {
+      "worktree ps": {
+       "ok": {
+        "worktrees": [
+         {
+          "worktreeId": "repo-synth::/synthetic/worktrees/t-1",
+          "agents": [
+           {
+            "paneKey": "tab-synth:leaf-synth",
+            "state": "working"
+           }
+          ]
+         }
+        ],
+        "truncated": false
+       }
+      }
+     }
+    },
+    {
+     "op": "sync",
+     "at": 2000,
+     "orca": {
+      "worktree ps": {
+       "ok": {
+        "worktrees": [],
+        "truncated": false
+       }
+      },
+      "terminal list": {
+       "refused": "other"
+      }
+     }
+    },
+    {
+     "op": "sync",
+     "at": 3000,
+     "orca": {
+      "terminal list": "lost"
+     }
+    }
+   ]
+  },
+  {
+   "name": "선점만 남음",
+   "steps": [
+    {
+     "op": "sql",
+     "text": "UPDATE items SET state = 'accepted' WHERE id = 1; INSERT INTO runs (id, item_id, state, playbook, created_at) VALUES ('00000000-0000-4000-8000-000000000001', 1, 'claimed', 'qa_issue', '2026-03-02T01:00:00.000Z')"
+    },
+    {
+     "op": "sync",
+     "at": 299999
+    },
+    {
+     "op": "sync",
+     "at": 300000
+    }
+   ]
+  },
+  {
+   "name": "이동 실패",
+   "steps": [
+    {
+     "op": "move",
+     "id": 9,
+     "at": 0
+    },
+    {
+     "op": "move",
+     "id": 1,
+     "at": 0
+    },
+    {
+     "op": "accept",
+     "id": 1,
+     "run": "00000000-0000-4000-8000-000000000001",
+     "at": 0
+    },
+    {
+     "op": "move",
+     "id": 1,
+     "at": 0,
+     "orca": {
+      "terminal list": {
+       "ok": {
+        "terminals": []
+       }
+      }
+     }
+    },
+    {
+     "op": "move",
+     "id": 1,
+     "at": 0,
+     "orca": {
+      "terminal list": {
+       "ok": {
+        "terminals": [
+         {
+          "handle": "--evil handle",
+          "tabId": "tab-synth",
+          "leafId": "leaf-synth",
+          "connected": true,
+          "title": "합성 제목"
+         }
+        ]
+       }
+      }
+     }
+    },
+    {
+     "op": "move",
+     "id": 1,
+     "at": 0,
+     "orca": {
+      "terminal list": {
+       "ok": {
+        "terminals": [
+         {
+          "handle": "term_now",
+          "tabId": "tab-synth",
+          "leafId": "leaf-synth",
+          "connected": true,
+          "title": "합성 제목"
+         }
+        ]
+       }
+      },
+      "terminal switch": {
+       "ok": {
+        "focus": {
+         "navigated": false
+        }
+       }
+      }
+     }
+    },
+    {
+     "op": "move",
+     "id": 1,
+     "at": 0,
+     "orca": {
+      "terminal switch": {
+       "refused": "x"
+      }
+     }
+    },
+    {
+     "op": "move",
+     "id": 1,
+     "at": 0,
+     "orca": {
+      "terminal switch": "lost"
+     }
+    },
+    {
+     "op": "move",
+     "id": 1,
+     "at": 0,
+     "orca": {
+      "terminal switch": "missing"
+     }
+    },
+    {
+     "op": "move",
+     "id": 1,
+     "at": 0,
+     "orca": {
+      "terminal list": "lost"
+     }
+    }
+   ]
+  },
+  {
+   "name": "이동 pane 없음",
+   "steps": [
+    {
+     "op": "accept",
+     "id": 1,
+     "run": "00000000-0000-4000-8000-000000000001",
+     "at": 0,
+     "orca": {
+      "terminal create": {
+       "ok": {
+        "terminal": {
+         "handle": "term_only"
+        }
+       }
+      }
+     }
+    },
+    {
+     "op": "move",
+     "id": 1,
+     "at": 0
+    }
+   ]
+  },
+  {
+   "name": "kairos-run 정상",
+   "steps": [
+    {
+     "op": "accept",
+     "id": 1,
+     "run": "00000000-0000-4000-8000-000000000001",
+     "at": 0
+    },
+    {
+     "op": "run",
+     "argv": [
+      "00000000-0000-4000-8000-000000000001"
+     ],
+     "exit": 0,
+     "claude": "/synthetic/claude",
+     "at": 0
+    },
+    {
+     "op": "run",
+     "argv": [
+      "00000000-0000-4000-8000-000000000001"
+     ],
+     "exit": 0,
+     "claude": "/synthetic/claude",
+     "at": 0
+    },
+    {
+     "op": "sync",
+     "at": 1000,
+     "orca": {
+      "worktree ps": {
+       "ok": {
+        "worktrees": [
+         {
+          "worktreeId": "repo-synth::/synthetic/worktrees/t-1",
+          "agents": [
+           {
+            "paneKey": "tab-synth:leaf-synth",
+            "state": "working"
+           }
+          ]
+         }
+        ],
+        "truncated": false
+       }
+      }
+     }
+    }
+   ]
+  },
+  {
+   "name": "kairos-run 보이기 전 실패",
+   "steps": [
+    {
+     "op": "accept",
+     "id": 1,
+     "run": "00000000-0000-4000-8000-000000000001",
+     "at": 0
+    },
+    {
+     "op": "run",
+     "argv": [
+      "00000000-0000-4000-8000-000000000001"
+     ],
+     "exit": 1,
+     "claude": "/synthetic/claude",
+     "at": 0
+    }
+   ]
+  },
+  {
+   "name": "kairos-run 127",
+   "steps": [
+    {
+     "op": "accept",
+     "id": 1,
+     "run": "00000000-0000-4000-8000-000000000001",
+     "at": 0
+    },
+    {
+     "op": "run",
+     "argv": [
+      "00000000-0000-4000-8000-000000000001"
+     ],
+     "exit": 127,
+     "claude": "/synthetic/claude",
+     "at": 0
+    }
+   ]
+  },
+  {
+   "name": "kairos-run 본 뒤 실패",
+   "steps": [
+    {
+     "op": "accept",
+     "id": 1,
+     "run": "00000000-0000-4000-8000-000000000001",
+     "at": 0
+    },
+    {
+     "op": "sync",
+     "at": 1000,
+     "orca": {
+      "worktree ps": {
+       "ok": {
+        "worktrees": [
+         {
+          "worktreeId": "repo-synth::/synthetic/worktrees/t-1",
+          "agents": [
+           {
+            "paneKey": "tab-synth:leaf-synth",
+            "state": "working"
+           }
+          ]
+         }
+        ],
+        "truncated": false
+       }
+      }
+     }
+    },
+    {
+     "op": "run",
+     "argv": [
+      "00000000-0000-4000-8000-000000000001"
+     ],
+     "exit": 1,
+     "claude": "/synthetic/claude",
+     "at": 0
+    }
+   ]
+  },
+  {
+   "name": "kairos-run claude 없음",
+   "steps": [
+    {
+     "op": "accept",
+     "id": 1,
+     "run": "00000000-0000-4000-8000-000000000001",
+     "at": 0
+    },
+    {
+     "op": "run",
+     "argv": [
+      "00000000-0000-4000-8000-000000000001"
+     ],
+     "exit": 0,
+     "claude": null,
+     "at": 0
+    }
+   ]
+  },
+  {
+   "name": "kairos-run 거절",
+   "steps": [
+    {
+     "op": "run",
+     "argv": [],
+     "exit": 0,
+     "claude": "/synthetic/claude",
+     "at": 0
+    },
+    {
+     "op": "run",
+     "argv": [
+      "bad"
+     ],
+     "exit": 0,
+     "claude": "/synthetic/claude",
+     "at": 0
+    },
+    {
+     "op": "run",
+     "argv": [
+      "00000000-0000-4000-8000-000000000001",
+      "extra"
+     ],
+     "exit": 0,
+     "claude": "/synthetic/claude",
+     "at": 0
+    },
+    {
+     "op": "run",
+     "argv": [
+      "00000000-0000-4000-8000-000000000002"
+     ],
+     "exit": 0,
+     "claude": "/synthetic/claude",
+     "at": 0
+    },
+    {
+     "op": "accept",
+     "id": 1,
+     "run": "00000000-0000-4000-8000-000000000001",
+     "at": 0
+    },
+    {
+     "op": "sql",
+     "text": "UPDATE objects SET trust_tier = 'T3'"
+    },
+    {
+     "op": "run",
+     "argv": [
+      "00000000-0000-4000-8000-000000000001"
+     ],
+     "exit": 0,
+     "claude": "/synthetic/claude",
+     "at": 0
+    }
+   ]
+  },
+  {
+   "name": "확인 필요 뒤 kairos-run 끝",
+   "steps": [
+    {
+     "op": "accept",
+     "id": 1,
+     "run": "00000000-0000-4000-8000-000000000001",
+     "at": 0
+    },
+    {
+     "op": "sync",
+     "at": 30000
+    },
+    {
+     "op": "run",
+     "argv": [
+      "00000000-0000-4000-8000-000000000001"
+     ],
+     "exit": 0,
+     "claude": "/synthetic/claude",
+     "at": 31000
+    }
+   ]
+  },
+  {
+   "name": "확인 필요 뒤 kairos-run 실패",
+   "steps": [
+    {
+     "op": "accept",
+     "id": 1,
+     "run": "00000000-0000-4000-8000-000000000001",
+     "at": 0
+    },
+    {
+     "op": "sync",
+     "at": 30000
+    },
+    {
+     "op": "run",
+     "argv": [
+      "00000000-0000-4000-8000-000000000001"
+     ],
+     "exit": 1,
+     "claude": "/synthetic/claude",
+     "at": 31000
+    }
+   ]
+  },
+  {
+   "name": "확인 필요 뒤 다시 확인",
+   "steps": [
+    {
+     "op": "accept",
+     "id": 1,
+     "run": "00000000-0000-4000-8000-000000000001",
+     "at": 0,
+     "orca": {
+      "terminal create": "lost",
+      "terminal list": {
+       "ok": {
+        "terminals": []
+       }
+      }
+     }
+    },
+    {
+     "op": "sync",
+     "at": 30000
+    },
+    {
+     "op": "sync",
+     "at": 40000
+    }
+   ]
+  },
+  {
+   "name": "준비됨 뒤 끝",
+   "steps": [
+    {
+     "op": "accept",
+     "id": 1,
+     "run": "00000000-0000-4000-8000-000000000001",
+     "at": 0
+    },
+    {
+     "op": "sync",
+     "at": 1000,
+     "orca": {
+      "worktree ps": {
+       "ok": {
+        "worktrees": [
+         {
+          "worktreeId": "repo-synth::/synthetic/worktrees/t-1",
+          "agents": [
+           {
+            "paneKey": "tab-synth:leaf-synth",
+            "state": "done"
+           }
+          ]
+         }
+        ],
+        "truncated": false
+       }
+      }
+     }
+    },
+    {
+     "op": "sync",
+     "at": 2000,
+     "orca": {
+      "worktree ps": {
+       "ok": {
+        "worktrees": [],
+        "truncated": false
+       }
+      },
+      "terminal list": {
+       "ok": {
+        "terminals": []
+       }
+      }
+     }
+    }
+   ]
+  },
+  {
+   "name": "늦은 terminal list 뒤 pane 없음",
+   "steps": [
+    {
+     "op": "accept",
+     "id": 1,
+     "run": "00000000-0000-4000-8000-000000000001",
+     "at": 0,
+     "orca": {
+      "terminal create": {
+       "ok": {
+        "terminal": {
+         "handle": "term_only"
+        }
+       }
+      }
+     }
+    },
+    {
+     "op": "sync",
+     "at": 1000,
+     "orca": {
+      "terminal list": {
+       "ok": {
+        "terminals": []
+       }
+      },
+      "worktree ps": {
+       "ok": {
+        "worktrees": [],
+        "truncated": false
+       }
+      }
+     }
+    },
+    {
+     "op": "sync",
+     "at": 31000,
+     "orca": {
+      "terminal list": {
+       "ok": {
+        "terminals": []
+       }
+      }
+     }
+    }
+   ]
+  },
+  {
+   "name": "선점과 끝",
+   "steps": [
+    {
+     "op": "accept",
+     "id": 1,
+     "run": "00000000-0000-4000-8000-000000000001",
+     "at": 0
+    },
+    {
+     "op": "claim",
+     "run": "00000000-0000-4000-8000-000000000001",
+     "at": 0
+    },
+    {
+     "op": "claim",
+     "run": "00000000-0000-4000-8000-000000000001",
+     "at": 0
+    },
+    {
+     "op": "finish",
+     "run": "00000000-0000-4000-8000-000000000001",
+     "exit": 0,
+     "at": 0
+    },
+    {
+     "op": "finish",
+     "run": "00000000-0000-4000-8000-000000000001",
+     "exit": 0,
+     "at": 100
+    },
+    {
+     "op": "claim",
+     "run": "00000000-0000-4000-8000-000000000002",
+     "at": 0
+    }
+   ]
+  },
+  {
+   "name": "끝 실패 코드",
+   "steps": [
+    {
+     "op": "accept",
+     "id": 1,
+     "run": "00000000-0000-4000-8000-000000000001",
+     "at": 0
+    },
+    {
+     "op": "claim",
+     "run": "00000000-0000-4000-8000-000000000001",
+     "at": 0
+    },
+    {
+     "op": "finish",
+     "run": "00000000-0000-4000-8000-000000000001",
+     "exit": 9,
+     "at": 0
+    }
+   ]
+  },
+  {
+   "name": "취소한 run의 선점",
+   "steps": [
+    {
+     "op": "accept",
+     "id": 1,
+     "run": "00000000-0000-4000-8000-000000000001",
+     "at": 0
+    },
+    {
+     "op": "cancel",
+     "id": 1,
+     "at": 0
+    },
+    {
+     "op": "claim",
+     "run": "00000000-0000-4000-8000-000000000001",
+     "at": 0
+    }
+   ]
+  },
+  {
+   "name": "닫힌 항목의 선점",
+   "steps": [
+    {
+     "op": "accept",
+     "id": 1,
+     "run": "00000000-0000-4000-8000-000000000001",
+     "at": 0
+    },
+    {
+     "op": "sql",
+     "text": "UPDATE items SET state = 'closed', closed_at = 'x', close_reason = 'user_done' WHERE id = 1"
+    },
+    {
+     "op": "claim",
+     "run": "00000000-0000-4000-8000-000000000001",
+     "at": 0
+    }
+   ]
+  },
+  {
+   "name": "프로필",
+   "steps": [
+    {
+     "op": "command",
+     "claude": "/synthetic/claude",
+     "run": "00000000-0000-4000-8000-000000000001",
+     "url": "https://github.com/contoso/atlas/issues/1"
+    },
+    {
+     "op": "command",
+     "claude": "/opt/it's here/claude",
+     "run": "00000000-0000-4000-8000-000000000002",
+     "url": "https://github.com/contoso/atlas-specs/pull/22"
+    },
+    {
+     "op": "command",
+     "claude": "/c",
+     "run": "bad",
+     "url": "https://github.com/contoso/atlas/issues/1"
+    },
+    {
+     "op": "command",
+     "claude": "/c",
+     "run": "00000000-0000-4000-8000-000000000001",
+     "url": "https://github.com/acme/x/issues/1"
+    },
+    {
+     "op": "command",
+     "claude": "/c",
+     "run": "00000000-0000-4000-8000-000000000001",
+     "url": "https://github.com/contoso/atlas/issues/1\n무시"
+    }
+   ]
+  }
+ ]
+}

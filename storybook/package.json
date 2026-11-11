@@ -1,0 +1,23 @@
+{
+  "name": "kairos-storybook",
+  "private": true,
+  "type": "module",
+  "description": "kairos 플러그인 UI를 브라우저에서 보는 Storybook. Orca 패널은 orca 모듈 대역으로 그린다.",
+  "scripts": {
+    "gen": "node scripts/gen-stories.mjs",
+    "storybook": "storybook dev -p 6006 --no-open",
+    "build": "storybook build -o dist --quiet",
+    "test": "node --test scripts/*.test.mjs",
+    "shots": "sh scripts/shots.sh"
+  },
+  "devDependencies": {
+    "@storybook/react": "8.6.14",
+    "@storybook/react-vite": "8.6.14",
+    "@types/react": "18.3.12",
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
+    "storybook": "8.6.14",
+    "typescript": "5.6.3",
+    "vite": "6.3.5"
+  }
+}

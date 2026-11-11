@@ -1,0 +1,42 @@
+[workspace]
+resolver = "3"
+members = ["crates/*"]
+
+[workspace.package]
+version = "0.2.0"
+edition = "2024"
+rust-version = "1.99"
+publish = false
+license = "MIT"
+repository = "https://github.com/blan22/Kairos"
+
+[workspace.dependencies]
+kairos-core = { path = "crates/kairos-core" }
+kairos-store = { path = "crates/kairos-store" }
+kairos-config = { path = "crates/kairos-config" }
+chrono = { version = "0.4", default-features = false, features = ["std", "clock"] }
+chrono-tz = "0.10"
+fancy-regex = "0.20"
+libc = "0.2"
+regex = "1"
+rusqlite = { version = "0.41", features = ["bundled"] }
+serde = { version = "1", features = ["derive"] }
+toml = "1"
+serde_json = { version = "1", features = ["preserve_order", "float_roundtrip"] }
+sha2 = "0.10"
+signal-hook = "0.3"
+tempfile = "3"
+uuid = { version = "1", features = ["v4"] }
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+
+[workspace.lints.clippy]
+unwrap_used = "warn"
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+codegen-units = 4
+panic = "unwind"
+strip = "symbols"

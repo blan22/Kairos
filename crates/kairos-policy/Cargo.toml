@@ -1,0 +1,23 @@
+[package]
+name = "kairos-policy"
+description = "판단 규칙: 등급, 종료, 배포 연결, 근무 시간과 예산"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+kairos-core.workspace = true
+regex.workspace = true
+serde.workspace = true
+# 배포 연결이 `String.prototype.normalize('NFC')`를 쓴다. 표준 라이브러리에 없다.
+unicode-normalization = "0.1"
+
+[dev-dependencies]
+kairos-core = { workspace = true, features = ["test-profile"] }
+tempfile.workspace = true
+
+[lints]
+workspace = true

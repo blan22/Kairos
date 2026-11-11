@@ -1,0 +1,27 @@
+{
+  "accessRole": "reader",
+  "summary": "합성 팀 캘린더",
+  "timeZone": "Asia/Seoul",
+  "events": [
+    {
+      "id": "syntheticdeploy1",
+      "status": "confirmed",
+      "summary": "[배포] 합성 기능 고도화",
+      "description": "<개선 사항> 저장되면 안 되는 배포 설명",
+      "htmlLink": "https://www.google.com/calendar/event?eid=dGVhbQ",
+      "transparency": "transparent",
+      "availability": "AVAILABILITY_FREE",
+      "start": { "date": "2026-03-04T00:00:00Z" },
+      "end": { "date": "2026-03-05T00:00:00Z" },
+      "organizer": { "displayName": "합성 팀 캘린더", "email": "team@group.calendar.google.com", "self": true }
+    },
+    {
+      "id": "syntheticnotdeploy",
+      "status": "confirmed",
+      "summary": "합성 일반 일정",
+      "description": "[배포] 관련 메모일 뿐이다",
+      "start": { "date": "2026-03-04T00:00:00Z" },
+      "end": { "date": "2026-03-05T00:00:00Z" }
+    }
+  ]
+}

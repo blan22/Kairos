@@ -1,0 +1,25 @@
+{
+  "accessRole": "reader",
+  "summary": "대한민국의 휴일",
+  "timeZone": "Asia/Seoul",
+  "events": [
+    {
+      "id": "20260303_synthetic_public",
+      "status": "confirmed",
+      "summary": "합성 공휴일",
+      "description": "공휴일",
+      "transparency": "transparent",
+      "start": { "date": "2026-03-03T00:00:00Z" },
+      "end": { "date": "2026-03-04T00:00:00Z" }
+    },
+    {
+      "id": "20260306_synthetic_observance",
+      "status": "confirmed",
+      "summary": "합성 기념일",
+      "description": "기념일\n기념일을 숨기려면 설정으로 이동하세요.",
+      "transparency": "transparent",
+      "start": { "date": "2026-03-06T00:00:00Z" },
+      "end": { "date": "2026-03-07T00:00:00Z" }
+    }
+  ]
+}

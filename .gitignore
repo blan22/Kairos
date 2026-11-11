@@ -1,0 +1,30 @@
+.codex/
+.omc/
+target/
+node_modules/
+
+# 개인 값과 로컬 설정. 저장소에 올리지 않는다.
+.personal-patterns*
+profiles/**/*.toml*
+CLAUDE.local.md
+.claude/settings.local.json
+.claude/scheduled_tasks.lock
+.env
+.env.*
+*.local.json
+*.log
+.DS_Store
+
+# 편집기 임시 파일과 사본. 무시한 파일의 사본(.personal-patterns.bak 등)이 올라가지 않게 한다.
+*.swp
+*.swo
+*~
+*.bak
+*.orig
+
+# 스토리북 캡처(shots.sh). 합성 시나리오지만 이미지는 개인 값 검사가 읽지 못한다.
+storybook/public/shots/*.png
+
+# graft's local graph cache — regenerable, not committed (run `graft build`).
+/graft/
+.playwright-mcp/

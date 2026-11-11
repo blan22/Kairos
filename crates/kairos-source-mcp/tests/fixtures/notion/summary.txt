@@ -1,0 +1,17 @@
+| 새로운 소식 확인하기 ͏ ͏ ͏ ͏ ͏ |
+| | Contoso |
+## 합성 주간 요약
+합성 워크스페이스의 지난주 활동입니다.
+| Notion으로 이동하기 →[](https://mg.mail.notion.com/c/synthetic-top) |
+Contoso에서 합성 목록 페이지
+[| || 📝 | 합성 추천 제목 저장금지 || | 합성 부제 |](https://mg.mail.notion.com/c/synthetic-l1)
+[| || | 합성 추천 제목 저장금지 || | 합성 부제 |](https://mg.mail.notion.com/c/synthetic-l2)
+홍길동 외 2명 업데이트함
+[| || | 합성 페이지 제목 S |](https://mg.mail.notion.com/c/synthetic-s)
+| | 김철수 이 페이지 페이지를 편집했습니다.[](https://mg.mail.notion.com/c/synthetic-s1) |
+[| | || | 합성 미리보기 저장금지 |](https://mg.mail.notion.com/c/synthetic-s2)
+[| | 합성 미리보기 둘째 저장금지 |](https://mg.mail.notion.com/c/synthetic-s3)
+[| | 합성 미리보기 셋째 저장금지 |](https://mg.mail.notion.com/c/synthetic-s4)
+[합성 내용 저장금지](https://mg.mail.notion.com/c/synthetic-s5)
+Notion
+[Notion.com](https://mg.mail.notion.com/c/synthetic-site) - 문서, 프로젝트, 위키를 위한

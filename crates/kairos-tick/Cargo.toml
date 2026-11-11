@@ -1,0 +1,31 @@
+[package]
+name = "kairos-tick"
+description = "수집 틱의 지휘: 잠금, 수집 모드, 소스 등록, 건강 진단"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+kairos-agenda = { path = "../kairos-agenda" }
+kairos-core.workspace = true
+kairos-ledger = { path = "../kairos-ledger" }
+kairos-ops = { path = "../kairos-ops" }
+kairos-policy = { path = "../kairos-policy" }
+kairos-source-github = { path = "../kairos-source-github" }
+kairos-source-mcp = { path = "../kairos-source-mcp" }
+kairos-store.workspace = true
+rustix = { version = "1", features = ["process"] }
+serde.workspace = true
+serde_json.workspace = true
+signal-hook.workspace = true
+
+[dev-dependencies]
+kairos-core = { workspace = true, features = ["test-profile"] }
+tempfile.workspace = true
+rusqlite.workspace = true
+
+[lints]
+workspace = true

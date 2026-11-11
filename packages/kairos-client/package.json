@@ -1,0 +1,10 @@
+{
+  "name": "@kairos/client",
+  "version": "0.3.0",
+  "private": true,
+  "description": "kairos 표시면 계약 클라이언트. 호스트(VS Code, Claude Code 등)가 kairos 실행 파일을 부르고 응답을 검사한다.",
+  "type": "module",
+  "exports": { ".": "./src/index.ts" },
+  "scripts": { "test": "node --test src/*.test.ts" },
+  "engines": { "node": ">=22.6" }
+}

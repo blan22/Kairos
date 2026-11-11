@@ -1,0 +1,33 @@
+[package]
+name = "kairos-cli"
+description = "kairos, kairos-run 실행 파일과 조립"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+kairos-agenda = { path = "../kairos-agenda" }
+kairos-config.workspace = true
+kairos-core.workspace = true
+kairos-ledger = { path = "../kairos-ledger" }
+kairos-ops = { path = "../kairos-ops" }
+kairos-policy = { path = "../kairos-policy" }
+kairos-sessions = { path = "../kairos-sessions" }
+kairos-source-github = { path = "../kairos-source-github" }
+kairos-source-mcp = { path = "../kairos-source-mcp" }
+kairos-store.workspace = true
+kairos-tick = { path = "../kairos-tick" }
+regex.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+
+[dev-dependencies]
+kairos-core = { workspace = true, features = ["test-profile"] }
+tempfile.workspace = true
+
+[lints]
+workspace = true

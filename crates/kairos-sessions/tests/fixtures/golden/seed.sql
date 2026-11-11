@@ -1,0 +1,9 @@
+INSERT INTO source_run VALUES(1,'slack','tick','2026-03-01T01:00:00.000Z','2026-03-01T01:00:00.000Z','ok',1,NULL,0,NULL,NULL,NULL,NULL);
+INSERT INTO source_run VALUES(2,'github','tick','2026-03-01T01:00:00.000Z','2026-03-01T01:00:00.000Z','ok',1,NULL,0,NULL,NULL,NULL,NULL);
+INSERT INTO source_run VALUES(3,'github','tick','2026-03-02T01:00:00.000Z','2026-03-02T01:00:00.000Z','ok',1,NULL,0,NULL,NULL,NULL,NULL);
+INSERT INTO source_run VALUES(4,'github','tick','2026-03-02T01:00:00.000Z','2026-03-02T01:00:00.000Z','ok',1,NULL,0,NULL,NULL,NULL,NULL);
+INSERT INTO cursor VALUES('slack','tick','2026-03-01T01:00:00.000Z',300,'2026-03-01T01:00:00.000Z','2026-03-01T01:00:00.000Z',NULL);
+INSERT INTO cursor VALUES('github','tick','2026-03-02T01:00:00.000Z',300,'2026-03-01T01:00:00.000Z','2026-03-01T01:00:00.000Z',NULL);
+INSERT INTO objects VALUES('gh:acme/widget#1','github','tick','issue','1','a9a8c548fe666273bd3c23c11fbe9e1a089f09c54910701e2c461991bc7af263','https://github.com/contoso/atlas/issues/1',NULL,NULL,NULL,'합성 이슈 1','T1',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'open',NULL,1,0,NULL,NULL,NULL,NULL,NULL,0,'2026-03-02T01:00:00.000Z',3,0);
+INSERT INTO events VALUES(1,'gh:comment:c1','github','gh:acme/widget#1','gh:acme/widget#1','gh_comment','synthetic-teammate','human',0,0,'2026-03-02T01:00:00.000Z','2026-03-02T01:00:00.000Z',4,0,0,NULL,NULL,NULL,'T1','opened','p2.owned_comment',NULL,NULL,NULL,1);
+INSERT INTO items VALUES(1,'gh:acme/widget#1','reply_owed','P2','open',0,'github',NULL,NULL,'gh:comment:c1','2026-03-02T01:00:00.000Z',NULL,NULL,0,0,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,0,NULL);

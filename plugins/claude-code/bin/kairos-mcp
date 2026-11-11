@@ -1,0 +1,15 @@
+#!/bin/sh
+# kairos mcp serve를 띄운다. 실행 파일은 설치본의 current 링크만 쓴다(환경 변수로 바꾸지 않는다).
+# 본인 소유가 아니거나 다른 사용자가 고칠 수 있으면 띄우지 않는다.
+kairos="$HOME/Library/Application Support/kairos/current/bin/kairos"
+if [ ! -x "$kairos" ]; then
+  echo "kairos가 설치되지 않았습니다. kairos install --apply를 실행하세요" >&2
+  exit 1
+fi
+owner=$(/usr/bin/stat -L -f '%u' "$kairos")
+mode=$(/usr/bin/stat -L -f '%Lp' "$kairos")
+if [ "$owner" != "$(/usr/bin/id -u)" ] || [ $(( 0$mode & 022 )) -ne 0 ]; then
+  echo "kairos 실행 파일의 소유자나 권한이 맞지 않습니다" >&2
+  exit 1
+fi
+exec "$kairos" mcp serve

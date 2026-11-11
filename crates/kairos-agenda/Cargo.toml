@@ -1,0 +1,29 @@
+[package]
+name = "kairos-agenda"
+description = "항목, 표시 게이트, 카드와 알림"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+kairos-config.workspace = true
+kairos-core.workspace = true
+kairos-ledger = { path = "../kairos-ledger" }
+kairos-policy = { path = "../kairos-policy" }
+kairos-store.workspace = true
+regex.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+uuid.workspace = true
+
+[dev-dependencies]
+kairos-core = { workspace = true, features = ["test-profile"] }
+# 시험이 한 번만 실패하는 SQL 함수를 등록한다. 운영 빌드에는 들어가지 않는다.
+rusqlite = { workspace = true, features = ["functions"] }
+tempfile.workspace = true
+
+[lints]
+workspace = true

@@ -1,0 +1,36 @@
+| 새로운 소식 확인하기 ͏ ͏ ͏ ͏ ͏ |
+| | Contoso |
+# Contoso에 새 업데이트
+내 워크스페이스에서 8페이지의 변경 사항을 검토합니다.
+| Notion으로 이동하기 →[](https://mg.mail.notion.com/c/synthetic-top) |
+[| || 📝 | 합성 페이지 제목 A |](https://mg.mail.notion.com/c/synthetic-a)
+| Y | 홍길동 이 페이지 블록에서 댓글을 남겼습니다.[](https://mg.mail.notion.com/c/synthetic-a1) |
+| | 홍길동 합성 댓글 내용 저장금지[](https://mg.mail.notion.com/c/synthetic-a2) 홍길동 다음 댓글[](https://mg.mail.notion.com/c/synthetic-a3) |
+| | 신규 | |
+[홍길동합성 세부 내용 저장금지](https://mg.mail.notion.com/c/synthetic-a4)
+[| || | 합성 페이지 제목 B |](https://mg.mail.notion.com/c/synthetic-b)
+| | 김철수 이 페이지 페이지를 편집했습니다.[](https://mg.mail.notion.com/c/synthetic-b1) |
+| | * 합성 내용 준서님 확인 예정.[](https://mg.mail.notion.com/c/synthetic-b2) * 다른 항목[](https://mg.mail.notion.com/c/synthetic-b3) |
+[| | 합성 페이지 제목 C |](https://mg.mail.notion.com/c/synthetic-c)
+| K | 이영희, 최민수님 이 페이지페이지에서 나를 멘션했습니다.[](https://mg.mail.notion.com/c/synthetic-c1) |
+[| | || | 담당자 || || __SELF_NAME__ |](https://mg.mail.notion.com/c/synthetic-c2)
+[| || 🧪 | 합성 페이지 제목 D |](https://mg.mail.notion.com/c/synthetic-d)
+| | 이영희, __SELF_NAME__님 이 페이지 블록에서 댓글을 남겼습니다.[](https://mg.mail.notion.com/c/synthetic-d1) |
+| | __SELF_NAME__ 내가 쓴 합성 댓글[](https://mg.mail.notion.com/c/synthetic-d2) 이영희 합성 답글[](https://mg.mail.notion.com/c/synthetic-d3) |
+[| || | 합성 페이지 제목 E |](https://mg.mail.notion.com/c/synthetic-e)
+| | __SELF_NAME__ 이 페이지 블록에서 댓글을 남겼습니다.[](https://mg.mail.notion.com/c/synthetic-e1) |
+| | __SELF_NAME__ 혼자 남긴 합성 메모[](https://mg.mail.notion.com/c/synthetic-e2) |
+[| || | 합성 페이지 제목 F |](https://mg.mail.notion.com/c/synthetic-f)
+| | 김철수 이 페이지 페이지를 편집했습니다.[](https://mg.mail.notion.com/c/synthetic-f1) |
+| | * 기준서 개정과 표준서 초안[](https://mg.mail.notion.com/c/synthetic-f2) |
+[| || | 합성 페이지 제목 G |](https://mg.mail.notion.com/c/synthetic-g)
+| | 홍길동 이 페이지페이지에서 나를 멘션했습니다.[](https://mg.mail.notion.com/c/synthetic-g1) |
+[| | || | 합성 미리보기 저장금지 || || 합성 값 |](https://mg.mail.notion.com/c/synthetic-g2)
+| | 김철수 이 페이지 블록에서 댓글을 남겼습니다.[](https://mg.mail.notion.com/c/synthetic-g3) |
+| | 김철수 합성 답글 저장금지[](https://mg.mail.notion.com/c/synthetic-g4) |
+[| || | 합성 페이지 제목 H |](https://mg.mail.notion.com/c/synthetic-h)
+| | 홍길동 이 페이지에 처음 보는 동작을 했습니다.[](https://mg.mail.notion.com/c/synthetic-h1) |
+Notion
+[Notion.com](https://mg.mail.notion.com/c/synthetic-site) - 문서, 프로젝트, 위키를 위한
+커넥티드 워크스페이스
+[이메일 설정 업데이트](https://mg.mail.notion.com/c/synthetic-settings)

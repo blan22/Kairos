@@ -1,0 +1,779 @@
+{
+ "parseReply": [
+  "",
+  "{",
+  "null",
+  "[]",
+  "1",
+  "true",
+  "\"x\"",
+  "{\"ok\":true}",
+  "{\"ok\":true,\"result\":[]}",
+  "{\"ok\":true,\"result\":null}",
+  "{\"ok\":1,\"result\":{}}",
+  "{\"ok\":true,\"result\":{\"a\":\"b\"}}\n",
+  " {\"ok\":true,\"result\":{}} ",
+  "{\"ok\":false}",
+  "{\"ok\":false,\"error\":null}",
+  "{\"ok\":false,\"error\":{\"code\":\"\"}}",
+  "{\"ok\":false,\"error\":{\"code\":7}}",
+  "{\"ok\":false,\"error\":{\"code\":\"selector_not_found\"}}",
+  "{\"ok\":false,\"result\":{}}",
+  "{\"ok\":\"true\",\"result\":{}}",
+  "{\"result\":{}}",
+  "{\"ok\":true,\"ok\":false}",
+  "{\"ok\":false,\"ok\":true,\"result\":{}}",
+  "﻿{\"ok\":true,\"result\":{}}"
+ ],
+ "readWorktree": [
+  {},
+  {
+   "worktree": null
+  },
+  {
+   "worktree": []
+  },
+  {
+   "worktree": {}
+  },
+  {
+   "worktree": {
+    "id": ""
+   }
+  },
+  {
+   "worktree": {
+    "id": 5
+   }
+  },
+  {
+   "worktree": {
+    "id": "a\u0000b"
+   }
+  },
+  {
+   "worktree": {
+    "id": "ab"
+   }
+  },
+  {
+   "worktree": {
+    "id": "ab"
+   }
+  },
+  {
+   "worktree": {
+    "id": "a b"
+   }
+  },
+  {
+   "worktree": {
+    "id": "w"
+   }
+  },
+  {
+   "worktree": {
+    "id": "w",
+    "identity": {}
+   }
+  },
+  {
+   "worktree": {
+    "id": "w",
+    "identity": {
+     "key": ""
+    }
+   }
+  },
+  {
+   "worktree": {
+    "id": "w",
+    "identity": {
+     "key": "k"
+    },
+    "path": "/p",
+    "head": "h"
+   }
+  },
+  {
+   "worktree": {
+    "id": "w",
+    "identity": {
+     "key": "k\n"
+    },
+    "path": "",
+    "head": 7
+   }
+  },
+  {
+   "worktree": {
+    "id": "w",
+    "identity": "k"
+   }
+  },
+  {
+   "worktree": {
+    "id": "한글 id",
+    "identity": {
+     "key": "한글"
+    },
+    "path": "/한글",
+    "head": "h"
+   }
+  }
+ ],
+ "readCreatedTerminal": [
+  {},
+  {
+   "terminal": null
+  },
+  {
+   "terminal": {}
+  },
+  {
+   "terminal": {
+    "handle": ""
+   }
+  },
+  {
+   "terminal": {
+    "handle": "-x"
+   }
+  },
+  {
+   "terminal": {
+    "handle": "a b"
+   }
+  },
+  {
+   "terminal": {
+    "handle": "term\n"
+   }
+  },
+  {
+   "terminal": {
+    "handle": "한글"
+   }
+  },
+  {
+   "terminal": {
+    "handle": "a_b:c.d-e"
+   }
+  },
+  {
+   "terminal": {
+    "handle": "a",
+    "paneKey": ""
+   }
+  },
+  {
+   "terminal": {
+    "handle": "a",
+    "paneKey": "t:l"
+   }
+  },
+  {
+   "terminal": {
+    "handle": "_a"
+   }
+  },
+  {
+   "terminal": {
+    "handle": 7
+   }
+  }
+ ],
+ "findLiveAgent": [
+  {},
+  {
+   "matches": null
+  },
+  {
+   "matches": {}
+  },
+  {
+   "matches": [
+    null,
+    1,
+    "x",
+    {}
+   ]
+  },
+  {
+   "matches": [
+    {
+     "workspace": {
+      "id": "w"
+     }
+    }
+   ]
+  },
+  {
+   "matches": [
+    {
+     "workspace": {
+      "id": "w\u0001"
+     },
+     "agents": [
+      {
+       "liveness": "live",
+       "linked": true,
+       "paneKey": "p"
+      }
+     ]
+    },
+    {
+     "workspace": {
+      "id": "v"
+     },
+     "agents": [
+      {
+       "liveness": "live",
+       "linked": true,
+       "paneKey": "q",
+       "terminal": "a b"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "matches": [
+    {
+     "workspace": {
+      "id": "w"
+     },
+     "agents": [
+      {
+       "liveness": "live",
+       "linked": "true",
+       "paneKey": "p"
+      },
+      {
+       "liveness": "live",
+       "linked": true
+      },
+      {
+       "liveness": "LIVE",
+       "linked": true,
+       "paneKey": "p"
+      },
+      null,
+      {
+       "liveness": "live",
+       "linked": true,
+       "paneKey": "z",
+       "terminal": "term_z"
+      },
+      {
+       "liveness": "live",
+       "linked": true,
+       "paneKey": "y"
+      }
+     ]
+    }
+   ]
+  }
+ ],
+ "findWorkspaceNamed": [
+  {
+   "result": {},
+   "key": "n"
+  },
+  {
+   "result": {
+    "matches": [
+     {
+      "workspace": {
+       "id": "w",
+       "name": "m"
+      }
+     },
+     {
+      "workspace": {
+       "id": "",
+       "name": "n"
+      }
+     },
+     {
+      "workspace": {
+       "id": "x\u0002",
+       "name": "n"
+      }
+     },
+     {
+      "workspace": {
+       "id": "y",
+       "name": "n"
+      }
+     },
+     {
+      "workspace": {
+       "id": "z",
+       "name": "n"
+      }
+     }
+    ]
+   },
+   "key": "n"
+  },
+  {
+   "result": {
+    "matches": [
+     {
+      "workspace": {
+       "id": "w",
+       "name": 7
+      }
+     }
+    ]
+   },
+   "key": "7"
+  },
+  {
+   "result": {
+    "matches": [
+     null,
+     {}
+    ]
+   },
+   "key": "n"
+  }
+ ],
+ "readPs": [
+  {},
+  {
+   "worktrees": null
+  },
+  {
+   "worktrees": [
+    null,
+    1,
+    {}
+   ]
+  },
+  {
+   "truncated": true
+  },
+  {
+   "truncated": "true"
+  },
+  {
+   "worktrees": [
+    {
+     "worktreeId": "a",
+     "agents": [
+      {
+       "paneKey": "p",
+       "state": "working"
+      },
+      {
+       "paneKey": "p",
+       "state": "done"
+      },
+      {
+       "paneKey": "q",
+       "state": "working"
+      },
+      {
+       "paneKey": "",
+       "state": "working"
+      },
+      {
+       "paneKey": "r",
+       "state": ""
+      },
+      {
+       "paneKey": "s"
+      },
+      null
+     ]
+    },
+    {
+     "id": "b",
+     "agents": [
+      {
+       "paneKey": "t",
+       "state": "working"
+      }
+     ]
+    },
+    {
+     "worktreeId": "",
+     "id": "c",
+     "agents": [
+      {
+       "paneKey": "u",
+       "state": "blocked"
+      }
+     ]
+    },
+    {
+     "agents": [
+      {
+       "paneKey": "v",
+       "state": "working"
+      }
+     ]
+    },
+    {
+     "worktreeId": "a",
+     "agents": [
+      {
+       "paneKey": "p",
+       "state": "working"
+      }
+     ]
+    }
+   ],
+   "truncated": false
+  }
+ ],
+ "findTerminalByTitle": [
+  {
+   "result": {},
+   "key": "T"
+  },
+  {
+   "result": {
+    "visualLayouts": null
+   },
+   "key": "T"
+  },
+  {
+   "result": {
+    "visualLayouts": [
+     null,
+     {},
+     {
+      "root": null
+     },
+     {
+      "root": {
+       "tabs": null
+      }
+     }
+    ]
+   },
+   "key": "T"
+  },
+  {
+   "result": {
+    "visualLayouts": [
+     {
+      "root": {
+       "type": "group",
+       "tabs": [
+        null,
+        {
+         "title": "T"
+        },
+        {
+         "title": "T",
+         "panes": null
+        },
+        {
+         "title": "T",
+         "panes": {
+          "handle": "--bad"
+         }
+        },
+        {
+         "title": "T",
+         "tabId": "tt",
+         "panes": {
+          "handle": "h2",
+          "leafId": "l"
+         }
+        }
+       ]
+      }
+     }
+    ]
+   },
+   "key": "T"
+  },
+  {
+   "result": {
+    "visualLayouts": [
+     {
+      "root": {
+       "tabs": [
+        {
+         "title": "T",
+         "tabId": "tt",
+         "panes": {
+          "handle": "h2",
+          "tabId": null,
+          "leafId": "l"
+         }
+        }
+       ]
+      }
+     }
+    ]
+   },
+   "key": "T"
+  },
+  {
+   "result": {
+    "visualLayouts": [
+     {
+      "root": {
+       "tabs": [
+        {
+         "title": "T",
+         "tabId": "tt",
+         "panes": {
+          "handle": "h2",
+          "tabId": "",
+          "leafId": "l"
+         }
+        }
+       ]
+      }
+     }
+    ]
+   },
+   "key": "T"
+  },
+  {
+   "result": {
+    "visualLayouts": [
+     {
+      "root": {
+       "tabs": [
+        {
+         "title": "T",
+         "panes": {
+          "handle": "h2",
+          "leafId": "l"
+         }
+        }
+       ]
+      }
+     }
+    ]
+   },
+   "key": "T"
+  },
+  {
+   "result": {
+    "visualLayouts": [
+     {
+      "root": {
+       "type": "split",
+       "first": null,
+       "second": {
+        "type": "split",
+        "first": {
+         "tabs": [
+          {
+           "title": "X",
+           "panes": {
+            "type": "pane",
+            "handle": "h1",
+            "tabId": "t1",
+            "leafId": "l1"
+           }
+          }
+         ]
+        },
+        "second": {
+         "tabs": [
+          {
+           "title": "T",
+           "panes": {
+            "type": "pane-split",
+            "first": null,
+            "second": {
+             "type": "pane-split",
+             "first": {
+              "type": "pane-split"
+             },
+             "second": {
+              "type": "pane",
+              "handle": "h1",
+              "tabId": "t1",
+              "leafId": "l1"
+             }
+            }
+           }
+          }
+         ]
+        }
+       }
+      }
+     }
+    ]
+   },
+   "key": "T"
+  },
+  {
+   "result": {
+    "visualLayouts": [
+     {
+      "root": {
+       "tabs": [
+        {
+         "title": "T",
+         "panes": {
+          "type": "pane-split",
+          "first": {
+           "handle": "-x"
+          },
+          "second": {
+           "type": "pane",
+           "handle": "h1",
+           "tabId": "t1",
+           "leafId": "l1"
+          }
+         }
+        }
+       ]
+      }
+     }
+    ]
+   },
+   "key": "T"
+  },
+  {
+   "result": {
+    "visualLayouts": [
+     {
+      "root": {
+       "tabs": [
+        {
+         "title": 7,
+         "panes": {
+          "type": "pane",
+          "handle": "h1",
+          "tabId": "t1",
+          "leafId": "l1"
+         }
+        }
+       ]
+      }
+     }
+    ]
+   },
+   "key": "7"
+  }
+ ],
+ "findPane": [
+  {
+   "result": {},
+   "key": "t:l"
+  },
+  {
+   "result": {
+    "terminals": null
+   },
+   "key": "t:l"
+  },
+  {
+   "result": {
+    "terminals": [
+     null,
+     {},
+     {
+      "tabId": "t"
+     },
+     {
+      "tabId": "t",
+      "leafId": "l"
+     },
+     {
+      "tabId": "t",
+      "leafId": "l",
+      "handle": "bad h"
+     },
+     {
+      "tabId": "t",
+      "leafId": "l",
+      "handle": "h3",
+      "connected": "true"
+     }
+    ]
+   },
+   "key": "t:l"
+  },
+  {
+   "result": {
+    "terminals": [
+     {
+      "tabId": "t",
+      "leafId": "l",
+      "handle": "h4",
+      "connected": true
+     },
+     {
+      "tabId": "t",
+      "leafId": "l",
+      "handle": "h5"
+     }
+    ]
+   },
+   "key": "t:l"
+  },
+  {
+   "result": {
+    "terminals": [
+     {
+      "tabId": "t:l",
+      "leafId": "",
+      "handle": "h"
+     }
+    ]
+   },
+   "key": "t:l:"
+  },
+  {
+   "result": {
+    "terminals": [
+     {
+      "tabId": "a:b",
+      "leafId": "c",
+      "handle": "h6"
+     }
+    ]
+   },
+   "key": "a:b:c"
+  }
+ ],
+ "focusNavigated": [
+  {},
+  {
+   "focus": null
+  },
+  {
+   "focus": []
+  },
+  {
+   "focus": {}
+  },
+  {
+   "focus": {
+    "navigated": true
+   }
+  },
+  {
+   "focus": {
+    "navigated": false
+   }
+  },
+  {
+   "focus": {
+    "navigated": null
+   }
+  },
+  {
+   "focus": {
+    "navigated": 0
+   }
+  },
+  {
+   "focus": "x"
+  }
+ ]
+}

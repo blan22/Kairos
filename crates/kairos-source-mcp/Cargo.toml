@@ -1,0 +1,25 @@
+[package]
+name = "kairos-source-mcp"
+description = "수집 모드를 거치는 소스: Calendar, Gmail, Slack, Notion"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+kairos-core.workspace = true
+fancy-regex.workspace = true
+regex.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+unicode-normalization = "0.1"
+url = "2"
+
+[dev-dependencies]
+kairos-core = { workspace = true, features = ["test-profile"] }
+tempfile.workspace = true
+
+[lints]
+workspace = true

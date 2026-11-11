@@ -1,0 +1,33 @@
+# 조직 프로필 예시. 값은 모두 합성이다(contoso, atlas는 가상의 조직과 저장소).
+# 자기 조직 값으로 바꾼 파일은 저장소에 커밋하지 않는다. profiles/(git 무시)에 두거나 --org로 넘긴다.
+#   kairos config init --org <파일> --sha256 <관리자가 알려 준 지문>
+# 개인 값(GitHub 로그인, 메일, Slack ID, 이름)은 여기에 두지 않는다. `kairos connect`가 connections.toml에 쓴다.
+# 시험이 이 파일을 그대로 읽는다(Profile::fixture와 같은 값). 고치면 시험도 함께 본다.
+schema = 1
+name = "contoso"
+
+[github]
+orgs = ["contoso"]
+
+[trust]
+# 이 도메인의 메일 주소를 조직 사람(T1)으로 본다.
+email_domains = ["contoso.example", "atlas.example"]
+
+[calendar]
+# 배포 일정만 담는 그룹 캘린더. 주최자가 이 캘린더면 조직 일정으로 믿는다.
+deploy = "c_synthetic0deploy0calendar0@group.calendar.google.com"
+# 연차 캘린더. 제목이 `<이름> 연차`인 종일 일정을 쉬는 날로 본다.
+leave = "contoso.example_synthetic0leave00calendar0@group.calendar.google.com"
+holidays = "ko.south_korea#holiday@group.v.calendar.google.com"
+deploy_tag = "[배포]"
+
+[notion]
+workspace = "Contoso"
+
+# 세션에 맡길 수 있는 저장소. 두 저장소의 이슈 모두 atlas에서 작업한다.
+# Orca 저장소 ID는 컴퓨터마다 달라 각자의 config.toml [hosts.orca.repos]에 적는다.
+[[playbooks]]
+owner = "contoso"
+repos = ["atlas", "atlas-specs"]
+workspace_repo = "contoso/atlas"
+base_branch = "origin/fe-stage"

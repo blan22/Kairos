@@ -1,0 +1,54 @@
+{
+  "accessRole": "owner",
+  "summary": "__SELF_EMAIL__",
+  "timeZone": "Asia/Seoul",
+  "updated": "2026-03-01T00:00:00Z",
+  "defaultReminders": [{ "method": "popup", "minutes": 10 }],
+  "events": [
+    {
+      "id": "syntheticmeeting1",
+      "status": "confirmed",
+      "summary": "합성 회의",
+      "description": "저장되면 안 되는 일정 설명",
+      "location": "저장되면 안 되는 회의실",
+      "htmlLink": "https://www.google.com/calendar/event?eid=c3ludGhldGlj",
+      "start": { "dateTime": "2026-03-02T16:00:00+09:00", "timeZone": "Asia/Seoul" },
+      "end": { "dateTime": "2026-03-02T17:00:00+09:00", "timeZone": "Asia/Seoul" },
+      "organizer": { "email": "organizer@contoso.example" },
+      "attendees": [
+        { "displayName": "회의실", "email": "room@resource.calendar.google.com", "resource": true, "responseStatus": "accepted" },
+        { "email": "__SELF_EMAIL__", "responseStatus": "needsAction", "self": true },
+        { "displayName": "합성 동료", "email": "secret-attendee@contoso.example", "responseStatus": "accepted" }
+      ]
+    },
+    {
+      "id": "syntheticallday1",
+      "status": "confirmed",
+      "summary": "합성 종일 일정",
+      "recurringEventId": "syntheticseries",
+      "transparency": "transparent",
+      "availability": "AVAILABILITY_FREE",
+      "start": { "date": "2026-03-05T00:00:00Z" },
+      "end": { "date": "2026-03-06T00:00:00Z" },
+      "organizer": { "email": "__SELF_EMAIL__", "self": true }
+    },
+    {
+      "id": "syntheticoutsider1",
+      "status": "confirmed",
+      "summary": "외부 주최 회의",
+      "start": { "dateTime": "2026-03-03T10:00:00+09:00" },
+      "end": { "dateTime": "2026-03-03T11:00:00+09:00" },
+      "organizer": { "email": "someone@example.invalid" }
+    },
+    {
+      "id": "syntheticdeploy1",
+      "status": "confirmed",
+      "summary": "[배포] 합성 기능 고도화",
+      "htmlLink": "https://www.google.com/calendar/event?eid=cGVyc29uYWw",
+      "start": { "date": "2026-03-04T00:00:00Z" },
+      "end": { "date": "2026-03-05T00:00:00Z" },
+      "organizer": { "displayName": "합성 배포 캘린더", "email": "c_synthetic0deploy0calendar0@group.calendar.google.com" },
+      "attendees": [{ "email": "__SELF_EMAIL__", "responseStatus": "accepted", "self": true }]
+    }
+  ]
+}

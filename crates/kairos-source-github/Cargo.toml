@@ -1,0 +1,25 @@
+[package]
+name = "kairos-source-github"
+description = "gh로 직접 읽는 GitHub 소스"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+kairos-core.workspace = true
+fancy-regex.workspace = true
+regex.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+
+[dev-dependencies]
+kairos-core = { workspace = true, features = ["test-profile"] }
+kairos-ledger = { path = "../kairos-ledger" }
+kairos-store.workspace = true
+tempfile.workspace = true
+
+[lints]
+workspace = true

@@ -1,0 +1,35 @@
+{
+  "resultCountEstimate": "5",
+  "threads": [
+    {
+      "id": "synthetic0001",
+      "messageCount": 1,
+      "messages": [
+        {
+          "id": "synthetic0001",
+          "sender": "App Store Connect <no_reply@email.apple.com>",
+          "subject": "Your submission: App Review completed",
+          "snippet": "저장되면 안 되는 메일 미리보기",
+          "threadId": "synthetic0001",
+          "toRecipients": ["__SELF_EMAIL__"]
+        }
+      ]
+    },
+    {
+      "id": "synthetic0002",
+      "messages": [{ "id": "m2", "sender": "alerts@sentry.io", "subject": "New issue in widget", "threadId": "synthetic0002" }]
+    },
+    {
+      "id": "synthetic0003",
+      "messages": [{ "id": "m3", "sender": "합성 동료 <teammate@contoso.example>", "subject": "사람이 보낸 메일", "threadId": "synthetic0003" }]
+    },
+    {
+      "id": "synthetic0004",
+      "messages": [{ "id": "m4", "sender": "__SELF_EMAIL__", "subject": "내가 보낸 메일", "threadId": "synthetic0004", "date": "2026-03-02T00:30:00Z" }]
+    },
+    {
+      "id": "synthetic0005",
+      "messages": [{ "id": "m5", "sender": "no-reply@example.invalid", "subject": "주문 안내", "threadId": "synthetic0005" }]
+    }
+  ]
+}

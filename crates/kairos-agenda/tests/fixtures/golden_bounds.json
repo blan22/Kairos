@@ -1,0 +1,569 @@
+[
+ {
+  "name": "카드 만료는 정확히 1시간째부터",
+  "sql": [
+   "INSERT INTO items (id, object_key, reason, tier, source, opened_at) VALUES (1, 'k1', 'reply_owed', 'P1', 'slack', '2026-03-02T00:30:00.000Z')",
+   "INSERT INTO suggestions (item_id, card_id, kind, tier, shown_at, surface, seen, response, response_at) VALUES (1, 'item-1@1', 'item', 'P1', '2026-03-02T01:00:00.000Z', 'panel', 1, NULL, NULL)"
+  ],
+  "steps": [
+   {
+    "op": "next",
+    "now": "2026-03-02T01:59:59.999Z"
+   },
+   {
+    "op": "rows",
+    "sql": "SELECT card_id, response, response_at FROM suggestions ORDER BY id"
+   },
+   {
+    "op": "next",
+    "now": "2026-03-02T02:00:00.000Z"
+   },
+   {
+    "op": "rows",
+    "sql": "SELECT card_id, response, response_at FROM suggestions ORDER BY id"
+   },
+   {
+    "op": "rows",
+    "sql": "SELECT push_count FROM items"
+   }
+  ]
+ },
+ {
+  "name": "슬롯 시작 시각의 묶음도 이미 본 것이다",
+  "sql": [
+   "INSERT INTO items (id, object_key, reason, tier, source, opened_at) VALUES (1, 'k1', 'assigned', 'P2', 'slack', '2026-03-02T00:30:00.000Z')",
+   "INSERT INTO items (id, object_key, reason, tier, source, opened_at, first_surfaced_at) VALUES (2, 'k2', 'assigned', 'P2', 'slack', '2026-03-02T00:30:00.000Z', '2026-03-02T04:30:00.000Z')",
+   "INSERT INTO suggestions (item_id, card_id, kind, tier, shown_at, surface, seen, response, response_at) VALUES (2, 'bundle-x@1', 'bundle', 'P2', '2026-03-02T04:30:00.000Z', 'panel', 1, 'ack', '2026-03-02T04:30:00.000Z')"
+  ],
+  "steps": [
+   {
+    "op": "next",
+    "now": "2026-03-02T04:40:00.000Z"
+   }
+  ]
+ },
+ {
+  "name": "슬롯 1ms 전의 묶음은 이번 슬롯이 아니다",
+  "sql": [
+   "INSERT INTO items (id, object_key, reason, tier, source, opened_at) VALUES (1, 'k1', 'assigned', 'P2', 'slack', '2026-03-02T00:30:00.000Z')",
+   "INSERT INTO items (id, object_key, reason, tier, source, opened_at, first_surfaced_at) VALUES (2, 'k2', 'assigned', 'P2', 'slack', '2026-03-02T00:30:00.000Z', '2026-03-02T04:29:59.999Z')",
+   "INSERT INTO suggestions (item_id, card_id, kind, tier, shown_at, surface, seen, response, response_at) VALUES (2, 'bundle-x@1', 'bundle', 'P2', '2026-03-02T04:29:59.999Z', 'panel', 1, 'ack', '2026-03-02T04:29:59.999Z')"
+  ],
+  "steps": [
+   {
+    "op": "next",
+    "now": "2026-03-02T04:40:00.000Z"
+   }
+  ]
+ },
+ {
+  "name": "포커스 쌓인 건의 시작과 끝 경계",
+  "sql": [
+   "INSERT INTO items (id, object_key, reason, tier, source, opened_at) VALUES (1, 'k1', 'reply_owed', 'P1', 'slack', '2026-03-02T00:59:59.999Z')",
+   "INSERT INTO items (id, object_key, reason, tier, source, opened_at) VALUES (2, 'k2', 'reply_owed', 'P1', 'slack', '2026-03-02T01:00:00.000Z')",
+   "INSERT INTO items (id, object_key, reason, tier, source, opened_at) VALUES (3, 'k3', 'reply_owed', 'P1', 'slack', '2026-03-02T01:10:00.000Z')",
+   "INSERT INTO items (id, object_key, reason, tier, source, opened_at) VALUES (4, 'k4', 'reply_owed', 'P1', 'slack', '2026-03-02T01:10:00.001Z')",
+   "INSERT INTO items (id, object_key, reason, tier, source, opened_at) VALUES (5, 'k5', 'reply_owed', 'P1', 'slack', '2026-03-02T01:30:00.000Z')",
+   "INSERT INTO items (id, object_key, reason, tier, source, opened_at) VALUES (6, 'k6', 'reply_owed', 'P1', 'slack', '2026-03-02T01:30:00.001Z')"
+  ],
+  "steps": [
+   {
+    "op": "focus",
+    "now": "2026-03-02T01:10:00.000Z",
+    "control": {
+     "pausedUntil": null,
+     "offDates": [],
+     "displayMode": "on",
+     "focus": {
+      "startedAt": "2026-03-02T01:00:00.000Z",
+      "until": "2026-03-02T01:30:00.000Z"
+     }
+    }
+   },
+   {
+    "op": "focus",
+    "now": "2026-03-02T01:40:00.000Z",
+    "control": {
+     "pausedUntil": null,
+     "offDates": [],
+     "displayMode": "on",
+     "focus": {
+      "startedAt": "2026-03-02T01:00:00.000Z",
+      "until": "2026-03-02T01:30:00.000Z"
+     }
+    }
+   }
+  ]
+ },
+ {
+  "name": "포커스 끝난 뒤 알림 줄은 1시간 미만까지",
+  "sql": [
+   "INSERT INTO items (id, object_key, reason, tier, source, opened_at) VALUES (1, 'k1', 'reply_owed', 'P1', 'slack', '2026-03-02T01:10:00.000Z')"
+  ],
+  "steps": [
+   {
+    "op": "focus",
+    "now": "2026-03-02T02:29:59.999Z",
+    "control": {
+     "pausedUntil": null,
+     "offDates": [],
+     "displayMode": "on",
+     "focus": {
+      "startedAt": "2026-03-02T01:00:00.000Z",
+      "until": "2026-03-02T01:30:00.000Z"
+     }
+    }
+   },
+   {
+    "op": "focus",
+    "now": "2026-03-02T02:30:00.000Z",
+    "control": {
+     "pausedUntil": null,
+     "offDates": [],
+     "displayMode": "on",
+     "focus": {
+      "startedAt": "2026-03-02T01:00:00.000Z",
+      "until": "2026-03-02T01:30:00.000Z"
+     }
+    }
+   }
+  ]
+ },
+ {
+  "name": "포커스 시작과 같은 시각의 회의는 끝을 당기지 않는다",
+  "sql": [
+   "INSERT INTO objects (object_key, source, query, kind, external_id, snapshot_hash, first_seen_at, last_seen_run, start_at, all_day) VALUES ('m1', 'calendar', 'q', 'meeting', 'm1', 'h', '2026-03-01T00:00:00.000Z', 1, '2026-03-02T01:00:00.000Z', 0)"
+  ],
+  "steps": [
+   {
+    "op": "focus",
+    "now": "2026-03-02T01:05:00.000Z",
+    "control": {
+     "pausedUntil": null,
+     "offDates": [],
+     "displayMode": "on",
+     "focus": {
+      "startedAt": "2026-03-02T01:00:00.000Z",
+      "until": "2026-03-02T01:30:00.000Z"
+     }
+    }
+   }
+  ]
+ },
+ {
+  "name": "포커스 시작 1ms 뒤의 회의는 끝을 당긴다",
+  "sql": [
+   "INSERT INTO objects (object_key, source, query, kind, external_id, snapshot_hash, first_seen_at, last_seen_run, start_at, all_day) VALUES ('m1', 'calendar', 'q', 'meeting', 'm1', 'h', '2026-03-01T00:00:00.000Z', 1, '2026-03-02T01:00:00.001Z', 0)"
+  ],
+  "steps": [
+   {
+    "op": "focus",
+    "now": "2026-03-02T01:05:00.000Z",
+    "control": {
+     "pausedUntil": null,
+     "offDates": [],
+     "displayMode": "on",
+     "focus": {
+      "startedAt": "2026-03-02T01:00:00.000Z",
+      "until": "2026-03-02T01:30:00.000Z"
+     }
+    }
+   }
+  ]
+ },
+ {
+  "name": "포커스 끝이 같은 순간이면 앞의 표기를 남긴다",
+  "sql": [],
+  "steps": [
+   {
+    "op": "focus",
+    "now": "2026-03-02T01:05:00.000Z",
+    "control": {
+     "pausedUntil": null,
+     "offDates": [],
+     "displayMode": "on",
+     "focus": {
+      "startedAt": "2026-03-02T01:00:00.000Z",
+      "until": "2026-03-02T10:30:00+09:00",
+      "endedAt": "2026-03-02T01:30:00.000Z"
+     }
+    }
+   },
+   {
+    "op": "focus",
+    "now": "2026-03-02T01:05:00.000Z",
+    "control": {
+     "pausedUntil": null,
+     "offDates": [],
+     "displayMode": "on",
+     "focus": {
+      "startedAt": "2026-03-02T01:00:00.000Z",
+      "until": "2026-03-02T01:30:00.000Z",
+      "endedAt": "2026-03-02T10:30:00+09:00"
+     }
+    }
+   }
+  ]
+ },
+ {
+  "name": "건수의 경계",
+  "sql": [
+   "INSERT INTO items (id, object_key, reason, tier, source, opened_at, push_count) VALUES (1, 'k1', 'reply_owed', 'P1', 'slack', '2026-03-02T00:30:00.000Z', 2)",
+   "INSERT INTO items (id, object_key, reason, tier, source, opened_at, push_count) VALUES (2, 'k2', 'reply_owed', 'P1', 'slack', '2026-03-02T00:30:00.000Z', 1)",
+   "INSERT INTO items (id, object_key, reason, tier, source, opened_at, due_at) VALUES (3, 'k3', 'reply_owed', 'P1', 'slack', '2026-03-02T00:30:00.000Z', '2026-03-02T03:00:00.000Z')",
+   "INSERT INTO items (id, object_key, reason, tier, source, opened_at, due_at) VALUES (4, 'k4', 'reply_owed', 'P1', 'slack', '2026-03-02T00:30:00.000Z', '2026-03-02T02:59:59.999Z')",
+   "INSERT INTO items (id, object_key, reason, tier, source, opened_at) VALUES (5, 'k5', 'reply_owed', 'P1', 'slack', '2026-03-01T15:00:00.000Z')",
+   "INSERT INTO items (id, object_key, reason, tier, source, opened_at) VALUES (6, 'k6', 'reply_owed', 'P1', 'slack', '2026-03-01T14:59:59.999Z')",
+   "INSERT INTO items (id, object_key, reason, tier, source, opened_at, p1_notified_at, p1_notice) VALUES (7, 'k7', 'reply_owed', 'P1', 'slack', '2026-03-02T00:30:00.000Z', '2026-03-01T15:00:00.000Z', 'sent')",
+   "INSERT INTO items (id, object_key, reason, tier, source, opened_at, p1_notified_at, p1_notice) VALUES (8, 'k8', 'reply_owed', 'P1', 'slack', '2026-03-02T00:30:00.000Z', '2026-03-01T14:59:59.999Z', 'sent')",
+   "INSERT INTO items (id, object_key, reason, tier, source, opened_at, p1_notified_at, p1_notice) VALUES (9, 'k9', 'reply_owed', 'P1', 'slack', '2026-03-02T00:30:00.000Z', '2026-03-01T15:00:00.000Z', 'merged')",
+   "INSERT INTO items (id, object_key, reason, tier, source, opened_at, p1_notified_at, p1_notice) VALUES (10, 'k10', 'reply_owed', 'P1', 'slack', '2026-03-02T00:30:00.000Z', '2026-03-01T15:00:00.000Z', 'dropped')"
+  ],
+  "steps": [
+   {
+    "op": "counts",
+    "now": "2026-03-02T03:00:00.000Z"
+   }
+  ]
+ },
+ {
+  "name": "넘어온 표시는 자정 시작까지",
+  "sql": [
+   "INSERT INTO items (id, object_key, reason, tier, source, opened_at) VALUES (1, 'k1', 'reply_owed', 'P1', 'slack', '2026-03-01T15:00:00.000Z')",
+   "INSERT INTO items (id, object_key, reason, tier, source, opened_at) VALUES (2, 'k2', 'reply_owed', 'P1', 'slack', '2026-03-01T14:59:59.999Z')"
+  ],
+  "steps": [
+   {
+    "op": "list",
+    "now": "2026-03-02T03:00:00.000Z"
+   }
+  ]
+ },
+ {
+  "name": "열린 P0가 둘이면 최신이다",
+  "sql": [
+   "INSERT INTO items (id, object_key, reason, tier, source, opened_at, opened_by_event) VALUES (1, 'k1', 'meeting_new', 'P0', 'slack', '2026-03-02T00:10:00.000Z', 'e1')",
+   "INSERT INTO items (id, object_key, reason, tier, source, opened_at, opened_by_event) VALUES (2, 'k2', 'meeting_new', 'P0', 'slack', '2026-03-02T00:20:00.000Z', 'e2')",
+   "INSERT INTO items (id, object_key, reason, tier, source, opened_at, opened_by_event) VALUES (3, 'k3', 'meeting_new', 'P0', 'slack', '2026-03-02T00:15:00.000Z', 'e3')"
+  ],
+  "steps": [
+   {
+    "op": "next",
+    "now": "2026-03-02T01:00:00.000Z"
+   }
+  ]
+ },
+ {
+  "name": "같은 시각의 P0는 ID가 큰 쪽이다",
+  "sql": [
+   "INSERT INTO items (id, object_key, reason, tier, source, opened_at, opened_by_event) VALUES (1, 'k1', 'meeting_new', 'P0', 'slack', '2026-03-02T00:10:00.000Z', 'e1')",
+   "INSERT INTO items (id, object_key, reason, tier, source, opened_at, opened_by_event) VALUES (2, 'k2', 'meeting_new', 'P0', 'slack', '2026-03-02T00:10:00.000Z', 'e2')"
+  ],
+  "steps": [
+   {
+    "op": "next",
+    "now": "2026-03-02T01:00:00.000Z"
+   }
+  ]
+ },
+ {
+  "name": "복귀 뒤 정확히 30분의 알림은 복귀 첫 알림이다",
+  "sql": [
+   "INSERT INTO items (id, object_key, reason, tier, source, opened_at, channel_id) VALUES (1, 'k1', 'reply_owed', 'P1', 'slack', '2026-03-02T00:30:00.000Z', 'C1')"
+  ],
+  "steps": [
+   {
+    "op": "p1",
+    "now": "2026-03-02T02:00:00.000Z",
+    "resumedAt": "2026-03-02T01:30:00.000Z"
+   },
+   {
+    "op": "rows",
+    "sql": "SELECT card_id, surface FROM suggestions ORDER BY id"
+   }
+  ]
+ },
+ {
+  "name": "복귀 뒤 30분 1ms의 알림은 평소 알림이다",
+  "sql": [
+   "INSERT INTO items (id, object_key, reason, tier, source, opened_at, channel_id) VALUES (1, 'k1', 'reply_owed', 'P1', 'slack', '2026-03-02T00:30:00.000Z', 'C1')"
+  ],
+  "steps": [
+   {
+    "op": "p1",
+    "now": "2026-03-02T02:00:00.001Z",
+    "resumedAt": "2026-03-02T01:30:00.000Z"
+   },
+   {
+    "op": "rows",
+    "sql": "SELECT card_id, surface FROM suggestions ORDER BY id"
+   }
+  ]
+ },
+ {
+  "name": "복귀 시각과 같은 사건은 밀린 건이 아니다",
+  "sql": [
+   "INSERT INTO items (id, object_key, reason, tier, source, opened_at, channel_id, p1_notified_at, p1_notice) VALUES (1, 'k1', 'reply_owed', 'P1', 'slack', '2026-03-02T00:30:00.000Z', 'C1', '2026-03-02T01:50:00.000Z', 'sent')",
+   "INSERT INTO suggestions (item_id, card_id, kind, tier, shown_at, surface, seen, response, response_at) VALUES (1, 'p1-catchup@1', 'item', 'P1', '2026-03-02T01:50:00.000Z', 'osascript', 0, NULL, NULL)",
+   "INSERT INTO items (id, object_key, reason, tier, source, opened_at, channel_id) VALUES (2, 'k2', 'reply_owed', 'P1', 'slack', '2026-03-02T00:30:00.000Z', 'C2')",
+   "INSERT INTO events (dedupe_key, source, thread_key, type, actor_kind, occurred_at, first_seen_at, run_id, disposition, rule_id, item_id) VALUES ('same', 'slack', 'th-same', 'slack_mention', 'human', '2026-03-02T01:30:00.000Z', '2026-03-02T01:30:00.000Z', 1, 'opened', 'p1.direct_mention', 2)",
+   "INSERT INTO items (id, object_key, reason, tier, source, opened_at, channel_id) VALUES (3, 'k3', 'reply_owed', 'P1', 'slack', '2026-03-02T00:30:00.000Z', 'C3')",
+   "INSERT INTO events (dedupe_key, source, thread_key, type, actor_kind, occurred_at, first_seen_at, run_id, disposition, rule_id, item_id) VALUES ('early', 'slack', 'th-early', 'slack_mention', 'human', '2026-03-02T01:29:59.999Z', '2026-03-02T01:29:59.999Z', 1, 'opened', 'p1.direct_mention', 3)"
+  ],
+  "steps": [
+   {
+    "op": "p1",
+    "now": "2026-03-02T02:00:00.000Z",
+    "resumedAt": "2026-03-02T01:30:00.000Z"
+   },
+   {
+    "op": "rows",
+    "sql": "SELECT id, p1_notice FROM items ORDER BY id"
+   }
+  ]
+ },
+ {
+  "name": "합치기 구간은 정확히 30분째까지",
+  "sql": [
+   "INSERT INTO items (id, object_key, reason, tier, source, opened_at, channel_id, p1_notified_at, p1_notice) VALUES (1, 'k1', 'reply_owed', 'P1', 'slack', '2026-03-02T00:30:00.000Z', 'C1', '2026-03-02T01:30:00.000Z', 'sent')",
+   "INSERT INTO suggestions (item_id, card_id, kind, tier, shown_at, surface, seen, response, response_at) VALUES (1, 'p1-alert@1', 'item', 'P1', '2026-03-02T01:30:00.000Z', 'osascript', 0, NULL, NULL)",
+   "INSERT INTO items (id, object_key, reason, tier, source, opened_at, channel_id) VALUES (2, 'k2', 'reply_owed', 'P1', 'slack', '2026-03-02T00:30:00.000Z', 'C1')"
+  ],
+  "steps": [
+   {
+    "op": "p1",
+    "now": "2026-03-02T02:00:00.000Z"
+   },
+   {
+    "op": "rows",
+    "sql": "SELECT id, p1_notice FROM items ORDER BY id"
+   }
+  ]
+ },
+ {
+  "name": "복귀가 지금과 같으면 지금부터 잰다",
+  "sql": [
+   "INSERT INTO source_run (source, query, started_at, finished_at, outcome) VALUES ('github', 'tick', '2026-03-02T01:00:00.000Z', '2026-03-02T01:00:00.000Z', 'ok')"
+  ],
+  "steps": [
+   {
+    "op": "health",
+    "now": "2026-03-02T05:00:00.000Z",
+    "resumedAt": "2026-03-02T05:00:00.000Z"
+   },
+   {
+    "op": "health",
+    "now": "2026-03-02T05:00:00.000Z",
+    "resumedAt": "2026-03-02T05:00:00.001Z"
+   },
+   {
+    "op": "health",
+    "now": "2026-03-02T05:00:00.000Z",
+    "resumedAt": "2026-03-02T04:50:00.000Z"
+   },
+   {
+    "op": "health",
+    "now": "2026-03-02T05:00:00.000Z",
+    "resumedAt": "2026-03-02T04:49:59.999Z"
+   }
+  ]
+ },
+ {
+  "name": "Notion 형식 경고는 3건부터",
+  "sql": [
+   "INSERT INTO events (dedupe_key, source, thread_key, type, actor_kind, occurred_at, first_seen_at, run_id, disposition, rule_id, item_id) VALUES ('n0', 'slack', 'th-n0', 'notion_unknown', 'human', '2026-03-02T01:00:00.000Z', '2026-03-02T01:00:00.000Z', 1, 'opened', 'p2.notion_unknown', NULL)",
+   "INSERT INTO events (dedupe_key, source, thread_key, type, actor_kind, occurred_at, first_seen_at, run_id, disposition, rule_id, item_id) VALUES ('n1', 'slack', 'th-n1', 'notion_unknown', 'human', '2026-03-02T01:00:00.000Z', '2026-03-02T01:00:00.000Z', 1, 'opened', 'p2.notion_unknown', NULL)"
+  ],
+  "steps": [
+   {
+    "op": "suspects",
+    "now": "2026-03-02T02:00:00.000Z"
+   }
+  ]
+ },
+ {
+  "name": "Notion 형식 경고 3건",
+  "sql": [
+   "INSERT INTO events (dedupe_key, source, thread_key, type, actor_kind, occurred_at, first_seen_at, run_id, disposition, rule_id, item_id) VALUES ('n0', 'slack', 'th-n0', 'notion_unknown', 'human', '2026-03-02T01:00:00.000Z', '2026-03-02T01:00:00.000Z', 1, 'opened', 'p2.notion_unknown', NULL)",
+   "INSERT INTO events (dedupe_key, source, thread_key, type, actor_kind, occurred_at, first_seen_at, run_id, disposition, rule_id, item_id) VALUES ('n1', 'slack', 'th-n1', 'notion_unknown', 'human', '2026-03-02T01:00:00.000Z', '2026-03-02T01:00:00.000Z', 1, 'opened', 'p2.notion_unknown', NULL)",
+   "INSERT INTO events (dedupe_key, source, thread_key, type, actor_kind, occurred_at, first_seen_at, run_id, disposition, rule_id, item_id) VALUES ('n2', 'slack', 'th-n2', 'notion_unknown', 'human', '2026-03-02T01:00:00.000Z', '2026-03-02T01:00:00.000Z', 1, 'opened', 'p2.notion_unknown', NULL)"
+  ],
+  "steps": [
+   {
+    "op": "suspects",
+    "now": "2026-03-02T02:00:00.000Z"
+   },
+   {
+    "op": "suspects",
+    "now": "2026-03-03T01:00:00.000Z"
+   },
+   {
+    "op": "suspects",
+    "now": "2026-03-03T01:00:00.001Z"
+   }
+  ]
+ },
+ {
+  "name": "표시 시작의 경계",
+  "sql": [],
+  "steps": [
+   {
+    "op": "start",
+    "t0": "2026-03-02T01:00:00.000Z",
+    "now": "2026-03-02T10:59:59.999Z"
+   },
+   {
+    "op": "start",
+    "t0": "2026-03-02T01:00:00.000Z",
+    "now": "2026-03-02T11:00:00.000Z"
+   },
+   {
+    "op": "start",
+    "t0": "2026-03-02T01:00:59.999Z",
+    "now": "2026-03-02T11:00:00.000Z"
+   },
+   {
+    "op": "start",
+    "t0": "2026-03-02T01:01:00.000Z",
+    "now": "2026-03-02T11:00:00.000Z"
+   },
+   {
+    "op": "start",
+    "t0": "2026-03-07T01:00:00.000Z",
+    "now": "2026-03-02T11:00:00.000Z"
+   }
+  ]
+ },
+ {
+  "name": "같은 순간의 T0는 먼저 읽은 표기를 남긴다",
+  "sql": [
+   "INSERT INTO cursor (source, query, t0) VALUES ('github', 'tick', '2026-03-02T01:00:00.000Z')",
+   "INSERT INTO cursor (source, query, t0) VALUES ('slack', 'tick', '2026-03-02T10:00:00+09:00')"
+  ],
+  "steps": [
+   {
+    "op": "t0"
+   }
+  ]
+ },
+ {
+  "name": "같은 순간의 T0 순서 바꿈",
+  "sql": [
+   "INSERT INTO cursor (source, query, t0) VALUES ('slack', 'tick', '2026-03-02T01:00:00.000Z')",
+   "INSERT INTO cursor (source, query, t0) VALUES ('github', 'tick', '2026-03-02T10:00:00+09:00')"
+  ],
+  "steps": [
+   {
+    "op": "t0"
+   }
+  ]
+ },
+ {
+  "name": "해석할 수 없는 T0는 뒤의 값이 남는다",
+  "sql": [
+   "INSERT INTO cursor (source, query, t0) VALUES ('github', 'tick', '깨진 값')",
+   "INSERT INTO cursor (source, query, t0) VALUES ('slack', 'tick', '2026-03-02T01:00:00.000Z')"
+  ],
+  "steps": [
+   {
+    "op": "t0"
+   }
+  ]
+ },
+ {
+  "name": "해석할 수 없는 T0가 뒤에 있으면 그 값이 남는다",
+  "sql": [
+   "INSERT INTO cursor (source, query, t0) VALUES ('github', 'tick', '2026-03-02T01:00:00.000Z')",
+   "INSERT INTO cursor (source, query, t0) VALUES ('slack', 'tick', '깨진 값')"
+  ],
+  "steps": [
+   {
+    "op": "t0"
+   }
+  ]
+ },
+ {
+  "name": "일시정지는 그 시각에 풀린다",
+  "sql": [],
+  "steps": [
+   {
+    "op": "paused",
+    "now": "2026-03-02T01:00:00.000Z",
+    "control": {
+     "pausedUntil": "2026-03-02T01:00:00.000Z",
+     "offDates": [],
+     "displayMode": "on"
+    }
+   },
+   {
+    "op": "paused",
+    "now": "2026-03-02T00:59:59.999Z",
+    "control": {
+     "pausedUntil": "2026-03-02T01:00:00.000Z",
+     "offDates": [],
+     "displayMode": "on"
+    }
+   },
+   {
+    "op": "paused",
+    "now": "2026-03-02T00:59:59.999Z",
+    "control": {
+     "pausedUntil": "깨진 값",
+     "offDates": [],
+     "displayMode": "on"
+    }
+   },
+   {
+    "op": "paused",
+    "now": "2026-03-02T00:59:59.999Z",
+    "control": {
+     "pausedUntil": "indefinite",
+     "offDates": [],
+     "displayMode": "on"
+    }
+   }
+  ]
+ },
+ {
+  "name": "배포 때 다시는 그 시각이면 이미 늦었다",
+  "sql": [
+   "INSERT INTO objects (object_key, source, query, kind, external_id, snapshot_hash, first_seen_at, last_seen_run, text_head, all_day, start_date, end_date, state) VALUES ('gcal:d', 'calendar', 'q', 'deploy', 'gcal:d', 'h', '2026-03-01T00:00:00.000Z', 1, '[배포] 합성 기능', 1, '2026-03-03', '2026-03-04', 'confirmed')",
+   "INSERT INTO objects (object_key, source, query, kind, external_id, snapshot_hash, first_seen_at, last_seen_run, state, assigned_to_me, milestone_title) VALUES ('gh:i', 'github', 'q', 'issue', 'gh:i', 'h', '2026-03-01T00:00:00.000Z', 1, 'open', 1, '합성 기능')",
+   "INSERT INTO items (id, object_key, reason, tier, source, opened_at) VALUES (1, 'gh:i', 'reply_owed', 'P1', 'slack', '2026-03-02T00:30:00.000Z')"
+  ],
+  "steps": [
+   {
+    "op": "keep",
+    "ids": [
+     1
+    ],
+    "now": "2026-03-02T01:00:00.000Z"
+   },
+   {
+    "op": "rows",
+    "sql": "SELECT state, park_trigger, parked_until FROM items"
+   }
+  ]
+ },
+ {
+  "name": "배포 때 다시는 1ms 전이면 된다",
+  "sql": [
+   "INSERT INTO objects (object_key, source, query, kind, external_id, snapshot_hash, first_seen_at, last_seen_run, text_head, all_day, start_date, end_date, state) VALUES ('gcal:d', 'calendar', 'q', 'deploy', 'gcal:d', 'h', '2026-03-01T00:00:00.000Z', 1, '[배포] 합성 기능', 1, '2026-03-03', '2026-03-04', 'confirmed')",
+   "INSERT INTO objects (object_key, source, query, kind, external_id, snapshot_hash, first_seen_at, last_seen_run, state, assigned_to_me, milestone_title) VALUES ('gh:i', 'github', 'q', 'issue', 'gh:i', 'h', '2026-03-01T00:00:00.000Z', 1, 'open', 1, '합성 기능')",
+   "INSERT INTO items (id, object_key, reason, tier, source, opened_at) VALUES (1, 'gh:i', 'reply_owed', 'P1', 'slack', '2026-03-02T00:30:00.000Z')"
+  ],
+  "steps": [
+   {
+    "op": "keep",
+    "ids": [
+     1
+    ],
+    "now": "2026-03-02T00:59:59.999Z"
+   },
+   {
+    "op": "rows",
+    "sql": "SELECT state, park_trigger, parked_until FROM items"
+   }
+  ]
+ }
+]

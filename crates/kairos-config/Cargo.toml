@@ -1,0 +1,23 @@
+[package]
+name = "kairos-config"
+description = "kairos 설정 파일(조직 프로필, 사용자 설정, 연동 결과)을 읽고 검증해 Profile을 만든다"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+chrono-tz.workspace = true
+kairos-core.workspace = true
+regex.workspace = true
+serde.workspace = true
+sha2.workspace = true
+toml.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+
+[lints]
+workspace = true
