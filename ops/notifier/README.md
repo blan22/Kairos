@@ -55,7 +55,7 @@ ops/notifier/build.sh
 
 ## 처음 한 번: setup
 
-`kairos setup`의 마지막 단계가 아래 두 명령을 대신한다. 손으로 할 때만 아래를 쓴다.
+`kairos setup`의 마지막 단계와 `kairos notify setup`이 아래 두 명령을 대신한다. 터미널에서 묻지 않고 바로 macOS 권한 창을 띄운다. 손으로 할 때만 아래를 쓴다.
 
 ```sh
 app="$HOME/Library/Application Support/kairos/0.2.0/ops/notifier/KairosNotifier.app"
@@ -66,6 +66,7 @@ app="$HOME/Library/Application Support/kairos/0.2.0/ops/notifier/KairosNotifier.
 `lsregister -f`는 설치본을 LaunchServices에 등록합니다. 알림을 누르면 macOS가 이 번들을 띄웁니다. 다시 설치한 뒤에도 한 번 실행합니다.
 
 권한 창에서 허용하면 "알림이 켜졌습니다" 알림이 뜹니다. 그 전까지 `post`는 3으로 끝나고 Mac 알림은 나가지 않습니다.
+macOS는 한 번 답한 앱에 권한 창을 다시 띄우지 않습니다. 거절한 뒤에는 `kairos notify setup`이 시스템 설정의 알림 화면을 엽니다. 거기서 kairos의 '알림 허용'을 켭니다.
 설치 전 개발 트리에서 실행하면 개발 트리의 번들이 따로 권한을 받습니다. 설치본 경로로 실행하세요.
 
 ## 클릭에서 reveal까지
@@ -86,7 +87,7 @@ app="$HOME/Library/Application Support/kairos/0.2.0/ops/notifier/KairosNotifier.
 
 ## 문제 해결
 
-- 알림이 안 뜹니다: `KairosNotifier status`를 확인하세요. `denied`면 시스템 설정 > 알림 > kairos에서 '알림 허용'을 켭니다.
+- 알림이 안 뜹니다: `kairos doctor`의 `Mac 알림` 줄을 보고 `kairos notify test`로 시험 알림을 보내 봅니다. 권한이 없으면 `kairos notify setup`을 실행합니다. 전에 거절했으면 시스템 설정 > 알림 > kairos에서 '알림 허용'을 켭니다.
 - 집중 모드에서 P0이 가려집니다: 이 앱에는 Time Sensitive 자격(entitlement)이 없어 집중 모드를 뚫지 못할 수 있습니다. 시스템 설정 > 집중 모드 > 해당 모드 > 허용된 앱에 kairos를 넣으세요.
 - 아이콘이 예전 것으로 보입니다: macOS가 아이콘을 캐시합니다. 다시 로그인하면 바뀝니다.
 - 눌러도 패널이 안 열립니다: 로그를 봅니다.

@@ -12,6 +12,7 @@ mod list;
 mod mcp;
 mod mode;
 mod next;
+mod notifier;
 mod reveal;
 mod sessions;
 mod settings;
@@ -22,7 +23,7 @@ mod surface;
 
 use crate::command::CommandRegistry;
 
-/// 순서가 `usage()`에 나오는 순서다.
+/// 새 명령은 여기와 `help`의 표에 한 줄씩 더한다.
 pub fn registry() -> CommandRegistry {
     CommandRegistry::new()
         .with(surface::Hello)

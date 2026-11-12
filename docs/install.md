@@ -9,7 +9,7 @@ git clone https://github.com/blan22/Kairos.git kairos && cd kairos
 scripts/install.sh [--org <파일> [--sha256 <값>]]
 ```
 
-미리 있어야 하는 것은 Apple Silicon Mac, Xcode Command Line Tools(`xcode-select --install`), Rust(rustup, 판은 `rust-toolchain.toml`이 받는다), 로그인한 gh(`gh auth login`), Claude Code다. Orca는 패널을 쓸 때만 있으면 된다. 빠진 것이 있으면 스크립트가 설치 명령을 알려 주고 멈춘다.
+미리 있어야 하는 것은 Apple Silicon Mac, Xcode Command Line Tools(`xcode-select --install`), Rust(rustup, 판은 `rust-toolchain.toml`이 받는다), 로그인한 gh(`gh auth login`), Claude Code다. Orca는 패널을 쓸 때만 있으면 된다. 빠진 것이 있으면 스크립트가 빠진 것을 모두 모아 설치 명령과 함께 알려 주고 멈춘다. `scripts/install.sh --help`는 사용법을 보여 준다.
 
 스크립트는 kairos, kairos-run, 알림 헬퍼를 빌드하고 `~/.local/bin/kairos`를 설치본(`current/bin/kairos`)에 건 뒤 `kairos setup`으로 넘긴다. 알림 헬퍼는 키체인의 Apple Development 인증서로 서명하고, 없으면 ad-hoc으로 서명한다. ad-hoc이면 다시 빌드할 때마다 알림 권한을 다시 물을 수 있다. `~/.local/bin`이 PATH에 없으면 더할 줄을 알려 준다.
 
@@ -19,13 +19,13 @@ scripts/install.sh [--org <파일> [--sha256 <값>]]
 scripts/install.sh --yes --google <회사 메일> --slack <Slack 멤버 ID> [--name <연차 일정의 이름>]
 ```
 
-`--yes`는 소스를 지금 값(처음이면 기본값)으로 두고, 설치, 알림 권한, Orca 패널 적재와 승인을 예로 답한다. 패널 승인 전 Orca의 권한 문구는 그대로 보여 준다. 조직 프로필은 `--org`가 없으면 실행한 kairos가 든 저장소의 `profiles/`에 하나뿐일 때만 들이고 SHA256을 찍는다. 지금 폴더의 `profiles/`는 묻지 않고 들이지 않는다. 넘기지 않은 식별자는 비워 두고 채우는 명령을 알려 준다. 세션은 켜지 않는다.
+`--yes`는 소스를 지금 값(처음이면 기본값)으로 두고, 설치, Orca 패널 적재와 승인을 예로 답한다. 알림 권한은 `--yes`가 아니어도 터미널에서 묻지 않는다. 패널 승인 전 Orca의 권한 문구는 그대로 보여 준다. 조직 프로필은 `--org`가 없으면 실행한 kairos가 든 저장소의 `profiles/`에 하나뿐일 때만 들이고 SHA256을 찍는다. 지금 폴더의 `profiles/`는 묻지 않고 들이지 않는다. 넘기지 않은 식별자는 비워 두고 채우는 명령을 알려 준다. 세션은 켜지 않는다.
 
 조직 프로필(`org.toml`)은 저장소에 넣지 않는다. 회사 도메인, 그룹 캘린더 ID, 저장소 이름이 들어 있기 때문이다. 관리자가 따로 나눠 주고 SHA256 지문을 함께 알려 준다. 받은 파일은 `profiles/`에 두거나(git이 무시한다) `--org <파일> --sha256 <값>`으로 넘긴다. `examples/org.toml`은 모양을 보여 주는 합성 예시다. 조직 없이 쓰면 조직 값이 필요한 판정(신뢰 도메인, 배포 캘린더, 플레이북)은 꺼진다.
 
 ## 설정과 연동
 
-`kairos setup`은 조직 프로필, 켤 서비스, 계정 연결, 설치, 알림과 Orca 패널을 차례로 묻는다. 조직 프로필은 SHA256을 보여 주고 `y`일 때만 들인다(`--yes`면 묻지 않고 들인다). 관리자가 지문을 알려 줬으면 `--sha256`으로 고정한다. 다시 실행해도 되고 Enter는 지금 값을 그대로 둔다. 설치는 `y`라고 답할 때만 한다.
+`kairos setup`은 조직 프로필, 켤 서비스, 계정 연결, 설치, Orca 패널을 차례로 묻고, 알림 권한은 macOS 권한 창으로 받는다. 조직 프로필은 SHA256을 보여 주고 `y`일 때만 들인다(`--yes`면 묻지 않고 들인다). 관리자가 지문을 알려 줬으면 `--sha256`으로 고정한다. 다시 실행해도 되고 Enter는 지금 값을 그대로 둔다. 설치는 `y`라고 답할 때만 한다.
 
 ```
 kairos setup [--org <파일> [--sha256 <값>]] [--yes] [--no-install] [--google <주소>] [--slack <ID>] [--name <이름>]
@@ -35,7 +35,9 @@ kairos setup [--org <파일> [--sha256 <값>]] [--yes] [--no-install] [--google 
 
 마지막 단계는 설치본(`<데이터 폴더>/current`)이 있을 때만 돈다. 개발 트리의 번들과 패널 폴더는 권한과 승인을 따로 받기 때문에 설치본을 쓴다.
 
-- Mac 알림: 헬퍼가 이미 권한을 받았으면(`status`가 `authorized`) 묻지 않는다. 아니면 묻고, 번들을 LaunchServices에 등록(`lsregister -f`)한 뒤 `KairosNotifier setup`으로 권한 창을 띄운다.
+- Mac 알림: 다른 Mac 앱과 같다. 터미널에서 묻지 않고 macOS 권한 창이 묻는다. 허용하면 확인 알림이 하나 오고 그때부터 알림이 간다. 헬퍼가 이미 권한을 받았으면(`status`가 `authorized`) 아무것도 띄우지 않는다. 아직 묻지 않은 상태면 번들을 LaunchServices에 등록(`lsregister -f`)한 뒤 `KairosNotifier setup`으로 권한 창을 띄운다. 창은 화면 오른쪽 위에 뜨고 2분 동안 기다린다.
+- 전에 거절했으면 macOS가 권한 창을 다시 띄우지 않는다. 그때는 시스템 설정의 알림 화면을 열지 묻는다(`--yes`와 입력이 끝난 실행은 열지 않고 알리기만 한다). 시스템 설정 > 알림 > kairos에서 '알림 허용'을 켜면 된다.
+- 나중에 다시 받으려면 `kairos notify setup`, 알림이 오는지 보려면 `kairos notify test`, 지금 상태는 `kairos doctor`의 `Mac 알림` 줄이다.
 - Orca 패널: 묻고 `orca plugin dev load <설치본>/plugins/orca-panel`을 부른다. Orca가 승인을 받으면 그 권한 문구를 그대로 보여 주고, `y`일 때만(또는 `--yes`) Orca가 준 지문(`ap1-…`)으로 `--approve`를 부른다. 묻는 승인의 기본은 아니오다. 판이 바뀌면 폴더 경로가 바뀌어 다시 승인한다.
 - 세션은 여기서 켜지 않는다. 차단 시험을 본 뒤 `kairos sessions on`을 직접 한다.
 
@@ -84,4 +86,4 @@ lunch = []
 
 세션 호스트는 `orca`(기본)와 `git`이다. `git`이면 `[hosts.git.repos]`의 로컬 클론에 `kairos/<이름>` 브랜치로 worktree를 만들고 띄울 명령을 돌려준다. VS Code 확장은 그 명령을 터미널로 띄우고, Claude Code는 명령을 보여 준다.
 
-0.2에서 올리면 launchd 라벨이 `dev.kairos.*`로 바뀐다. `install --register`가 옛 라벨(`com.<이름>.kairos.collect`, `com.<이름>.kairos.watchdog`)을 내리고 지운다. 이름이 같아도 링크이거나 내용에 그 라벨과 `KAIROS_HOME` 키가 없는 plist는 남의 잡으로 보고 건드리지 않는다. 알림 헬퍼의 번들 ID도 `dev.kairos.notifier`로 바뀌어 다시 빌드하고 `KairosNotifier setup`으로 권한을 받는다. 세션은 설정 지문이 없어 잠기므로 차단 시험 뒤 `kairos sessions on`을 다시 한다.
+0.2에서 올리면 launchd 라벨이 `dev.kairos.*`로 바뀐다. `install --register`가 옛 라벨(`com.<이름>.kairos.collect`, `com.<이름>.kairos.watchdog`)을 내리고 지운다. 이름이 같아도 링크이거나 내용에 그 라벨과 `KAIROS_HOME` 키가 없는 plist는 남의 잡으로 보고 건드리지 않는다. 알림 헬퍼의 번들 ID도 `dev.kairos.notifier`로 바뀌어 다시 빌드하고 `kairos notify setup`으로 권한을 받는다. 세션은 설정 지문이 없어 잠기므로 차단 시험 뒤 `kairos sessions on`을 다시 한다.

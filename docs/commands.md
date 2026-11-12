@@ -1,6 +1,8 @@
 # 명령
 
 ```
+kairos help [<명령> | --all]
+kairos --version
 kairos hello [--json]
 kairos list [--would-show | --items | --json [--all]]
 kairos next [--seen] [--surface panel|orca|claude-code|vscode] [--ack] [--json]
@@ -13,7 +15,7 @@ kairos triage [keep|drop <항목 ID>...] [--json]
 kairos focus [분] | --end | --status [--json]
 kairos display [on|off|auto] [--json]
 kairos sessions [on|off] [--json]
-kairos notify [on|off] [--json]
+kairos notify [on|off|setup|test] [--json]
 kairos accept <항목 ID> [--cancel] [--from claude-code] [--json]
 kairos move <항목 ID> [--json]
 kairos pr <항목 ID> [--json]
@@ -31,6 +33,12 @@ kairos connect [github | google <주소> | slack <ID> | name <이름> | mcp <소
 kairos mcp serve
 KAIROS_HOME=<비어 있는 새 폴더> kairos demo [--json]
 ```
+
+`kairos help`는 명령을 하는 일로 묶어 한 줄 설명과 함께 보여 준다. 호스트와 수집이 부르는 명령(`hello`, `watch`, `reveal`, `plan-tick`, `page-info`, `ingest`, `mcp`)은 `--all`에만 나온다. `kairos help <명령>`과 `kairos <명령> --help`는 그 명령의 설명과 사용법 줄을 낸다. 옵션을 잘못 주면 오류 코드 아래에 사용법 줄이 따라온다. 잘못 친 명령에는 가까운 이름을 권한다.
+
+`notify setup`은 macOS 알림 권한 창을 띄운다. 터미널에서 묻지 않는다. 이미 받았으면 아무것도 띄우지 않고, 전에 거절했으면 권한 창이 다시 뜨지 않으므로 시스템 설정의 알림 화면을 연다. `notify test`는 고정 문구의 시험 알림 하나를 보낸다. 둘 다 설치본의 헬퍼를 쓰고 세션 안에서는 하지 않는다.
+
+`doctor`는 끝에 확인할 것을 모아 다시 보여 준다. 없으면 `문제 없음`이다. `Mac 알림` 줄은 알림 권한 상태다. 권한을 아직 받지 않았으면 문제로 올린다.
 
 `--skip-slack-until`은 Slack 질의가 `parse_error`로 멈췄을 때 쓰는 복구 명령이다. 그 시각까지 건너뛰고, 건너뛴 구간은 7일 동안 `doctor`와 `list` 첫 줄에 나온다. 쪽 상한이나 틱 마감으로 잘린 Slack 질의는 다음 틱이 읽은 마지막 건 1초 앞부터 저절로 이어 읽는다(`page_cap`). 같은 초에 쪽 예산보다 많은 메시지가 몰려 이어 읽어도 앞으로 가지 못할 때만 `page_cap_stalled` 공백으로 알리고, 그때도 이 명령으로 건너뛸 수 있다.
 

@@ -316,3 +316,27 @@ fn 권한_문제는_폴더와_파일을_이름순으로_본다() {
     assert_eq!(problems.len(), 2);
     assert!(problems[0].ends_with("a.log") && problems[1].ends_with("b.log"), "{problems:?}");
 }
+
+#[test]
+fn mac_알림_권한을_한_줄로_보여_주고_아직_받지_않은_상태만_문제로_올린다() {
+    let (_dir, home) = temp_home();
+    drop(Database::open(&home).unwrap());
+    let read = |answer: &'static str| {
+        let doctor = doctor_with(&home, BTreeMap::new(), answer).with_notifier(Some("/x/KairosNotifier".to_owned()));
+        let report = doctor.diagnose().unwrap();
+        let line = report.lines.iter().find(|line| line.starts_with("Mac 알림")).cloned().unwrap();
+        (line, report.problems.iter().any(|problem| problem.contains("Mac 알림")))
+    };
+    assert_eq!(read("authorized\n"), ("Mac 알림: 허용됨".to_owned(), false));
+    assert_eq!(read("provisional\n"), ("Mac 알림: 허용됨".to_owned(), false));
+    let (denied, problem) = read("denied\n");
+    assert!(denied.starts_with("Mac 알림: 꺼짐.") && denied.contains("kairos notify setup"), "{denied}");
+    assert!(!problem, "사용자가 끈 것은 알리기만 한다");
+    let (pending, problem) = read("notDetermined\n");
+    assert!(pending.contains("kairos notify setup"), "{pending}");
+    assert!(problem);
+    assert_eq!(read(""), ("Mac 알림: 상태 모름(알림 헬퍼가 답하지 않음)".to_owned(), false));
+    // 헬퍼를 주지 않으면 부르지 않고 줄도 없다.
+    let silent = doctor_with(&home, BTreeMap::new(), "authorized\n").diagnose().unwrap();
+    assert!(!silent.lines.iter().any(|line| line.starts_with("Mac 알림")), "{:?}", silent.lines);
+}

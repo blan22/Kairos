@@ -1,4 +1,4 @@
-//! setup의 설치 뒤 단계(알림 권한, Orca 패널). 실제 Orca, 알림 헬퍼, lsregister는 부르지 않는다.
+//! setup의 설치 뒤 단계(알림 권한, Orca 패널)와 `kairos notify setup|test`. 실제 Orca, 알림 헬퍼, lsregister, open은 부르지 않는다.
 #![allow(clippy::unwrap_used)]
 
 mod common;
@@ -22,8 +22,9 @@ impl Fakes {
     }
 }
 
-/// 데이터 폴더에 설치본 모양(`current -> 0.2.0`)과 가짜 헬퍼, lsregister, orca를 둔다. 호출은 한 파일에 남는다.
+/// 데이터 폴더에 설치본 모양(`current -> 0.2.0`)과 가짜 헬퍼, lsregister, open, orca를 둔다. 호출은 한 파일에 남는다.
 /// `status`는 헬퍼의 권한 상태, `orca_approved`는 승인 없이 올라가는지다.
+/// 데이터 폴더에 `post-exit` 파일이 있으면 헬퍼의 `post`가 그 안의 코드로 끝난다.
 fn fakes(status: &str, orca_approved: bool) -> Fakes {
     let mut cli = Cli::new();
     let root = cli.root.clone();
@@ -35,13 +36,17 @@ fn fakes(status: &str, orca_approved: bool) -> Fakes {
     fs::create_dir_all(&panel).unwrap();
     std::os::unix::fs::symlink("0.2.0", root.join("current")).unwrap();
     let log_text = log.to_str().unwrap();
+    let post_exit = root.join("post-exit");
+    let post_exit = post_exit.to_str().unwrap();
     let notifier = macos.join("KairosNotifier");
     write_script(
         &notifier,
         &format!(
-            "#!/bin/sh\nprintf 'notifier %s\\n' \"$*\" >> '{log_text}'\ncase \"$1\" in\nstatus) printf '{status}\\n' ;;\nesac\nexit 0\n"
+            "#!/bin/sh\nprintf 'notifier %s\\n' \"$*\" >> '{log_text}'\ncase \"$1\" in\nstatus) printf '{status}\\n' ;;\npost) [ -f '{post_exit}' ] && exit \"$(cat '{post_exit}')\" ;;\nesac\nexit 0\n"
         ),
     );
+    let open = root.join("open");
+    write_script(&open, &format!("#!/bin/sh\nprintf 'open %s\\n' \"$*\" >> '{log_text}'\n"));
     let lsregister = root.join("lsregister");
     write_script(&lsregister, &format!("#!/bin/sh\nprintf 'lsregister %s\\n' \"$*\" >> '{log_text}'\n"));
     let orca = root.join("orca");
@@ -60,6 +65,7 @@ fn fakes(status: &str, orca_approved: bool) -> Fakes {
     );
     cli.set("KAIROS_NOTIFIER", notifier.to_str().unwrap());
     cli.set("KAIROS_LSREGISTER", lsregister.to_str().unwrap());
+    cli.set("KAIROS_OPEN", open.to_str().unwrap());
     cli.set("KAIROS_ORCA", orca.to_str().unwrap());
     let panel = fs::canonicalize(panel).unwrap();
     Fakes { cli, log, panel }
@@ -73,11 +79,13 @@ fn answers(tail: &str) -> Vec<u8> {
 
 #[test]
 fn setup은_알림_권한을_받고_패널을_승인한다() {
-    let fakes = fakes("denied", false);
-    // 알림 예(Enter), 패널 예(Enter), 승인 y.
-    let done = fakes.cli.pipe(&["setup"], &answers("\n\ny\n"));
+    let fakes = fakes("notDetermined", false);
+    // 알림은 묻지 않는다. macOS 권한 창이 묻는다. 패널 예(Enter), 승인 y.
+    let done = fakes.cli.pipe(&["setup"], &answers("\ny\n"));
     assert_eq!(done.status, 0, "{}{}", done.out, done.err);
     assert!(done.out.contains("5/5 알림과 Orca 패널"), "{}", done.out);
+    assert!(!done.out.contains("알림 권한을 받을까요"), "{}", done.out);
+    assert!(done.out.contains("권한 창에서 '허용'을 누르세요"), "{}", done.out);
     assert!(done.out.contains("Mac 알림 권한을 받았습니다"), "{}", done.out);
     // Orca가 보여 준 권한 문구는 띄우고, 명령 안내 줄은 뺀다.
     assert!(done.out.contains("Runs its own code"), "{}", done.out);
@@ -102,8 +110,8 @@ fn setup은_알림_권한을_받고_패널을_승인한다() {
 
 #[test]
 fn setup은_묻지_않으면_패널을_승인하지_않는다() {
-    let fakes = fakes("denied", false);
-    // 입력이 끝나면 기본값이다. 알림과 적재는 예, 승인은 아니오다.
+    let fakes = fakes("notDetermined", false);
+    // 입력이 끝나면 기본값이다. 적재는 예, 승인은 아니오다.
     let done = fakes.cli.pipe(&["setup"], b"");
     assert_eq!(done.status, 0, "{}{}", done.out, done.err);
     assert!(done.out.contains("승인하지 않았습니다"), "{}", done.out);
@@ -140,7 +148,7 @@ fn setup은_설치본이_없으면_다섯째_단계를_건너뛴다() {
 
 #[test]
 fn setup_yes는_묻지_않고_계정을_기록하고_패널까지_승인한다() {
-    let fakes = fakes("denied", false);
+    let fakes = fakes("notDetermined", false);
     let done = fakes
         .cli
         .pipe(&["setup", "--yes", "--no-install", "--google", "someone@example.com", "--slack", "U0TEST1234"], b"");
@@ -189,4 +197,105 @@ fn setup_yes는_모양이_틀린_계정을_기록하지_않는다() {
     assert!(done.out.contains("저장하지 않음"), "{}", done.out);
     let connections = fs::read_to_string(fakes.cli.root.join("connections.toml")).unwrap_or_default();
     assert!(!connections.contains("not an id"), "{connections}");
+}
+
+const SETTINGS: &str =
+    "open x-apple.systempreferences:com.apple.Notifications-Settings.extension?id=dev.kairos.notifier";
+
+#[test]
+fn setup은_거절된_알림에_권한_창_대신_시스템_설정을_연다() {
+    let fakes = fakes("denied", true);
+    // 시스템 설정 예(Enter), 패널 예(Enter).
+    let done = fakes.cli.pipe(&["setup"], &answers("\n\n"));
+    assert_eq!(done.status, 0, "{}{}", done.out, done.err);
+    assert!(done.out.contains("권한 창을 다시 띄우지 않습니다"), "{}", done.out);
+    let calls = fakes.calls();
+    assert!(calls.contains(&SETTINGS.to_owned()), "{calls:?}");
+    assert!(!calls.contains(&"notifier setup".to_owned()), "{calls:?}");
+    assert!(calls.iter().all(|call| !call.starts_with("lsregister")), "{calls:?}");
+}
+
+#[test]
+fn setup은_시스템_설정을_열지_않겠다고_하거나_yes면_열지_않는다() {
+    let declined = fakes("denied", true);
+    assert_eq!(declined.cli.pipe(&["setup"], &answers("n\n\n")).status, 0);
+    assert!(declined.calls().iter().all(|call| !call.starts_with("open ")), "{:?}", declined.calls());
+    // 입력이 끝났으면 사람이 없다. 화면을 띄우지 않는다.
+    let unattended = fakes("denied", true);
+    assert_eq!(unattended.cli.pipe(&["setup"], b"").status, 0);
+    assert!(unattended.calls().iter().all(|call| !call.starts_with("open ")), "{:?}", unattended.calls());
+    let yes = fakes("denied", true);
+    let done = yes.cli.pipe(&["setup", "--yes", "--no-install"], b"");
+    assert_eq!(done.status, 0, "{}{}", done.out, done.err);
+    assert!(done.out.contains("시스템 설정 > 알림 > kairos"), "{}", done.out);
+    assert!(yes.calls().iter().all(|call| !call.starts_with("open ")), "{:?}", yes.calls());
+}
+
+#[test]
+fn notify_setup은_묻지_않고_권한_창을_띄운다() {
+    let fakes = fakes("notDetermined", true);
+    let done = fakes.cli.run(&["notify", "setup"]);
+    assert_eq!(done.status, 0, "{}{}", done.out, done.err);
+    assert!(done.out.contains("Mac 알림 권한을 받았습니다"), "{}", done.out);
+    let app = fakes.panel.parent().unwrap().parent().unwrap().join("ops/notifier/KairosNotifier.app");
+    assert_eq!(
+        fakes.calls(),
+        ["notifier status".to_owned(), format!("lsregister -f {}", app.to_str().unwrap()), "notifier setup".to_owned()]
+    );
+}
+
+#[test]
+fn notify_setup은_이미_받았으면_그대로_두고_거절됐으면_시스템_설정을_연다() {
+    let granted = fakes("authorized", true);
+    let done = granted.cli.run(&["notify", "setup"]);
+    assert_eq!((done.status, done.out.as_str()), (0, "Mac 알림: 권한이 이미 있습니다\n"));
+    assert_eq!(granted.calls(), ["notifier status"]);
+
+    let denied = fakes("denied", true);
+    let done = denied.cli.run(&["notify", "setup"]);
+    assert_eq!(done.status, 1, "{}{}", done.out, done.err);
+    assert!(done.out.contains("시스템 설정의 알림 화면을 열었습니다"), "{}", done.out);
+    assert_eq!(denied.calls(), ["notifier status", SETTINGS]);
+    // --json의 표준 출력은 JSON 한 덩어리다.
+    let json = denied.cli.run(&["notify", "setup", "--json"]);
+    assert_eq!(json.body()["notify"], serde_json::json!({ "permission": "denied" }));
+}
+
+#[test]
+fn notify_test는_고정_문구의_알림을_보내고_권한이_없으면_알린다() {
+    let fakes = fakes("authorized", true);
+    let done = fakes.cli.run(&["notify", "test"]);
+    assert_eq!(done.status, 0, "{}{}", done.out, done.err);
+    assert!(done.out.contains("시험 알림을 보냈습니다"), "{}", done.out);
+    let calls = fakes.calls();
+    assert_eq!(calls.len(), 1, "{calls:?}");
+    let payload: serde_json::Value = serde_json::from_str(calls[0].strip_prefix("notifier post ").unwrap()).unwrap();
+    assert_eq!(
+        (&payload["title"], &payload["tier"], &payload["items"]),
+        (&"kairos".into(), &"P1".into(), &serde_json::json!([]))
+    );
+
+    fs::write(fakes.cli.root.join("post-exit"), "3").unwrap();
+    let refused = fakes.cli.run(&["notify", "test"]);
+    assert_eq!(refused.status, 1);
+    assert!(refused.out.contains("kairos notify setup"), "{}", refused.out);
+    fs::write(fakes.cli.root.join("post-exit"), "5").unwrap();
+    let failed = fakes.cli.run(&["notify", "test", "--json"]);
+    assert_eq!((failed.status, &failed.body()["error"]["code"]), (1, &serde_json::json!("notify_failed")));
+}
+
+#[test]
+fn notify_setup과_test는_설치본이_없거나_세션_안이면_하지_않는다() {
+    let bare = Cli::new();
+    for mode in ["setup", "test"] {
+        let done = bare.run(&["notify", mode]);
+        assert_eq!(done.status, 1, "{mode}");
+        assert!(done.out.contains("설치본이 없습니다"), "{}", done.out);
+    }
+    let fakes = fakes("notDetermined", true);
+    for mode in ["setup", "test"] {
+        let done = fakes.cli.run_with(&[("KAIROS_SESSION", "1")], &["notify", mode]);
+        assert_eq!(done.status, 1, "{mode}");
+    }
+    assert!(fakes.calls().is_empty(), "{:?}", fakes.calls());
 }

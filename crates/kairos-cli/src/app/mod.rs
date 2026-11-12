@@ -47,6 +47,16 @@ fn notifier_bin(env: &BTreeMap<String, String>, layout: Option<&InstallLayout>) 
     Path::is_file(&bin).then(|| bin.to_string_lossy().into_owned())
 }
 
+/// `doctor`가 권한 상태를 묻는 헬퍼. `notifier_bin`과 달리 지금 폴더의 조상은 보지 않는다.
+/// 진단 명령이 남의 저장소에 놓인 실행 파일을 띄우지 않게 한다.
+fn doctor_notifier_bin(env: &BTreeMap<String, String>, layout: Option<&InstallLayout>) -> Option<String> {
+    let bin = match given(env, "KAIROS_NOTIFIER") {
+        Some(bin) => PathBuf::from(bin),
+        None => layout?.binary_asset_root()?.join(NOTIFIER_APP_REL),
+    };
+    Path::is_file(&bin).then(|| bin.to_string_lossy().into_owned())
+}
+
 /// 프로세스 환경. 자식 환경이 문자열이라 UTF-8이 아닌 값은 넘어가지 않는다.
 fn process_env() -> BTreeMap<String, String> {
     std::env::vars_os().filter_map(|(key, value)| Some((key.into_string().ok()?, value.into_string().ok()?))).collect()
@@ -61,6 +71,8 @@ pub struct AppContext {
     env: BTreeMap<String, String>,
     sources: SourceRegistry,
     notifier: Option<Arc<dyn Notifier>>,
+    /// 알림 헬퍼의 실행 파일. `doctor`가 권한 상태를 읽는다.
+    notifier_bin: Option<String>,
     panel: Option<Arc<dyn PanelOpener>>,
     sleep: Option<Arc<dyn SleepProbe>>,
     layout: Option<InstallLayout>,
@@ -86,6 +98,7 @@ impl AppContext {
             env,
             sources,
             notifier: None,
+            notifier_bin: None,
             panel: None,
             sleep: None,
             layout: None,
@@ -103,6 +116,8 @@ impl AppContext {
         let layout = InstallLayout::current();
         let notifier = notifier_bin(&env, layout.as_ref());
         let mut context = Self::new(KairosHome::from_env(), clock, runner.clone(), env).with_console(Console::system());
+        // doctor가 상태를 묻는 헬퍼는 실행 파일 쪽 설치 자료에서만 고른다. 지금 폴더는 남의 저장소일 수 있다.
+        context.notifier_bin = doctor_notifier_bin(&context.env, layout.as_ref());
         if let Some(bin) = notifier {
             context = context.with_notifier(Arc::new(NativeNotifier::new(runner.clone(), bin)));
         }
@@ -295,6 +310,7 @@ impl AppContext {
     pub fn doctor(&self) -> Doctor {
         let config = DoctorConfig { home: self.home.clone(), user_home: self.user_home.clone(), env: self.env.clone() };
         Doctor::new(config, self.clock.clone(), self.runner.clone(), self.sources.sources().to_vec())
+            .with_notifier(self.notifier_bin.clone())
     }
 
     /// state.json을 새로 쓴다. 상태 표시줄 건수가 조작 뒤 바로 맞게 한다.

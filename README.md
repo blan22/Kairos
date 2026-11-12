@@ -36,7 +36,7 @@ git clone https://github.com/blan22/Kairos.git kairos && cd kairos
 scripts/install.sh
 ```
 
-스크립트가 실행 파일과 알림 헬퍼를 빌드하고 `~/.local/bin/kairos`를 건 뒤 `kairos setup`으로 넘긴다. setup은 조직 프로필, 켤 서비스, 계정 연결, 설치, 알림과 Orca 패널을 차례로 묻는다. 업그레이드도 같은 명령이다. 묻지 않고 끝까지 가는 `--yes`, 단계별 명령, 설정 파일의 모양은 [설치와 설정](docs/install.md)에 있다.
+스크립트가 실행 파일과 알림 헬퍼를 빌드하고 `~/.local/bin/kairos`를 건 뒤 `kairos setup`으로 넘긴다. setup은 조직 프로필, 켤 서비스, 계정 연결, 설치, Orca 패널을 차례로 묻는다. 알림은 다른 Mac 앱처럼 macOS 권한 창이 묻고, 허용하면 그때부터 온다. 업그레이드도 같은 명령이다. 묻지 않고 끝까지 가는 `--yes`, 단계별 명령, 설정 파일의 모양은 [설치와 설정](docs/install.md)에 있다.
 
 조직 프로필은 저장소에 넣지 않는다. 관리자가 따로 나눠 주고 지문(SHA256)을 알려 준다. `examples/org.toml`이 합성 값으로 쓴 예시다.
 
@@ -49,6 +49,8 @@ kairos later <ID>      # 나중에
 kairos done <ID>       # 끝냄
 kairos doctor          # 수집과 설정 상태
 kairos sources         # 연동 서비스 켜고 끄기
+kairos notify test     # Mac 알림이 오는지 시험(권한은 kairos notify setup)
+kairos help            # 명령 전체와 한 줄 설명
 ```
 
 수집은 launchd가 3분마다 돈다. 첫 정상 수집 뒤 하루는 기록만 하고 카드와 알림을 내지 않는다(`kairos display`로 바꾼다). 명령 전체는 [명령](docs/commands.md), 고르는 규칙과 알림 예산은 [항목과 표시](docs/items.md)에 있다.

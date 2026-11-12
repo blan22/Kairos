@@ -9,6 +9,7 @@ mod app;
 mod args;
 mod command;
 mod commands;
+mod help;
 mod js_number;
 mod reply;
 mod session;
@@ -65,15 +66,16 @@ fn refuse(args: &[String], code: &str, message: &str) -> i32 {
 /// 데이터 폴더가 git 작업 트리 안이면 `help`만 돈다.
 pub fn kairos_main() -> i32 {
     let args = process_args();
-    let help = matches!(args.first().map(String::as_str), Some("help" | "--help") | None);
+    let help = matches!(
+        args.first().map(String::as_str),
+        Some("help" | "--help" | "-h" | "--version" | "-V" | "version") | None
+    );
     if !help && let Some(message) = home_in_worktree() {
         return refuse(&args, "home_in_git_worktree", &message);
     }
     if let Err(error) = install_profile() {
-        let diagnostic = matches!(
-            args.first().map(String::as_str),
-            Some("config" | "connect" | "sources" | "setup" | "help" | "--help") | None
-        );
+        let diagnostic =
+            matches!(args.first().map(String::as_str), Some("config" | "connect" | "sources" | "setup") | None) || help;
         if !diagnostic {
             let message = format!("kairos 설정 오류: {error} (kairos config validate로 확인)");
             return refuse(&args, error.code, &message);
