@@ -12,6 +12,7 @@ mod surfaces;
 use std::fs;
 use std::path::{Path, PathBuf};
 
+use kairos_agenda::KairosControl;
 use kairos_config::{Connections, IdentityField, ORG_FILE};
 use kairos_core::KairosResult;
 use kairos_core::catalog::{self, CATALOG, Need, SourceSpec};
@@ -421,6 +422,27 @@ impl Wizard<'_> {
         self.console.print("세션을 쓰려면 읽기 전용 토큰을 넣습니다: kairos connect session-token < 토큰파일");
     }
 
+    /// 표시를 켜서 첫 수집부터 카드와 알림을 내게 한다. 기본값 auto는 기록 1근무일이 끝날 때까지 알리지 않는다.
+    /// 표시 모드를 직접 고른 적이 있으면 그 값을 지킨다. 켰으면 켜기 전의 값을 돌려준다. 설치가 실패하면 그 값으로 되돌린다.
+    fn show_from_first_collect(&self) -> KairosResult<Option<KairosControl>> {
+        let before = self.context.control();
+        let Some(shown) = before.clone().shown_from_install() else {
+            return Ok(None);
+        };
+        self.write_display(&shown)?;
+        self.console.print("표시를 켰습니다. 첫 수집부터 카드와 알림을 냅니다");
+        self.console.print("하루 동안 기록만 하려면: kairos display auto");
+        Ok(Some(before))
+    }
+
+    /// 표시 모드를 쓰고 state.json을 맞춘다. 바로 도는 수집 틱이 수집 시간 밖이나 중단 상태로 끝나면 state.json을 쓰지 않는다.
+    /// state.json은 감시와 조회용이고 다음 틱이 다시 쓰므로, 맞추지 못해도 설치를 멈추지 않는다.
+    fn write_display(&self, control: &KairosControl) -> KairosResult<()> {
+        self.context.control_file().write(control)?;
+        let _ = self.context.refresh_state();
+        Ok(())
+    }
+
     fn install(&self) -> KairosResult<i32> {
         let question = "설치하고 launchd에 등록해 수집을 시작할까요? (kairos install --register)";
         if !self.agree(question, false)? {
@@ -440,12 +462,19 @@ impl Wizard<'_> {
         } else {
             layout.asset_root()
         };
+        // 등록하면 수집 잡이 바로 한 번 돈다. 그 틱이 열린 표시를 읽도록 등록보다 먼저 켠다.
+        let before = self.show_from_first_collect()?;
         let options =
             InstallOptions { mode: InstallMode::Register, ..InstallOptions::new(self.context.home().clone(), assets) };
-        let result = Installer::new(self.context.runner()).install(&options)?;
-        for line in &result.lines {
+        let result = Installer::new(self.context.runner()).install(&options);
+        for line in result.iter().flat_map(|result| &result.lines) {
             self.console.print(line);
         }
-        Ok(i32::from(result.failed))
+        // 설치하지 못했는데 표시만 켜져 있으면, 나중에 install --register로 설치했을 때 묻지도 않고 알림이 나간다.
+        if let Some(before) = before.filter(|_| result.as_ref().map_or(true, |result| result.failed)) {
+            self.write_display(&before)?;
+            self.console.print("설치하지 못해 표시 모드를 되돌렸습니다");
+        }
+        Ok(i32::from(result?.failed))
     }
 }

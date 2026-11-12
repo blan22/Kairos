@@ -163,6 +163,10 @@ fn setup_yes는_묻지_않고_계정을_기록하고_패널까지_승인한다()
     let connections = fs::read_to_string(fakes.cli.root.join("connections.toml")).unwrap();
     assert!(connections.contains("someone@example.com"), "{connections}");
     assert!(connections.contains("U0TEST1234"), "{connections}");
+    // 설치하지 않으면 표시 모드를 건드리지 않는다. 표시는 설치 단계가 켠다.
+    assert!(!done.out.contains("표시를 켰습니다"), "{}", done.out);
+    let control = fs::read_to_string(fakes.cli.root.join("control.json")).unwrap_or_default();
+    assert!(!control.contains("displayMode"), "{control}");
 }
 
 #[test]

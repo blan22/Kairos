@@ -81,7 +81,7 @@ kairos update          # 현재 버전과 업데이트 명령
 kairos help            # 전체 명령과 한 줄 설명
 ```
 
-수집은 launchd가 3분마다 실행한다. 첫 정상 수집 뒤 하루 동안은 기록만 하고 카드와 알림을 내지 않는다(`kairos display`로 바꿀 수 있다). 전체 명령은 [명령](docs/commands.md)에, 일을 고르는 규칙과 알림 예산은 [항목과 표시](docs/items.md)에 있다.
+수집은 launchd가 3분마다 실행하고, 설치하면 바로 한 번 실행한다. `kairos setup`으로 설치하면 표시를 켜 두므로 첫 수집부터 카드와 알림을 낸다. 하루 동안 기록만 하려면 `kairos display auto`로 바꾼다. 전체 명령은 [명령](docs/commands.md)에, 일을 고르는 규칙과 알림 예산은 [항목과 표시](docs/items.md)에 있다.
 
 일을 세션에 맡기려면 차단 테스트를 확인한 뒤 `kairos sessions on`으로 켠다. 세션이 할 수 있는 일과 막힌 일은 [수락과 세션](docs/sessions.md)에 있다.
 

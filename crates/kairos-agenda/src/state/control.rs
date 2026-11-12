@@ -153,6 +153,14 @@ impl KairosControl {
         self.with(DISPLAY_MODE, Value::from(mode.as_str()))
     }
 
+    /// 설치가 표시를 바로 켠 값. 첫 수집부터 카드와 알림을 내게 한다.
+    /// 표시 모드를 고른 적이 없고 표시가 열린 적도 없을 때만 on으로 바꾼다. 사용자가 고른 값(on, off, auto)은 지킨다.
+    #[must_use]
+    pub fn shown_from_install(self) -> Option<Self> {
+        let untouched = self.text(DISPLAY_MODE).is_none() && !self.display_opened();
+        untouched.then(|| self.with_display_mode(DisplayMode::On))
+    }
+
     /// 포커스 값이 있는가.
     pub fn has_focus(&self) -> bool {
         self.fields.get(FOCUS).is_some_and(truthy)
