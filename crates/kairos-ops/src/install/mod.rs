@@ -190,8 +190,23 @@ impl Installer {
             failed |= code != 0;
             let status = if code == 0 { "등록됨".to_owned() } else { format!("등록 실패(코드 {code})") };
             lines.push(format!("{}: {status}", plist.label));
+            if code == 0 && plist.label == COLLECT_LABEL {
+                lines.push(Self::collect_now(&launchctl, &domain));
+            }
         }
         failed
+    }
+
+    /// 등록한 수집 잡을 바로 한 번 돌린다. 다음 3분 눈금을 기다리지 않고 설치 직후에 수집하고, 알릴 것이 있으면 그 틱이 알린다.
+    /// launchd가 plist의 인자와 환경 그대로 띄우므로 수집 시간, 수집 중단, 방해 금지 판정은 예약된 틱과 같다.
+    /// 이미 도는 틱이 있으면 launchd가 새로 띄우지 않는다. 실패해도 잡은 등록돼 있어 다음 눈금에 수집하므로 설치 실패로 세지 않는다.
+    fn collect_now(launchctl: &Launchctl<'_>, domain: &str) -> String {
+        let code = launchctl.run(&["kickstart", &format!("{domain}/{COLLECT_LABEL}")]);
+        if code == 0 {
+            format!("{COLLECT_LABEL}: 첫 수집을 바로 시작함")
+        } else {
+            format!("{COLLECT_LABEL}: 첫 수집을 바로 시작하지 못함(코드 {code}). 다음 틱에 수집합니다")
+        }
     }
 
     pub fn uninstall(&self, options: &UninstallOptions) -> KairosResult<UninstallResult> {

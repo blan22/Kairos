@@ -28,7 +28,8 @@
 
 - `kairos notify`가 `off`면 `kairos notify on`으로 켠다.
 - 근무 요일과 근무 시간 밖에는 알림을 내지 않는다(`config.toml`의 `[schedule]`).
-- 처음 설치한 뒤 첫 근무일에는 기록만 하고 카드와 알림을 내지 않는다. `kairos display`로 현재 상태를 보고 `kairos display on`으로 연다.
+- 표시 모드가 auto면 첫 수집 뒤 첫 근무일에는 기록만 하고 카드와 알림을 내지 않는다. `kairos setup`으로 설치하면 표시를 켜 두지만, `kairos install --register`만 실행했거나 `kairos display auto`를 고른 경우에는 auto다. `kairos display`로 현재 상태를 보고 `kairos display on`으로 연다.
+- 설치 직후의 첫 수집은 알림 권한을 허용하기 전에 돌 수 있다. 그때 알리지 못한 일은 권한을 허용한 뒤의 틱이 다시 알린다.
 - `kairos pause` 중에는 알림을 내지 않고, `kairos focus` 중에는 쌓아 둔다.
 - macOS 집중 모드가 켜져 있으면 알림 센터에만 쌓인다.
 
@@ -36,7 +37,7 @@
 
 ## 카드나 항목이 보이지 않는다
 
-- 표시가 닫혀 있는 동안(첫 근무일, `kairos display off`)에는 기록만 한다. `kairos list --would-show`는 표시됐을 항목을, `kairos list --items`는 열린 항목을 보여 준다.
+- 표시가 닫혀 있는 동안(auto의 첫 근무일, `kairos display off`)에는 기록만 한다. `kairos list --would-show`는 표시됐을 항목을, `kairos list --items`는 열린 항목을 보여 준다.
 - 상태 줄에 `수집 기록 없음`이 나오면 수집이 아직 돌지 않은 것이다. `kairos doctor`의 소스 줄과 launchd 작업을 확인한다. 작업이 없으면 `kairos setup`을 다시 실행해 설치한다.
 - 서비스가 `설정 필요` 상태면 `kairos sources`가 부족한 값과 채우는 명령을 알려 준다.
 - Mac이 잠든 동안의 틱은 고장이 아니다(`sleep_interrupted`).

@@ -216,11 +216,41 @@ fn install_register만_launchctl_bootstrap을_부른다() {
     let calls = fake.calls();
     assert_eq!(
         calls.iter().map(|call| call[0].as_str()).collect::<Vec<_>>(),
-        ["bootout", "bootstrap", "bootout", "bootstrap"]
+        ["bootout", "bootstrap", "kickstart", "bootout", "bootstrap"]
     );
     assert_eq!(calls[0], ["bootout", "gui/501/dev.kairos.collect"]);
     assert_eq!(calls[1][1], "gui/501");
     assert_eq!(calls[1][2], registered.plan.plists[0].path.to_string_lossy());
+}
+
+#[test]
+fn install_register는_수집_잡을_등록한_뒤_바로_한_번_돌린다() {
+    let setup = Setup::new(InstallMode::Register);
+    let fake = FakeLaunchctl::ok();
+    let registered = installer(&fake).install(&setup.options).unwrap();
+    // 수집 잡만 돌린다. 인자는 고정된 라벨뿐이고 감시자는 제 주기를 기다린다.
+    let kicks: Vec<Vec<String>> = fake.calls().into_iter().filter(|call| call[0] == "kickstart").collect();
+    assert_eq!(kicks, [["kickstart", "gui/501/dev.kairos.collect"]]);
+    assert!(!registered.failed);
+    let at = |line: &str| registered.lines.iter().position(|found| found == line).unwrap();
+    assert!(at("dev.kairos.collect: 등록됨") < at("dev.kairos.collect: 첫 수집을 바로 시작함"));
+    assert!(at("dev.kairos.collect: 첫 수집을 바로 시작함") < at("dev.kairos.watchdog: 등록됨"));
+}
+
+#[test]
+fn 첫_수집을_시작하지_못해도_설치는_실패가_아니고_등록에_실패한_잡은_돌리지_않는다() {
+    let setup = Setup::new(InstallMode::Register);
+    let stuck = FakeLaunchctl::replying(|args| if args[0] == "kickstart" { 3 } else { 0 });
+    let registered = installer(&stuck).install(&setup.options).unwrap();
+    assert!(!registered.failed);
+    let line = "dev.kairos.collect: 첫 수집을 바로 시작하지 못함(코드 3). 다음 틱에 수집합니다";
+    assert!(registered.lines.contains(&line.to_owned()), "{:?}", registered.lines);
+
+    let broken = Setup::new(InstallMode::Register);
+    let fake = FakeLaunchctl::replying(|args| if args[0] == "bootstrap" { 5 } else { 0 });
+    let failed = installer(&fake).install(&broken.options).unwrap();
+    assert!(failed.failed);
+    assert!(fake.calls().iter().all(|call| call[0] != "kickstart"));
 }
 
 #[test]

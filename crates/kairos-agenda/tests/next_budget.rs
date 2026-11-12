@@ -58,6 +58,25 @@ fn 표시_게이트_수집_전_off_pause는_카드를_주지_않고_on은_auto�
 }
 
 #[test]
+fn 설치는_표시_모드를_고른_적이_없을_때만_표시를_켠다() {
+    let none = none();
+    let gate = |control: &KairosControl, start: Option<&str>| gate_at(start, control, T1, &none);
+    // 고른 적이 없으면 켠다. 기본값이면 닫혀 있을 수집 전과 기록 1근무일 안에도 열린다.
+    let base = KairosControl::default();
+    assert_eq!(gate(&base, None).reason, Some(GateReason::NoCollection));
+    assert_eq!(gate(&base, Some(T0)).reason, Some(GateReason::Recording));
+    let shown = base.clone().shown_from_install().unwrap();
+    assert_eq!(shown.display_mode(), DisplayMode::On);
+    assert!(gate(&shown, None).open && gate(&shown, Some(T0)).open);
+    // 사용자가 고른 값은 지킨다. 직접 고른 auto는 기록 1근무일을 원한다는 뜻이다.
+    for mode in [DisplayMode::On, DisplayMode::Off, DisplayMode::Auto] {
+        assert!(base.clone().with_display_mode(mode).shown_from_install().is_none());
+    }
+    // 이미 열린 표시도 건드리지 않는다.
+    assert!(base.with_display_opened_at(T1).shown_from_install().is_none());
+}
+
+#[test]
 fn next는_읽기만_하고_seen이_노출과_예산을_기록한다() {
     let db = seeded();
     p1(&db, T0, &["C1"]);
