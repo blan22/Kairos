@@ -17,6 +17,7 @@ type Story = StoryObj<Args>
 
 export const WorkerInCheckMode: Story = { args: { scenario: 'workerInCheckMode' } }
 export const GateClosed: Story = { args: { scenario: 'gateClosed' } }
+export const GateClosedSources: Story = { args: { scenario: 'gateClosedSources' } }
 export const GatePaused: Story = { args: { scenario: 'gatePaused' } }
 export const GateDisplayOff: Story = { args: { scenario: 'gateDisplayOff' } }
 export const GateNoCollection: Story = { args: { scenario: 'gateNoCollection' } }
@@ -44,6 +45,8 @@ export const LongAndDangerousTitle: Story = { args: { scenario: 'longAndDangerou
 export const SlackTitle: Story = { args: { scenario: 'slackTitle' } }
 export const Health: Story = { args: { scenario: 'health' } }
 export const HealthWithRows: Story = { args: { scenario: 'healthWithRows' } }
+export const HealthWithSources: Story = { args: { scenario: 'healthWithSources' } }
+export const NowEmptyOthersLeft: Story = { args: { scenario: 'nowEmptyOthersLeft' } }
 export const HoldDayOff: Story = { args: { scenario: 'holdDayOff' } }
 export const HoldOffHours: Story = { args: { scenario: 'holdOffHours' } }
 export const HoldFocus: Story = { args: { scenario: 'holdFocus' } }

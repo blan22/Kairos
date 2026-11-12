@@ -1,6 +1,6 @@
 /** 상태 표시줄에 그릴 값을 정한다. 건수는 예산과 무관하고, 게이트가 닫히면 건수 대신 사유를 쓴다. */
 import type { Failure, NextView } from './protocol.ts'
-import { cleanText, failureCopy, holdLine, whenLabel } from './text.ts'
+import { cleanText, failureCopy, holdLine, lookup, whenLabel } from './text.ts'
 
 export type StatusTone = 'neutral' | 'accent' | 'success' | 'warning' | 'danger'
 export type StatusIcon = 'bell' | 'pause' | 'warning' | 'error'
@@ -49,7 +49,7 @@ export function statusOfNext(next: NextView): StatusView {
   if (!display.open) {
     const starts = whenLabel(display.startsAt, next.at)
     return {
-      text: `kairos ${GATE_LABELS[display.reason ?? ''] ?? '표시 대기'}${mark}`,
+      text: `kairos ${lookup(GATE_LABELS, display.reason ?? '') ?? '표시 대기'}${mark}`,
       icon: health === null ? 'pause' : 'warning',
       tone: health === null ? 'neutral' : 'warning',
       tooltip: tooltipOf([health, sessionLine, display.message, starts ? `${starts}부터 제안을 보여 드립니다` : null]),
@@ -57,8 +57,10 @@ export function statusOfNext(next: NextView): StatusView {
   }
   const tally = `긴급 ${counts.P0}, 오늘 ${counts.P1}, 여유 있을 때 ${counts.P2}`
   const extra = `할 일 ${counts.manual}, 미룬 일 ${counts.parked}, 세션 ${counts.accepted}`
+  // 긴급은 색만으로 알리지 않는다. 건수를 글자로 쓴다.
+  const urgent = counts.P0 > 0 ? ` · 긴급 ${counts.P0}` : ''
   return {
-    text: `kairos ${badgeOf(next)}${mark}`,
+    text: `kairos ${badgeOf(next)}${urgent}${mark}`,
     icon: health === null ? 'bell' : 'warning',
     tone: toneOf(next),
     tooltip: tooltipOf([

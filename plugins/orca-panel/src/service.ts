@@ -40,6 +40,8 @@ const BUSY: Failure = { code: 'busy', message: '앞선 처리가 끝나지 않�
 
 const NEXT_ARGV: readonly string[] = ['next', '--json']
 const SEEN_ARGV: readonly string[] = ['next', '--seen', '--surface', 'panel', '--json']
+/** 세션 소식만 확인으로 적는다. 카드를 그리지 않는 탭의 읽기가 쓴다. 카드 노출과 예산은 건드리지 않는다. */
+const READY_ARGV: readonly string[] = ['next', '--seen-ready', '--surface', 'panel', '--json']
 const LIST_ARGV: readonly string[] = ['list', '--json']
 const RUNS_ARGV: readonly string[] = ['runs', '--json']
 
@@ -52,8 +54,16 @@ function timeoutFor(action: unknown): number {
   return action === 'start' || action === 'pr' ? TIMEOUT_MS.accept : TIMEOUT_MS.write
 }
 
-async function readNext(kairos: Kairos, seen: boolean): Promise<NextView | Failure> {
-  const reply = await kairos(seen ? SEEN_ARGV : NEXT_ARGV, TIMEOUT_MS.read)
+/** 패널이 화면에 그린 것. seen은 카드와 세션 소식, ready는 세션 소식만, none은 아무것도 적지 않는다. */
+type Seen = 'seen' | 'ready' | 'none'
+
+/** 요청의 값은 참인지만 본다. 둘 다 오면 seen을 따른다. */
+const seenOf = (input: Record<string, unknown>): Seen => (input.seen === true ? 'seen' : input.ready === true ? 'ready' : 'none')
+
+const NEXT_ARGVS: Record<Seen, readonly string[]> = { seen: SEEN_ARGV, ready: READY_ARGV, none: NEXT_ARGV }
+
+async function readNext(kairos: Kairos, seen: Seen): Promise<NextView | Failure> {
+  const reply = await kairos(NEXT_ARGVS[seen], TIMEOUT_MS.read)
   if (!reply.ok) return reply.failure
   return parseNext(reply.value) ?? BAD_SCHEMA
 }
@@ -75,6 +85,8 @@ export function startWorker(orca: OrcaWorkerApi, deps: WorkerDeps): WorkerHandle
   let tracking = false
   /** 세션 상태를 못 읽은 사실. 건강 경고와 같은 자리에 표시한다. */
   let sessionWarning: string | null = null
+  /** 설치된 kairos가 --seen-ready를 아는가. 사용법 오류를 한 번 받으면 이 워커에서는 다시 쓰지 않는다. */
+  let readyKnown = true
   let watcher: Watcher | null = null
   let revealTimer: ReturnType<typeof setTimeout> | null = null
   /** 마지막으로 남긴 감시 실패 코드. 폴링마다 다시 걸 때 같은 줄을 반복하지 않는다. */
@@ -89,8 +101,14 @@ export function startWorker(orca: OrcaWorkerApi, deps: WorkerDeps): WorkerHandle
   }
 
   /** next를 읽을 때마다 상태 표시줄을 같이 맞춘다. 실패도 그대로 그린다. */
-  const fetchNext = async (seen: boolean): Promise<NextView | Failure> => {
-    const read = await readNext(kairos, seen)
+  const fetchNext = async (seen: Seen): Promise<NextView | Failure> => {
+    let read = await readNext(kairos, seen === 'ready' && !readyKnown ? 'none' : seen)
+    if (seen === 'ready' && readyKnown && isFailure(read) && read.code === 'usage') {
+      // 설치된 kairos가 --seen-ready를 모른다. 다시 묻지 않고 기록 없이 읽는다. 세션 소식은 지금 탭의 읽기가 확인으로 적는다.
+      readyKnown = false
+      orca.log('kairos next: --seen-ready 미지원')
+      read = await readNext(kairos, 'none')
+    }
     if (isFailure(read)) {
       orca.log(`kairos next 실패: ${read.code}`)
       await paint(statusOfFailure(read))
@@ -112,7 +130,7 @@ export function startWorker(orca: OrcaWorkerApi, deps: WorkerDeps): WorkerHandle
     sessionWarning = reply.ok && reply.value.orca !== false ? null : '세션 상태를 읽지 못했습니다'
   }
 
-  const snapshot = async (seen: boolean): Promise<Snapshot> => {
+  const snapshot = async (seen: Seen): Promise<Snapshot> => {
     const next = await fetchNext(seen)
     const list = await readList(kairos)
     if (isFailure(list)) orca.log(`kairos list 실패: ${list.code}`)
@@ -165,7 +183,7 @@ export function startWorker(orca: OrcaWorkerApi, deps: WorkerDeps): WorkerHandle
     polling = true
     try {
       await syncRuns()
-      await fetchNext(false)
+      await fetchNext('none')
       if (!stopped) orca.panels.post('kairos.tick', { at: Date.now() })
     } catch (error) {
       // 주기 호출이라 받아 줄 곳이 없다. 던지면 워커가 죽는다.
@@ -175,7 +193,7 @@ export function startWorker(orca: OrcaWorkerApi, deps: WorkerDeps): WorkerHandle
     }
   }
 
-  orca.panels.handle('kairos.snapshot', async input => snapshot(isRecord(input) && input.seen === true))
+  orca.panels.handle('kairos.snapshot', async input => snapshot(isRecord(input) ? seenOf(input) : 'none'))
 
   orca.panels.handle('kairos.action', async input => {
     if (!isRecord(input) || !Array.isArray(input.ids)) return refused(BAD_REQUEST)
@@ -185,7 +203,7 @@ export function startWorker(orca: OrcaWorkerApi, deps: WorkerDeps): WorkerHandle
     acting = true
     try {
       const reply = await kairos(argv, timeoutFor(input.action))
-      const after = await snapshot(input.seen === true)
+      const after = await snapshot(seenOf(input))
       if (!reply.ok) {
         orca.log(`kairos ${argv[0]} 실패: ${reply.failure.code}`)
         return { ok: false, code: reply.failure.code, message: reply.failure.message, run: null, snapshot: after }

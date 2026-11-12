@@ -2,7 +2,7 @@
  * Orca 컴포넌트 대역(React). 모양은 Orca 테마를 가깝게 흉내 낼 뿐 같지 않다. 정확한 모양은 실제 렌더 캡처(public/shots)로 본다.
  * 외부 문자열은 Orca처럼 글자로만 그린다. dangerouslySetInnerHTML을 쓰지 않는다.
  */
-import { useState, type ReactNode } from 'react'
+import { Children as ReactChildren, isValidElement, useState, type ReactElement, type ReactNode } from 'react'
 
 type Gap = 'none' | 'xs' | 'sm' | 'md' | 'lg'
 type Tone = 'neutral' | 'accent' | 'success' | 'warning' | 'danger'
@@ -16,7 +16,7 @@ const ICONS: Record<string, string> = {
   info: 'ℹ', warning: '⚠', error: '⛔', 'open-external': '↗', copy: '⧉', download: '↓', upload: '↑', play: '▶',
   pause: '⏸', stop: '■', more: '⋯', expand: '▾', collapse: '▸', next: '›', filter: '⏷', branch: '⑂', file: '🗎',
   agent: '🤖', link: '🔗', bell: '🔔', bot: '🤖', calendar: '📅', flag: '⚑', zap: 'ϟ', star: '★', terminal: '⌨',
-  rocket: '🚀', activity: '∿', clock: '◷',
+  rocket: '🚀', activity: '∿', clock: '◷', 'file-text': '🗎',
 }
 export const iconOf = (name?: string): string => (name ? (ICONS[name] ?? '•') : '')
 
@@ -187,3 +187,51 @@ export const Field = ({ children, label, description, error }: Children & { labe
 
 export const Toolbar = ({ children, label }: Children & { label: string; gap?: Gap }) => <div role="toolbar" aria-label={label} className="o-box o-dir-row o-gap-xs">{children}</div>
 export const Grid = ({ children, columns = 2 }: Children & { columns?: number }) => <div className="o-grid" style={{ gridTemplateColumns: `repeat(${columns}, 1fr)` }}>{children}</div>
+
+type TabProps = Children & { value: string; label: string; icon?: string; disabled?: boolean }
+
+/** 탭 하나. 그리는 일은 Tabs가 한다. */
+export const Tab = ({ children }: TabProps) => <>{children}</>
+
+/** Orca처럼 고른 탭의 내용만 그린다. */
+export const Tabs = ({ children, label, value, defaultValue, onChange }: Children & {
+  label: string; value?: string; defaultValue?: string; onChange?: (value: string) => void
+}) => {
+  const tabs = ReactChildren.toArray(children).filter((child): child is ReactElement<TabProps> => isValidElement(child))
+  const [local, setLocal] = useState(defaultValue ?? tabs[0]?.props.value ?? '')
+  const current = value ?? local
+  const shown = tabs.find(tab => tab.props.value === current) ?? tabs[0]
+  return (
+    <div className="o-tabs">
+      <div role="tablist" aria-label={label} className="o-tablist">
+        {tabs.map(tab => (
+          <button
+            key={tab.props.value}
+            type="button"
+            role="tab"
+            aria-selected={tab === shown}
+            className={cx('o-tab', tab === shown && 'o-tab-current')}
+            disabled={tab.props.disabled}
+            onClick={() => { setLocal(tab.props.value); onChange?.(tab.props.value) }}
+          >
+            {tab.props.icon ? `${iconOf(tab.props.icon)} ` : ''}{tab.props.label}
+          </button>
+        ))}
+      </div>
+      <div role="tabpanel">{shown?.props.children}</div>
+    </div>
+  )
+}
+
+export const KeyValue = ({ label, items }: {
+  label?: string; items: readonly { label: string; value: string | number | boolean | null; tone?: Tone; code?: boolean }[]
+}) => (
+  <dl className="o-kv" aria-label={label}>
+    {items.map(item => (
+      <div key={item.label} className="o-kv-row">
+        <dt className="o-muted">{item.label}</dt>
+        <dd className={cx(item.tone && `o-tone-${item.tone}`, item.code && 'o-code')}>{item.value === null ? '—' : String(item.value)}</dd>
+      </div>
+    ))}
+  </dl>
+)

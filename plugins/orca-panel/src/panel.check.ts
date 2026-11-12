@@ -1,5 +1,6 @@
 // orca plugin check가 상태마다 패널을 그린다. 워커는 점검 실행이라 실제 kairos를 부르지 않는다.
-// 점검은 버튼을 누를 수 없다. 처리 중, 처리 실패, 펼친 행은 panel.test.tsx가 맡는다.
+// 점검은 버튼을 누를 수 없다. 처리 중, 처리 실패, 펼친 행, 지금 말고 다른 탭, 검색은 panel.test.tsx가 맡는다.
+// 스토리북에서는 탭을 눌러 볼 수 있어 몇 시나리오에 소스별 수집 상태를 실어 둔다.
 import { defineCheck, hostError } from 'orca/testing'
 import {
   accepted,
@@ -24,6 +25,7 @@ import {
   sessionNews,
   SLACK_TITLE,
   snapshotOf,
+  sourceRows,
   startable,
   workdayRows,
 } from './fixtures.ts'
@@ -55,6 +57,7 @@ export default defineCheck({
   // 요청을 흉내 내지 않아 패널에서 워커까지 그대로 간다. 점검 실행이라는 실패가 그려져야 한다.
   workerInCheckMode: {},
   gateClosed: answers(snapshotOf(nextJson({ display: recordingGate, card: null, hold: { reason: 'recording', message: '기록 중입니다', until: null } }), listJson([], { hidden: 4 }))),
+  gateClosedSources: answers(snapshotOf(nextJson({ display: recordingGate, card: null, sources: sourceRows(), hold: { reason: 'recording', message: '기록 중입니다', until: null } }), listJson([], { hidden: 4 }))),
   gatePaused: answers(snapshotOf(nextJson({ display: { ...recordingGate, reason: 'paused', startsAt: null } }), listJson([], { hidden: 2 }))),
   gateDisplayOff: answers(snapshotOf(nextJson({ display: { ...recordingGate, reason: 'display_off', startsAt: null } }), listJson([], { hidden: 2 }))),
   gateNoCollection: answers(snapshotOf(nextJson({ display: { ...recordingGate, reason: 'no_collection', startsAt: null } }), listJson())),
@@ -65,7 +68,7 @@ export default defineCheck({
   offerLocked: answers(snapshotOf(nextJson({ card: card([offered(1)]), counts: counts({ P1: 2 }) }), listJson([offered(1), offered(2)]))),
   offerUrgentRow: answers(snapshotOf(nextJson({ counts: counts({ P0: 1 }) }), listJson([startable(1, { tier: 'P0' }), item(2, { tier: 'P0' })]))),
   urgentCard: answers(snapshotOf(nextJson({ card: card([item(1, { tier: 'P0' })], { tier: 'P0' }), counts: counts({ P0: 1, P1: 1 }) }), listJson([item(1, { tier: 'P0' }), item(3)]))),
-  everyGroup: answers(snapshotOf(nextJson({ card: card([startable(1)]), counts: counts({ P0: 1, P1: 3, P2: 1 }, { accepted: 1, parked: 1, baseline: 1 }) }), listJson([startable(1), ...everyTier]))),
+  everyGroup: answers(snapshotOf(nextJson({ card: card([startable(1)]), sources: sourceRows(true), counts: counts({ P0: 1, P1: 3, P2: 1 }, { accepted: 1, parked: 1, baseline: 1 }) }), listJson([startable(1), ...everyTier]))),
   running: answers(snapshotOf(nextJson({ card: card([accepted(1)]), counts: counts({}, { accepted: 1 }) }), listJson([accepted(1)]))),
   sessionReady: answers(snapshotOf(nextJson({ ready: [readyCard(1)], counts: counts({}, { accepted: 1 }) }), listJson([accepted(1, 'waiting_user')]))),
   sessionQuestion: answers(snapshotOf(nextJson({ ready: [sessionNews('question', 1, 'run-q')], counts: counts({}, { accepted: 1 }) }), listJson([accepted(1, 'waiting_user')]))),
@@ -92,6 +95,8 @@ export default defineCheck({
   slackTitle: answers(snapshotOf(nextJson({ card: card([item(1, { title: SLACK_TITLE })]), counts: counts({ P1: 2 }) }), listJson([item(1, { title: SLACK_TITLE }), item(2, { title: SLACK_TITLE })]))),
   health: answers(snapshotOf(nextJson({ health: 'Slack 수집이 30분 늦습니다' }), listJson())),
   healthWithRows: answers(snapshotOf(nextJson({ health: 'Slack 수집이 30분 늦습니다', counts: counts({ P1: 1, P2: 1 }) }), listJson(shortList))),
+  healthWithSources: answers(snapshotOf(nextJson({ health: 'Slack 수집이 37분 늦습니다', sources: sourceRows(), counts: counts({ P1: 1, P2: 1 }) }), listJson(shortList))),
+  nowEmptyOthersLeft: answers(snapshotOf(nextJson({ counts: counts({ P2: 1 }, { parked: 1, accepted: 1 }) }), listJson([item(12, { tier: 'P2' }), parked(13), accepted(14)]))),
   holdDayOff: held('day_off', shortList),
   holdOffHours: held('off_hours', shortList),
   holdFocus: held('focus', shortList),
@@ -114,7 +119,7 @@ export default defineCheck({
   ),
   workday: answers(
     snapshotOf(
-      nextJson({ card: card([startable(2, { title: workdayRows()[1]?.title, carried: true })]), counts: counts({ P0: 1, P1: 5, P2: 15 }, { carriedP1: 3, parked: 1, manual: 1 }) }),
+      nextJson({ card: card([startable(2, { title: workdayRows()[1]?.title, carried: true })]), sources: sourceRows(true), counts: counts({ P0: 1, P1: 5, P2: 15 }, { carriedP1: 3, parked: 1, manual: 1 }) }),
       listJson(workdayRows()),
     ),
   ),

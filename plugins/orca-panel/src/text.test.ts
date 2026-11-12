@@ -1,6 +1,6 @@
 import { assert, test } from 'orca/testing'
 import { DANGEROUS_TITLE, SLACK_TITLE } from './fixtures.ts'
-import { actionFailure, carriedWord, clip, dayLabel, displayTitle, failureCopy, holdLine, holdSentence, joinLine, openableUrl, whenLabel } from './text.ts'
+import { actionFailure, carriedWord, clip, dayLabel, displayTitle, failureCopy, guideOf, holdLine, holdSentence, isSourceTrouble, joinLine, matchesSearch, openableUrl, SEARCH_LIMIT, searchWords, sourceWord, whenLabel } from './text.ts'
 
 const NOW = '2026-11-05T02:00:00.000Z' // 한국 시간 11월 5일 11:00
 const shown = (value: unknown): string => displayTitle(value, 300)
@@ -206,4 +206,64 @@ test('고장 코드를 사용자 문구로 옮긴다', () => {
   assert.equal(failureCopy('schema', '').title, '설치된 kairos와 패널 버전이 다릅니다')
   assert.equal(failureCopy('unavailable', '').title, '패널이 응답을 받지 못했습니다')
   assert.deepEqual(failureCopy('other', '합성 메시지'), { title: 'kairos를 읽지 못했습니다', body: '합성 메시지' })
+})
+
+const guide = (overrides: Partial<Parameters<typeof guideOf>[0]> = {}) => guideOf({ reason: 'assigned', run: null, accepted: false, startable: false, canPr: false, ...overrides })
+
+test('이유와 권장은 사유마다 고정 문구이고 모르는 사유는 그리지 않는다', () => {
+  assert.deepEqual(guide(), { why: '담당자로 지정된 이슈입니다.', suggest: '내용을 확인하고 어떻게 진행할지 정하세요.' })
+  assert.deepEqual(guide({ reason: 'review_owed' }), { why: '리뷰 요청을 받았습니다.', suggest: '변경을 읽고 리뷰를 남기세요.' })
+  for (const reason of ['reply_owed', 'review_owed', 'assigned', 'my_pr_attention', 'meeting_new', 'deploy_risk', 'work_owed', 'manual']) {
+    const copy = guide({ reason })
+    assert.ok(copy !== null && copy.why.endsWith('.') && copy.suggest.endsWith('.'), reason)
+  }
+  for (const reason of ['', 'unknown', 'constructor', '__proto__', 'toString']) assert.equal(guide({ reason }), null, reason)
+})
+
+test('시작할 수 있는 제안이 붙으면 권장 끝에 맡길 수 있다고 덧붙인다', () => {
+  assert.equal(guide({ startable: true })?.suggest, '내용을 확인하고 어떻게 진행할지 정하세요. 에이전트에게 맡길 수도 있습니다.')
+  assert.equal(guide({ reason: 'unknown', startable: true }), null)
+})
+
+test('세션이 있으면 사유 대신 세션 상태가 권장을 정한다', () => {
+  assert.deepEqual(guide({ run: 'waiting_user' }), { why: '세션이 답을 기다리고 있습니다.', suggest: '세션으로 이동해 답해 주세요.' })
+  assert.equal(guide({ run: 'started', startable: true })?.suggest, '끝나거나 질문이 생기면 세션 소식으로 알려 드립니다.')
+  assert.equal(guide({ run: 'ended' })?.suggest, '결과를 확인하고 완료로 닫으세요.')
+  assert.equal(guide({ run: 'ended', canPr: true })?.suggest, '결과를 확인하고 PR을 올리거나 완료로 닫으세요.')
+  assert.equal(guide({ run: 'started', canPr: true })?.suggest, '끝나거나 질문이 생기면 세션 소식으로 알려 드립니다.')
+  // 모르는 세션 상태와 세션 상태 없이 수락만 된 일도 세션 쪽으로 안내한다. 사유를 몰라도 그린다.
+  for (const input of [{ run: 'constructor' }, { run: null, accepted: true }, { run: 'future_state', reason: 'unknown' }]) {
+    assert.deepEqual(guide(input), { why: '세션에 맡긴 일입니다.', suggest: '세션으로 이동해 상태를 확인해 주세요.' })
+  }
+})
+
+test('소스 상태는 고정 낱말이고 지연만 분을 붙이며 수집 시간 밖은 문제가 아니다', () => {
+  assert.equal(sourceWord('ok', null), '정상')
+  assert.equal(sourceWord('delayed', 37), '37분 지연')
+  assert.equal(sourceWord('delayed', null), '지연')
+  assert.equal(sourceWord('ok', 5), '정상')
+  assert.equal(sourceWord('never', null), '수집 기록 없음')
+  assert.equal(sourceWord('not_connected', null), '미연결')
+  assert.equal(sourceWord('quiet', null), '수집 시간 아님')
+  for (const status of ['', 'constructor', '<b>ok</b>']) assert.equal(sourceWord(status, null), '확인 필요', status)
+  assert.deepEqual(['ok', 'delayed', 'never', 'not_connected', 'quiet', 'constructor'].map(isSourceTrouble), [false, true, true, true, false, false])
+})
+
+test('검색어는 낱말로 나누고 제어 문자와 긴 글을 걸러 낸다', () => {
+  assert.deepEqual(searchWords('  GitHub   리뷰 '), ['github', '리뷰'])
+  assert.deepEqual(searchWords(''), [])
+  assert.deepEqual(searchWords('   '), [])
+  for (const value of [null, undefined, 1, {}, ['리뷰']]) assert.deepEqual(searchWords(value), [], String(value))
+  assert.ok(searchWords('가'.repeat(500)).join(' ').length <= SEARCH_LIMIT)
+  assert.deepEqual(searchWords('리뷰\u0000\u001b[31m 요청\n끝'), ['리뷰[31m', '요청', '끝'])
+})
+
+test('검색은 모든 낱말이 어느 칸에든 있으면 맞고 대소문자를 가리지 않는다', () => {
+  const fields = ['합성 리뷰 요청', '리뷰 요청', 'GitHub', '오늘']
+  assert.equal(matchesSearch([], fields), true)
+  assert.equal(matchesSearch(searchWords('github'), fields), true)
+  assert.equal(matchesSearch(searchWords('리뷰 github'), fields), true)
+  assert.equal(matchesSearch(searchWords('리뷰 slack'), fields), false)
+  assert.equal(matchesSearch(searchWords('.*'), fields), false)
+  assert.equal(matchesSearch(searchWords('오늘'), fields), true)
 })

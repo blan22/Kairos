@@ -196,7 +196,83 @@ const ACTION_FAILURES: Record<string, string> = {
   no_commits: '세션이 아직 커밋하지 않았습니다.',
   push_failed: 'push하지 못했습니다. git 자격 증명과 원격 권한을 확인해 주세요.',
   create_failed: 'PR을 만들지 못했습니다. gh 로그인을 확인해 주세요.',
+  usage: '설치된 kairos가 이 조작을 모릅니다. kairos를 업데이트해 주세요.',
 }
 
 /** 표에 없는 코드는 null이다. CLI 원문을 그대로 보이지 않고 제목만 쓴다. */
 export const actionFailure = (code: string): string | null => lookup(ACTION_FAILURES, code) ?? null
+
+/** 사유마다의 고정 문구. 앞 칸은 왜 올라왔는지, 뒤 칸은 다음에 할 일이다. 외부 문자열을 섞지 않는다. */
+const REASON_GUIDE: Record<string, readonly [string, string]> = {
+  reply_owed: ['답장을 기다리는 글이 있습니다.', '원문을 읽고 답장을 남기세요.'],
+  review_owed: ['리뷰 요청을 받았습니다.', '변경을 읽고 리뷰를 남기세요.'],
+  assigned: ['담당자로 지정된 이슈입니다.', '내용을 확인하고 어떻게 진행할지 정하세요.'],
+  my_pr_attention: ['내 PR에 확인할 일이 생겼습니다.', '리뷰 의견과 검사 결과를 확인하세요.'],
+  meeting_new: ['일정이 새로 잡혔거나 바뀌었습니다.', '시간을 확인하고 참석 여부를 정하세요.'],
+  deploy_risk: ['배포 전에 끝나야 할 일이 남아 있습니다.', '배포 전에 상태를 확인하세요.'],
+  work_owed: ['할 일로 남겨 둔 일입니다.', '끝냈다면 완료로 닫으세요.'],
+  manual: ['직접 추가한 할 일입니다.', '끝냈다면 완료로 닫으세요.'],
+}
+/** 세션이 있는 일은 사유보다 세션 상태가 다음 할 일을 정한다. */
+const RUN_GUIDE: Record<string, readonly [string, string]> = {
+  claimed: ['세션을 준비하고 있습니다.', '창이 열릴 때까지 잠시 기다려 주세요.'],
+  started: ['세션이 일하고 있습니다.', '끝나거나 질문이 생기면 세션 소식으로 알려 드립니다.'],
+  waiting_user: ['세션이 답을 기다리고 있습니다.', '세션으로 이동해 답해 주세요.'],
+  needs_attention: ['세션 창을 찾지 못했습니다.', '세션으로 이동해 상태를 확인해 주세요.'],
+  ended: ['세션이 끝났습니다.', '결과를 확인하고 완료로 닫으세요.'],
+}
+const ENDED_WITH_PR = '결과를 확인하고 PR을 올리거나 완료로 닫으세요.'
+const UNKNOWN_RUN: readonly [string, string] = ['세션에 맡긴 일입니다.', '세션으로 이동해 상태를 확인해 주세요.']
+const OFFER_TAIL = '에이전트에게 맡길 수도 있습니다.'
+
+export interface GuideInput {
+  reason: string
+  /** 세션 상태. 세션이 없으면 null이다. */
+  run: string | null
+  /** 수락했지만 세션 상태를 모르는 일도 세션 쪽으로 안내한다. */
+  accepted: boolean
+  /** 지금 시작할 수 있는 제안이 붙어 있다. */
+  startable: boolean
+  /** PR 올리기 버튼이 있다. */
+  canPr: boolean
+}
+
+/** 왜 올라왔는지와 권장 행동. 모르는 사유면 null이고 패널은 그 층을 그리지 않는다. */
+export function guideOf(input: GuideInput): { why: string; suggest: string } | null {
+  if (input.run !== null || input.accepted) {
+    const [why, suggest] = lookup(RUN_GUIDE, input.run ?? '') ?? UNKNOWN_RUN
+    return { why, suggest: input.run === 'ended' && input.canPr ? ENDED_WITH_PR : suggest }
+  }
+  const copy = lookup(REASON_GUIDE, input.reason)
+  if (copy === undefined) return null
+  return { why: copy[0], suggest: input.startable ? `${copy[1]} ${OFFER_TAIL}` : copy[1] }
+}
+
+const SOURCE_WORDS: Record<string, string> = {
+  ok: '정상',
+  delayed: '지연',
+  never: '수집 기록 없음',
+  not_connected: '미연결',
+  quiet: '수집 시간 아님',
+}
+/** 사용자가 손봐야 할 수 있는 상태. 수집 시간 밖은 문제가 아니다. */
+const SOURCE_TROUBLES: ReadonlySet<string> = new Set(['delayed', 'never', 'not_connected'])
+
+export const isSourceTrouble = (status: string): boolean => SOURCE_TROUBLES.has(status)
+
+/** 소스 상태 낱말. 지연은 분을 알면 붙인다. */
+export function sourceWord(status: string, delayMinutes: number | null): string {
+  const word = lookup(SOURCE_WORDS, status) ?? '확인 필요'
+  return status === 'delayed' && delayMinutes !== null ? `${delayMinutes}분 ${word}` : word
+}
+
+/** 검색어. 사용자가 패널에 친 글이고 kairos로 가지 않는다. 화면의 줄을 거르는 데만 쓴다. */
+export const SEARCH_LIMIT = 80
+export const searchWords = (value: unknown): string[] => cleanText(value, SEARCH_LIMIT).toLocaleLowerCase().split(' ').filter(word => word !== '')
+
+/** 모든 낱말이 어느 칸에든 들어 있으면 맞는다. 낱말이 없으면 거르지 않는다. */
+export function matchesSearch(words: readonly string[], fields: readonly string[]): boolean {
+  if (words.length === 0) return true
+  const text = fields.join(' ').toLocaleLowerCase()
+  return words.every(word => text.includes(word))
+}

@@ -6,7 +6,7 @@ import { badgeOf, statusOfFailure, statusOfNext } from './status.ts'
 
 const next = (overrides: Record<string, unknown> = {}): NextView => parseNext(nextJson(overrides)) as NextView
 
-test('건수는 모든 등급의 합이고 색은 긴급일 때만 쓴다', () => {
+test('건수는 모든 등급의 합이고 긴급은 색과 글자로 함께 알린다', () => {
   assert.deepEqual(
     [{ P2: 1 }, { P1: 2, P2: 1 }, { P0: 1, P1: 2, P2: 1 }].map(open => {
       const view = statusOfNext(next({ counts: counts(open) }))
@@ -15,7 +15,7 @@ test('건수는 모든 등급의 합이고 색은 긴급일 때만 쓴다', () =
     [
       ['kairos 1', 'neutral'],
       ['kairos 3', 'neutral'],
-      ['kairos 4', 'danger'],
+      ['kairos 4 · 긴급 1', 'danger'],
     ],
   )
 })
@@ -62,10 +62,10 @@ test('게이트가 닫히면 건수 대신 사유와 시작 시각을 쓴다', (
 })
 
 test('게이트 사유 4종을 모두 글로 보여 준다', () => {
-  const texts = ['paused', 'display_off', 'no_collection', 'recording', 'unknown_reason'].map(
+  const texts = ['paused', 'display_off', 'no_collection', 'recording', 'unknown_reason', 'constructor', 'toString'].map(
     reason => statusOfNext(next({ display: { ...recordingGate, reason } })).text,
   )
-  assert.deepEqual(texts, ['kairos 일시정지', 'kairos 표시 꺼짐', 'kairos 수집 전', 'kairos 기록 중', 'kairos 표시 대기'])
+  assert.deepEqual(texts, ['kairos 일시정지', 'kairos 표시 꺼짐', 'kairos 수집 전', 'kairos 기록 중', 'kairos 표시 대기', 'kairos 표시 대기', 'kairos 표시 대기'])
 })
 
 test('게이트가 닫혀도 건강 경고는 보인다', () => {

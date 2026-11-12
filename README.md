@@ -72,7 +72,7 @@ curl --proto '=https' --tlsv1.2 -fsSL https://raw.githubusercontent.com/blan22/K
 ```
 kairos next            # 지금 볼 일 하나
 kairos list            # 열린 항목
-kairos later <ID>      # 나중에 다시 보기
+kairos later <ID>      # 나중에 다시 보기(--when hour|tomorrow로 때를 고른다)
 kairos done <ID>       # 끝냄
 kairos doctor          # 수집과 설정 상태 점검
 kairos sources         # 연동 서비스 켜고 끄기

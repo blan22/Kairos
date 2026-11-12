@@ -1,4 +1,4 @@
-use kairos_agenda::{ActionContext, ActionResult, ItemActions, Presenter, TriageDecision};
+use kairos_agenda::{ActionContext, ActionResult, ItemActions, LaterWhen, Presenter, TriageDecision};
 use kairos_core::text::sanitize_head;
 use kairos_core::{Instant, KairosResult, OffDates};
 use kairos_ledger::OffDateBook;
@@ -7,11 +7,13 @@ use serde_json::json;
 
 use super::shared::{line, parse_ids};
 use crate::app::AppContext;
-use crate::args::{ArgParser, OptionSpec, flag};
+use crate::args::{ArgParser, OptionSpec, flag, text};
 use crate::command::Command;
 use crate::reply::Reply;
 
 const JSON_ONLY: [OptionSpec; 1] = [flag("json")];
+const LATER_OPTIONS: [OptionSpec; 2] = [flag("json"), text("when")];
+const LATER_USAGE: &str = "사용법: kairos later <항목 ID>... [--when hour|tomorrow] [--json]";
 const DONE_OPTIONS: [OptionSpec; 2] = [flag("json"), flag("drop")];
 const KEEP_OPTIONS: [OptionSpec; 2] = [flag("json"), flag("until-deploy")];
 
@@ -43,13 +45,21 @@ impl Command for Later {
     }
 
     fn usage(&self) -> Option<&'static str> {
-        Some("사용법: kairos later <항목 ID>... [--json]")
+        Some(LATER_USAGE)
     }
 
     fn execute(&self, context: &AppContext, args: &[String]) -> KairosResult<i32> {
-        let parsed = ArgParser::with_positionals(&JSON_ONLY).parse(args)?;
-        act(context, parsed.positionals(), parsed.flag("json"), |database, ids, now, off_dates| {
-            ItemActions::new(database).later(ids, &ActionContext { now, off_dates })
+        let parsed = ArgParser::with_positionals(&LATER_OPTIONS).parse(args)?;
+        let json = parsed.flag("json");
+        // 때는 고정 낱말 둘뿐이다. 없으면 다음 묶음이다.
+        let when = match parsed.text("when") {
+            None => LaterWhen::NextBundle,
+            Some("hour") => LaterWhen::Hour,
+            Some("tomorrow") => LaterWhen::Tomorrow,
+            Some(_) => return Ok(Reply::new(context, json).usage(LATER_USAGE)),
+        };
+        act(context, parsed.positionals(), json, |database, ids, now, off_dates| {
+            ItemActions::new(database).later_when(ids, &ActionContext { now, off_dates }, when)
         })
     }
 }

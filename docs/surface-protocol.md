@@ -19,17 +19,29 @@
 | 명령 | 용도 | 상태 변경 |
 |---|---|---|
 | `hello --json` | 시작할 때 계약 버전, 엔진 버전, 켠 호스트, 세션 호스트, 세션 잠금, 소스 연결을 읽는다 | 없음 |
-| `next [--seen] --surface <호스트> --json` | 지금 볼 일 카드, 묶음, 준비됨 카드, `reveal` | `--seen`일 때만 노출과 예산에 기록 |
+| `next [--seen \| --seen-ready] --surface <호스트> --json` | 지금 볼 일 카드, 묶음, 준비됨 카드, `reveal`, `sources` | `--seen`일 때만 노출과 예산에 기록. `--seen-ready`는 준비됨 카드만 확인으로 기록 |
 | `list --json` | 열린 항목 | 없음 |
 | `watch --json` | 상태가 바뀌면 `{"kind":"changed"}` 한 줄을 출력한다. 첫 줄은 `{"kind":"ready"}`다 | 없음 |
 | `runs --json` | 세션 상태를 맞춘다(`next`의 `runs.active > 0`일 때) | run 상태 |
-| `later`, `done [--drop]`, `keep [--until-deploy]`, `add -- <제목>` | 항목 조작 | 있음 |
+| `later [--when hour\|tomorrow]`, `done [--drop]`, `keep [--until-deploy]`, `add -- <제목>` | 항목 조작 | 있음 |
 | `accept <ID> [--cancel] [--from claude-code] --json` | 세션 시작과 되돌리기 | 있음 |
 | `move <ID> --json` | 세션으로 이동(Orca 세션만) | 없음 |
 | `pr <ID> --json` | 고치는 세션이 커밋한 브랜치를 사용자의 git, gh로 push하고 draft PR을 만든다. 응답은 `{"pr":{"status","message","url","branch"}}` | 원격 브랜치와 PR |
 | `reveal <ID>...` | 알림을 눌렀을 때 호출한다. `reveal.json`을 쓰고, Orca 호스트를 켰으면 패널을 연다 | `reveal.json` |
 
 `--surface`에는 호출한 호스트 이름(`orca`, `claude-code`, `vscode`)을 준다. `panel`은 `orca`의 옛 이름이다.
+
+## `next`의 `sources`
+
+소스마다 수집 상태 한 줄이다. 표시 게이트가 닫혀 있어도 온다. 소스가 없으면 키 자체가 없다. 이 필드가 없는 엔진의 응답도 같은 계약이므로 호스트는 없는 경우를 그려야 한다.
+
+```json
+{ "sources": [{ "source": "slack", "label": "Slack", "status": "delayed", "lastOkAt": "2026-11-04T01:20:00.000Z", "delayMinutes": 37 }] }
+```
+
+- `status`는 `ok`, `delayed`, `never`(수집 기록 없음), `not_connected`, `quiet`(수집 시간 아님) 가운데 하나다. 한 소스에 질의가 여럿이면 가장 나쁜 상태를 쓰고, `lastOkAt`과 `delayMinutes`는 그 상태인 질의의 값만 쓴다. 지연이면 가장 오래된 `lastOkAt`과 가장 긴 `delayMinutes`를, 그 밖에는 가장 최근의 `lastOkAt`을 쓴다. 주기가 다른 질의의 시각은 섞지 않는다.
+- `lastOkAt`과 `delayMinutes`는 값이 없으면 `null`이다.
+- 호스트는 `source`를 `^[a-z][a-z0-9_]{0,31}$`로, `status`를 위 다섯 값으로 검사하고 틀린 줄은 버린다. `label`은 텍스트로만 그린다.
 
 ## 수락 응답의 `launch`
 
