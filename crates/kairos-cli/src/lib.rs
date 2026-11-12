@@ -9,6 +9,7 @@ mod app;
 mod args;
 mod command;
 mod commands;
+mod help;
 mod js_number;
 mod reply;
 mod session;
@@ -61,19 +62,24 @@ fn refuse(args: &[String], code: &str, message: &str) -> i32 {
     1
 }
 
-/// `kairos`의 몸통. `config`, `connect`, `sources`, `setup`, `help`는 설정이 깨져도 돈다. 깨진 설정을 고치는 길이다.
-/// 데이터 폴더가 git 작업 트리 안이면 `help`만 돈다.
+/// `kairos`의 몸통. `config`, `connect`, `sources`, `setup`, `uninstall`, `help`는 설정이 깨져도 돈다. 깨진 설정을 고치거나
+/// 지우고 다시 시작하는 길이다. 데이터 폴더가 git 작업 트리 안이면 `help`만 돈다.
+/// `completions`는 상수만 내므로 `help`처럼 언제나 돈다. 셸 설정이 새 셸마다 부른다. `update`는 설정이 깨져도 돌지만
+/// 데이터 폴더의 `install-source`를 읽으므로 git 작업 트리 검사는 지킨다.
 pub fn kairos_main() -> i32 {
     let args = process_args();
-    let help = matches!(args.first().map(String::as_str), Some("help" | "--help") | None);
+    let help = matches!(
+        args.first().map(String::as_str),
+        Some("help" | "--help" | "-h" | "--version" | "-V" | "version" | "completions") | None
+    );
     if !help && let Some(message) = home_in_worktree() {
         return refuse(&args, "home_in_git_worktree", &message);
     }
     if let Err(error) = install_profile() {
         let diagnostic = matches!(
             args.first().map(String::as_str),
-            Some("config" | "connect" | "sources" | "setup" | "help" | "--help") | None
-        );
+            Some("config" | "connect" | "sources" | "setup" | "uninstall" | "update") | None
+        ) || help;
         if !diagnostic {
             let message = format!("kairos 설정 오류: {error} (kairos config validate로 확인)");
             return refuse(&args, error.code, &message);

@@ -1,4 +1,4 @@
-//! control.json을 바꾸는 명령.
+//! control.json을 바꾸는 명령. `notify`는 macOS 알림 권한도 다룬다.
 
 use kairos_agenda::{DisplayMode, FocusTracker, INDEFINITE};
 use kairos_core::local_date::is_date_only;
@@ -7,7 +7,9 @@ use kairos_policy::FOCUS_DEFAULT_MINUTES;
 use kairos_tick::js_number_text;
 use serde_json::json;
 
-use crate::app::AppContext;
+use super::notifier::{Grant, NotifierHelper, TestPost};
+use super::sources;
+use crate::app::{AppContext, Console};
 use crate::args::{ArgParser, OptionSpec, flag};
 use crate::command::Command;
 use crate::js_number::{is_integer, js_number};
@@ -111,22 +113,81 @@ impl Command for Display {
 
 pub struct Notify;
 
+const NOTIFY_USAGE: &str = "사용법: kairos notify [on|off|setup|test] [--json]";
+
+impl Notify {
+    /// `setup`: macOS 권한 창을 띄운다. 전에 거절했으면 창이 뜨지 않으므로 시스템 설정의 알림 화면을 연다.
+    /// `test`: 고정 문구의 시험 알림 하나를 보낸다. 둘 다 화면에 무언가를 띄우므로 세션 안에서는 하지 않는다.
+    fn permission(context: &AppContext, reply: Reply<'_>, mode: &str) -> KairosResult<i32> {
+        if sources::session_caller(context) {
+            return Ok(reply.fail(
+                "session_caller",
+                "세션 안에서는 알림 권한을 다루지 않습니다. 일반 터미널에서 실행하세요",
+                1,
+            ));
+        }
+        let helper = match NotifierHelper::installed(context) {
+            Ok(helper) => helper,
+            Err(missing) => return Ok(reply.fail("notifier_missing", missing.message(), 1)),
+        };
+        if mode == "test" {
+            return match helper.post_test() {
+                TestPost::Posted if reply.json() => reply.success(json!({ "notify": { "test": "posted" } })),
+                TestPost::Posted => {
+                    context.console().print(
+                        "시험 알림을 보냈습니다. 보이지 않으면 집중 모드와 시스템 설정 > 알림 > kairos를 확인하세요",
+                    );
+                    Ok(0)
+                }
+                TestPost::NotAuthorized => {
+                    Ok(reply.fail("notify_not_authorized", "알림 권한이 없습니다. kairos notify setup으로 받으세요", 1))
+                }
+                TestPost::Failed(code) => {
+                    let code = code.map_or_else(|| "없음".to_owned(), |code| code.to_string());
+                    Ok(reply.fail("notify_failed", &format!("시험 알림을 보내지 못했습니다(헬퍼 종료 코드 {code})"), 1))
+                }
+            };
+        }
+        // 진행 안내는 사람에게만 찍는다. --json의 표준 출력은 JSON 한 덩어리다.
+        let quiet = Console::captured("");
+        let grant = helper.grant(if reply.json() { &quiet } else { context.console() });
+        if grant == Grant::DeniedBefore {
+            let opened = helper.open_settings();
+            if !reply.json() {
+                context.console().print(if opened {
+                    "시스템 설정의 알림 화면을 열었습니다"
+                } else {
+                    "시스템 설정을 열지 못했습니다. 직접 여세요"
+                });
+            }
+        }
+        if reply.json() {
+            return reply.success(json!({ "notify": { "permission": helper.permission().as_str() } }));
+        }
+        Ok(i32::from(grant != Grant::Authorized))
+    }
+}
+
 impl Command for Notify {
     fn name(&self) -> &'static str {
         "notify"
     }
 
     fn usage(&self) -> Option<&'static str> {
-        Some("사용법: kairos notify [on|off] [--json]")
+        Some(NOTIFY_USAGE)
     }
 
-    /// P1 Mac 알림 켜기와 끄기. 끈 동안 잡힌 건은 다시 켜도 울리지 않는다. P0와 건강 경고는 끄지 못한다.
+    /// `on`, `off`는 P1 Mac 알림 켜기와 끄기다. 끈 동안 잡힌 건은 다시 켜도 울리지 않는다. P0와 건강 경고는 끄지 못한다.
+    /// `setup`, `test`는 macOS 알림 권한을 받고 시험한다.
     fn execute(&self, context: &AppContext, args: &[String]) -> KairosResult<i32> {
         let parsed = ArgParser::with_positionals(&JSON_ONLY).parse(args)?;
         let reply = Reply::new(context, parsed.flag("json"));
         let mode = parsed.first();
+        if let Some(mode @ ("setup" | "test")) = mode {
+            return Self::permission(context, reply, mode);
+        }
         if mode.is_some_and(|mode| mode != "on" && mode != "off") {
-            return Ok(reply.usage("사용법: kairos notify [on|off]"));
+            return Ok(reply.usage("사용법: kairos notify [on|off|setup|test]"));
         }
         if let Some(mode) = mode {
             context.control_file().write(&context.control().with_p1_notify(mode != "off"))?;

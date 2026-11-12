@@ -16,8 +16,9 @@ mod tool_results;
 pub use install::collector_allowlist;
 pub use install::{
     COLLECT_LABEL, InstallMode, InstallOptions, InstallPaths, InstallPlan, InstallResult, Installer, LABELS, PlanInput,
-    PlistFile, UninstallOptions, UninstallResult, VERSION, WATCHDOG_LABEL, default_launch_agents_dir, find_binary,
-    find_claude, is_legacy_label, legacy_labels, plan_install, render_template,
+    PlistFile, RemovalPlan, UninstallOptions, UninstallResult, VERSION, WATCHDOG_LABEL, default_launch_agents_dir,
+    find_binary, find_claude, is_legacy_label, legacy_labels, plan_install, plan_runtime_removal, purge_refusal,
+    remove_data, remove_runtime, render_template, runtime_refusal,
 };
 pub use maintenance::{
     BACKUP_KEEP, Maintenance, MaintenanceRecord, MaintenanceRepo, OPEN_TEXT_RETENTION_DAYS, backup_dir,

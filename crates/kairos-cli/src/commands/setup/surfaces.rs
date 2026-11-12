@@ -1,5 +1,6 @@
-//! 설치 뒤 단계. Mac 알림 권한과 Orca 패널 적재를 묻고 그 자리에서 한다.
+//! 설치 뒤 단계. Mac 알림 권한을 받고 Orca 패널 적재를 묻는다.
 //!
+//! 알림 권한은 터미널에서 묻지 않는다. macOS 권한 창이 묻는다(`commands::notifier`).
 //! 둘 다 설치본(`<홈>/current`)을 쓴다. 개발 트리의 번들과 패널 폴더는 권한과 승인을 따로 받기 때문이다.
 //! 패널 승인은 Orca가 보여 주는 권한 문구를 그대로 띄우고 사용자가 `y`라고 답할 때만 지문을 넘긴다.
 //! `--yes`면 문구를 띄운 뒤 묻지 않고 승인한다. 지문은 이 설치본 폴더를 적재한 Orca의 응답에서만 받는다.
@@ -14,18 +15,10 @@ use kairos_core::process::{ProcessOutput, ProcessRequest};
 use regex::Regex;
 
 use super::Wizard;
+use crate::commands::notifier::{Grant, Missing, NotifierHelper};
 
-/// LaunchServices 등록기. 알림을 누르면 macOS가 등록된 번들을 띄운다. 시험은 `KAIROS_LSREGISTER`로 가짜를 준다.
-const LSREGISTER_BIN: &str =
-    "/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister";
-/// 설치본 안의 알림 헬퍼 번들.
-const NOTIFIER_APP: [&str; 3] = ["ops", "notifier", "KairosNotifier.app"];
-/// 번들 안의 실행 파일.
-const NOTIFIER_EXEC: [&str; 3] = ["Contents", "MacOS", "KairosNotifier"];
 /// 설치본 안의 Orca 패널 폴더.
 const PANEL_DIR: [&str; 2] = ["plugins", "orca-panel"];
-/// 헬퍼의 `setup`은 권한 창에서 최대 120초 기다린다.
-const NOTIFIER_SETUP_TIMEOUT: Duration = Duration::from_secs(150);
 const SHORT_TIMEOUT: Duration = Duration::from_secs(30);
 /// Orca가 승인을 받을 때 보여 주는 지문 줄.
 static FINGERPRINT: LazyLock<Regex> =
@@ -65,48 +58,23 @@ impl Wizard<'_> {
         self.context.runner().run(&ProcessRequest::new(program, args.iter().copied(), timeout))
     }
 
+    /// 터미널에서 묻지 않는다. 다른 Mac 앱처럼 macOS 권한 창이 묻고, 허용하면 그때부터 알림이 간다.
+    /// 전에 거절했으면 권한 창이 다시 뜨지 않는다. 그때만 시스템 설정을 열지 묻는다. `--yes`와 입력이 끝난 실행은 열지 않고 알리기만 한다.
     fn notifier(&self, runtime: &Path) -> KairosResult<()> {
-        let (app, bin) = match self.context.env("KAIROS_NOTIFIER").map(str::trim).filter(|value| !value.is_empty()) {
-            // 시험의 가짜 헬퍼. 번들은 실행 파일의 세 단계 위다.
-            Some(bin) => {
-                let bin = PathBuf::from(bin);
-                let app = bin.ancestors().nth(3).map_or_else(|| bin.clone(), Path::to_path_buf);
-                (app, bin)
-            }
-            None => {
-                let app = join(runtime, &NOTIFIER_APP);
-                let bin = join(&app, &NOTIFIER_EXEC);
-                (app, bin)
-            }
+        let Some(helper) = NotifierHelper::in_runtime(self.context, runtime) else {
+            self.console.print(Missing::Helper.message());
+            return Ok(());
         };
-        if !bin.is_file() {
-            self.console.print("알림 헬퍼가 설치본에 없습니다. ops/notifier/build.sh로 만든 뒤 다시 설치하세요");
+        if helper.grant(self.console) != Grant::DeniedBefore || self.yes {
             return Ok(());
         }
-        let bin_text = bin.to_string_lossy();
-        if self.run(&bin_text, &["status"], SHORT_TIMEOUT).stdout.trim() == "authorized" {
-            self.console.print("Mac 알림: 권한이 이미 있습니다");
-            return Ok(());
-        }
-        if !self.agree("Mac 알림 권한을 받을까요? 권한 창이 뜨면 허용을 누르세요", true)? {
-            self.console.print(&format!("나중에: \"{bin_text}\" setup"));
-            return Ok(());
-        }
-        let lsregister = self
-            .context
-            .env("KAIROS_LSREGISTER")
-            .map(str::trim)
-            .filter(|value| !value.is_empty())
-            .unwrap_or(LSREGISTER_BIN);
-        // 등록이 실패해도 권한은 받을 수 있다. 알림을 눌렀을 때 패널이 열리지 않을 뿐이다.
-        if !self.run(lsregister, &["-f", &app.to_string_lossy()], SHORT_TIMEOUT).success() {
-            self.console.print("LaunchServices 등록에 실패했습니다. 알림을 눌러도 패널이 열리지 않을 수 있습니다");
-        }
-        let done = self.run(&bin_text, &["setup"], NOTIFIER_SETUP_TIMEOUT);
-        if done.success() {
-            self.console.print("Mac 알림 권한을 받았습니다");
-        } else {
-            self.console.print("알림 권한을 받지 못했습니다. 시스템 설정 > 알림 > KairosNotifier에서 켜거나 kairos setup을 다시 실행하세요");
+        // 입력이 끝났으면 사람이 없다. 화면을 띄우지 않는다.
+        let open = match self.ask("시스템 설정의 알림 화면을 열까요? [Y/n]")? {
+            None => false,
+            Some(answer) => !matches!(answer.to_lowercase().as_str(), "n" | "no" | "아니오" | "아니요"),
+        };
+        if open && !helper.open_settings() {
+            self.console.print("시스템 설정을 열지 못했습니다. 직접 여세요");
         }
         Ok(())
     }

@@ -4,7 +4,8 @@
 
 ## 언어와 기록
 
-- 답, 계획, 커밋 메시지, 주석, 문서는 한국어로 쓴다. 문서 문체는 README처럼 짧은 평서문이다.
+- 답, 계획, 주석, 문서는 한국어로 쓴다. 문서 문체는 README처럼 짧은 평서문이다.
+- 커밋 메시지는 영어로 쓴다. 제목은 명령형 한 줄이고, 본문은 바뀐 것을 줄마다 적는다.
 - 커밋과 PR에 AI 작성 표기(`Co-Authored-By`, "Generated with" 등)를 넣지 않는다. 기술 내용만 쓴다.
 - main에서 바로 커밋하지 않는다. 브랜치를 만들고, 머지는 사용자가 요청할 때만 한다.
 - 계획과 실행 기록은 `.codex/`(git 무시)에 둔다.
@@ -23,7 +24,7 @@
 | `examples/` | 합성 값으로 쓴 설정 예시(`org.toml`은 시험 프로필과 같다) |
 | `docs/` | 사용자 문서와 표시면 계약 |
 | `ops/` | launchd 템플릿, 감시자(zsh), 알림 헬퍼(Swift) |
-| `scripts/` | `verify.sh`, `check-personal-data.sh`, 하네스 시험 |
+| `scripts/` | `verify.sh`, `check-personal-data.sh`, 하네스 시험, 설치(`install.sh`, `install-release.sh`)와 릴리스 묶음(`package.sh`) |
 
 ## 검증
 
@@ -43,6 +44,7 @@ cargo test -p <크레이트> [--test <파일>] <이름>   # 한 시험
 - 설정 값이 argv, 정규식, 프롬프트, 경로로 가면 모양을 좁게 검사하고, 정규식에는 `regex::escape`한 값만 넣는다.
 - 시각은 `Clock`, 외부 프로세스는 `ProcessRunner`, SQL은 `*Repo`로만 다룬다. 프로세스는 셸 없이 인자 배열로 띄운다.
 - 계약(`CONTRACT_VERSION`)의 필드는 더하기만 한다. 없는 값은 키째 빼서(`skip_serializing_if`) v1의 바이트를 지킨다.
+- 새 명령은 `commands::registry`와 `help.rs`의 표에 한 줄씩 더한다. 표에 없으면 시험이 실패한다.
 - 새 동작에는 시험을 더한다. 프로세스 동작은 `crates/kairos-cli/tests`의 `Cli` 하네스로 고정한다.
 - 보안 경계 파일(세션 프로필, 설정 검증, 커넥터 목록, 수집 훅, MCP 서버)을 고쳤으면 `security-reviewer` 에이전트로 검토한다.
 
@@ -50,8 +52,9 @@ cargo test -p <크레이트> [--test <파일>] <이름>   # 한 시험
 
 - golden 고정값(`crates/*/tests/fixtures/golden`)을 맞추려고 고치지 않는다. 지운 TS 구현의 출력이라 다시 만들 수 없다. 출력 변화가 의도인지 사용자에게 묻는다.
 - 생성 파일을 손으로 고치지 않는다: `storybook/src/stories/OrcaPanel.stories.tsx`(`npm --prefix storybook run gen`), `plugins/collector/hooks/allowed.ts`(설치기 출력과 같아야 한다), lockfile.
-- 운영을 건드리지 않는다: `~/Library/Application Support/kairos`(운영 데이터), `~/Library/LaunchAgents`, `kairos install --apply|--register`, `kairos sessions on`, `next --seen`(노출 예산), Orca 플러그인 승인과 적재, `orca plugin shot local.kairos`.
-- 외부에 쓰지 않는다(push, PR, 코멘트, 메시지). 사용자가 요청할 때만 한다.
+- 운영을 건드리지 않는다: `~/Library/Application Support/kairos`(운영 데이터), `~/Library/LaunchAgents`, `kairos install --apply|--register`, `kairos uninstall`(`--dry-run`만 된다), `kairos sessions on`, `next --seen`(노출 예산), Orca 플러그인 승인과 적재, `orca plugin shot local.kairos`, `kairos notify setup|test`(화면에 권한 창과 알림을 띄운다).
+- 외부에 쓰지 않는다(push, PR, 코멘트, 메시지, 태그와 릴리스). 사용자가 요청할 때만 한다.
+- 설치 스크립트를 시험할 때는 `HOME`과 `KAIROS_HOME`을 임시 폴더로 돌리고 가짜 실행 파일을 준다(`scripts/harness/install.test.mjs`). 실제 `~/.zshrc`와 운영 데이터 폴더에 쓰지 않는다.
 - 공개 저장소다. 실제 사람, 조직, 저장소, 캘린더, 토큰을 코드, 시험 값, 문서, 커밋 메시지에 쓰지 않는다. 시험 값은 합성 표지(Slack ID의 `SYNTH`, `contoso.example` 같은 예약 도메인, 캘린더 ID의 `synthetic`)를 쓴다. `scripts/check-personal-data.sh`가 일반 규칙으로 막고, 막을 실제 값은 git이 무시하는 `.personal-patterns`에 둔다.
 - 수집 훅에서 `$`를 넘기는 함수를 화살표 함수로 바꾸지 않는다(엔진이 모듈을 거부한다).
 

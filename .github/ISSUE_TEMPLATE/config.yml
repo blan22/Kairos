@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 보안 문제
+    url: https://github.com/blan22/Kairos/security/advisories/new
+    about: 공개 이슈에 쓰지 않는다. 비공개로 알린다(SECURITY.md).
+  - name: 문제 해결
+    url: https://github.com/blan22/Kairos/blob/main/docs/troubleshooting.md
+    about: 자주 막히는 곳과 푸는 명령.

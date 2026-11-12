@@ -27,6 +27,9 @@ kairos는 회사 계정(GitHub, Google, Slack, Notion)을 읽고 로컬 claude �
 - `CLAUDE_CONFIG_DIR`로 claude 설정을 옮겼으면 그 폴더는 읽기 막기 밖이다. `kairos pr`의 gh는 worktree에서 뜬다.
 - 외부인 실시간 재확인은 세션을 띄우기 직전 한 번이다. 띄운 뒤 달린 외부인 댓글은 세션이 읽을 수 있다.
 - `setup --yes`는 실행 파일 옆의 설치 자료만 쓴다. 대화형 `setup`과 `kairos install`은 지금 폴더의 설치 자료를 쓸 수 있으니 남의 저장소 안에서 부르지 않는다.
+- kairos는 스스로 코드를 내려받아 실행하지 않는다. `kairos update`는 명령을 알려 주기만 하고, 받는 일은 사용자가 터미널에서 돌리는 설치 스크립트가 한다.
+- 릴리스 묶음의 SHA256 파일은 묶음과 같은 릴리스에서 받는다. 받는 중에 깨진 파일은 걸러내지만 릴리스 자체가 바뀐 경우는 막지 못한다. 묶음과 알림 헬퍼는 ad-hoc 서명이라 올린 사람을 증명하지 않는다. 믿지 않으면 저장소에서 빌드한다.
+- `kairos uninstall --purge`는 데이터 폴더를 통째로 지운다. 링크, 홈 폴더와 그 위, kairos만 쓰는 이름의 파일(`kairos.db`, `connections.toml`, `install-source`)이 없는 폴더는 거절한다. 표지는 이름만 보고, 홈 폴더는 `HOME`으로 안다. `KAIROS_HOME`을 다른 자료와 함께 쓰는 폴더로 줬다면 그 자료도 지워진다. `--runtime`은 같은 자리 검사 뒤 판 번호 이름의 실행본 폴더만 지운다.
 - 조직 프로필을 남에게서 받을 때는 `kairos config init --org <파일> --sha256 <값>`으로 값을 고정한다.
 
 ## 신고

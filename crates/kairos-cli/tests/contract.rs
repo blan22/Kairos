@@ -8,18 +8,74 @@ use std::fs;
 use common::*;
 use serde_json::json;
 
-const NAMES: &str = "hello, list, next, watch, reveal, accept, move, pr, runs, later, done, keep, add, triage, focus, display, sessions, notify, doctor, pause, off, collect, plan-tick, page-info, ingest, setup, config, sources, mcp, connect, install, uninstall, demo";
+const NAMES: &str = "hello, list, next, watch, reveal, accept, move, pr, runs, later, done, keep, add, triage, focus, display, sessions, notify, doctor, pause, off, collect, plan-tick, page-info, ingest, setup, config, sources, mcp, connect, install, uninstall, demo, update, completions";
 
 #[test]
-fn 사용법의_명령_순서는_원본의_commands_키_순서다() {
+fn 도움말은_명령을_묶어_설명하고_내부_명령은_all에만_나온다() {
     let cli = Cli::new();
-    let expected = format!("사용법: kairos <명령>\n명령: {NAMES}\n");
     let help = cli.run(&["help"]);
-    assert_eq!((help.status, help.out.as_str(), help.err.as_str()), (0, expected.as_str(), ""));
-    let flag = cli.run(&["--help"]);
-    assert_eq!((flag.status, flag.out.as_str()), (0, expected.as_str()));
+    assert_eq!((help.status, help.err.as_str()), (0, ""));
+    assert!(help.out.starts_with(&format!("kairos {}\n", env!("CARGO_PKG_VERSION"))), "{}", help.out);
+    assert!(help.out.contains("사용법: kairos <명령> [옵션]"), "{}", help.out);
+    assert!(help.out.contains("\n매일 쓰는 명령\n  next "), "{}", help.out);
+    let internal = ["hello", "watch", "reveal", "plan-tick", "page-info", "ingest", "mcp"];
+    let listed = |out: &str, name: &str| out.lines().any(|line| line.starts_with(&format!("  {name} ")));
+    for name in NAMES.split(", ") {
+        assert_eq!(listed(&help.out, name), !internal.contains(&name), "{name}\n{}", help.out);
+    }
+    for same in [&["--help"][..], &["-h"]] {
+        let flag = cli.run(same);
+        assert_eq!((flag.status, flag.out.as_str()), (0, help.out.as_str()));
+    }
     let none = cli.run(&[]);
-    assert_eq!((none.status, none.out.as_str()), (2, expected.as_str()));
+    assert_eq!((none.status, none.out.as_str()), (2, help.out.as_str()));
+    let all = cli.run(&["help", "--all"]);
+    assert_eq!(all.status, 0);
+    for name in NAMES.split(", ") {
+        assert!(listed(&all.out, name), "{name}\n{}", all.out);
+    }
+}
+
+#[test]
+fn 판_번호를_찍는다() {
+    let cli = Cli::new();
+    let expected = format!("kairos {}\n", env!("CARGO_PKG_VERSION"));
+    for args in [&["--version"][..], &["-V"], &["version"]] {
+        let done = cli.run(args);
+        assert_eq!((done.status, done.out.as_str(), done.err.as_str()), (0, expected.as_str(), ""), "{args:?}");
+    }
+}
+
+#[test]
+fn 명령_하나의_도움말은_설명과_사용법_줄이다() {
+    let cli = Cli::new();
+    let later = "kairos later: 나중에 다시 본다\n사용법: kairos later <항목 ID>... [--json]\n";
+    for args in [&["help", "later"][..], &["later", "--help"], &["later", "-h"], &["later", "--json", "--help"]] {
+        let done = cli.run(args);
+        assert_eq!((done.status, done.out.as_str(), done.err.as_str()), (0, later, ""), "{args:?}");
+    }
+    // usage()가 없는 명령은 표의 줄을 쓴다.
+    let doctor = cli.run(&["doctor", "--help"]);
+    assert_eq!(
+        (doctor.status, doctor.out.as_str()),
+        (0, "kairos doctor: 수집과 설정 상태를 점검한다\n사용법: kairos doctor\n")
+    );
+    // `--` 뒤는 값이다. 도움말로 보지 않는다.
+    let value = cli.run(&["later", "--", "--help"]);
+    assert_eq!((value.status, value.out.as_str()), (2, "항목 ID는 양의 정수입니다\n"));
+    let unknown = cli.run(&["help", "nope"]);
+    assert_eq!(unknown.status, 2);
+    assert!(unknown.out.starts_with("알 수 없는 명령: nope\n"), "{}", unknown.out);
+}
+
+#[test]
+fn 잘못_친_명령에는_가까운_이름을_권한다() {
+    let cli = Cli::new();
+    let done = cli.run(&["nxt"]);
+    assert_eq!(done.status, 2);
+    assert_eq!(done.out, "알 수 없는 명령: nxt\n혹시 이 명령인가요: kairos next\n명령 목록은 kairos help로 봅니다\n");
+    let far = cli.run(&["send-it"]);
+    assert_eq!(far.out, "알 수 없는 명령: send-it\n명령 목록은 kairos help로 봅니다\n");
 }
 
 #[test]
@@ -52,14 +108,20 @@ fn 옵션_오류는_json을_주면_usage이고_없으면_표준_오류다() {
     let plain = cli.run(&["list", "--bogus"]);
     assert_eq!(plain.status, 1);
     assert_eq!(plain.out, "");
-    assert_eq!(plain.err, "kairos list 실패: ERR_PARSE_ARGS_UNKNOWN_OPTION\n");
+    // 첫 줄은 코드, 둘째 줄은 받는 옵션이다.
+    let list_usage = "사용법: kairos list [--would-show | --items | --json [--all]]\n";
+    assert_eq!(plain.err, format!("kairos list 실패: ERR_PARSE_ARGS_UNKNOWN_OPTION\n{list_usage}"));
     let positional = cli.run(&["list", "x"]);
-    assert_eq!(positional.err, "kairos list 실패: ERR_PARSE_ARGS_UNEXPECTED_POSITIONAL\n");
+    assert_eq!(positional.err, format!("kairos list 실패: ERR_PARSE_ARGS_UNEXPECTED_POSITIONAL\n{list_usage}"));
     let value = cli.run(&["next", "--surface"]);
-    assert_eq!(value.err, "kairos next 실패: ERR_PARSE_ARGS_INVALID_OPTION_VALUE\n");
+    assert!(
+        value.err.starts_with("kairos next 실패: ERR_PARSE_ARGS_INVALID_OPTION_VALUE\n사용법: kairos next "),
+        "{}",
+        value.err
+    );
     let flag_value = cli.run(&["list", "--json=1"]);
     assert_eq!(flag_value.status, 1, "--json=1은 --json이 아니다");
-    assert_eq!(flag_value.err, "kairos list 실패: ERR_PARSE_ARGS_INVALID_OPTION_VALUE\n");
+    assert_eq!(flag_value.err, format!("kairos list 실패: ERR_PARSE_ARGS_INVALID_OPTION_VALUE\n{list_usage}"));
 }
 
 #[test]
@@ -113,7 +175,7 @@ fn 사용법_오류의_문구는_답_형식을_따른다() {
     assert_eq!(cli.run(&["focus", "0"]).out, "사용법: kairos focus [분] | --end | --status\n");
     assert_eq!(cli.run(&["display", "maybe"]).out, "사용법: kairos display [on|off|auto]\n");
     assert_eq!(cli.run(&["sessions", "maybe"]).out, "사용법: kairos sessions [on|off]\n");
-    assert_eq!(cli.run(&["notify", "maybe"]).out, "사용법: kairos notify [on|off]\n");
+    assert_eq!(cli.run(&["notify", "maybe"]).out, "사용법: kairos notify [on|off|setup|test]\n");
 }
 
 #[test]

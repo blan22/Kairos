@@ -14,7 +14,7 @@ use kairos_agenda::{
 };
 use kairos_core::model::{Outcome, Source, SourceName};
 use kairos_core::ports::Clock;
-use kairos_core::process::ProcessRunner;
+use kairos_core::process::{ProcessRequest, ProcessRunner};
 use kairos_core::{Instant, KairosHome, KairosResult};
 use kairos_ledger::{OffDateBook, check_invariants};
 use kairos_ops::{LABELS, MaintenanceRecord, ResumeFile, SLEEP_INTERRUPTED, ToolResults};
@@ -34,6 +34,8 @@ pub const LOGIN_WARN_DAYS: i64 = 7;
 /// 신원 단언이 이 기간 동안 한 번도 없으면 문제로 올린다. Slack은 내 글이 없는 날에 값이 없는 것이 정상이다.
 pub const IDENTITY_STALE_DAYS: i64 = 3;
 const DAY_MS: i64 = 86_400_000;
+/// 알림 헬퍼의 `status`는 4초 안에 끝난다.
+const NOTIFIER_STATUS_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(6);
 
 #[derive(Clone, Debug)]
 pub struct DoctorConfig {
@@ -59,6 +61,7 @@ pub struct Doctor {
     sources: Vec<Arc<dyn Source>>,
     failures: Vec<SourceFailure>,
     login: Option<Arc<dyn ClaudeProbe>>,
+    notifier: Option<String>,
 }
 
 struct Findings {
@@ -151,7 +154,14 @@ impl Doctor {
         runner: Arc<dyn ProcessRunner>,
         sources: Vec<Arc<dyn Source>>,
     ) -> Self {
-        Self { config, clock, runner, sources, failures: Vec::new(), login: None }
+        Self { config, clock, runner, sources, failures: Vec::new(), login: None, notifier: None }
+    }
+
+    /// 알림 헬퍼의 실행 파일. 주면 Mac 알림 권한 상태를 한 줄로 보여 준다. 헬퍼는 `status`로만 부르고 권한 창을 띄우지 않는다.
+    #[must_use]
+    pub fn with_notifier(mut self, bin: Option<String>) -> Self {
+        self.notifier = bin;
+        self
     }
 
     #[must_use]
@@ -216,6 +226,23 @@ impl Doctor {
             known(halt.cost_usd),
         ));
         found.problems.push("수집 중단".to_owned());
+    }
+
+    /// Mac 알림 권한. 묻지 않은 상태는 알림이 조용히 버려지므로 문제로 올린다. 사용자가 끈 것은 알리기만 한다.
+    fn notifier_lines(&self, found: &mut Findings) {
+        let Some(bin) = &self.notifier else {
+            return;
+        };
+        let status = self.runner.run(&ProcessRequest::new(bin.clone(), ["status"], NOTIFIER_STATUS_TIMEOUT));
+        found.lines.push(match status.stdout.trim() {
+            "authorized" | "provisional" | "ephemeral" => "Mac 알림: 허용됨".to_owned(),
+            "denied" => "Mac 알림: 꺼짐. 시스템 설정 > 알림 > kairos에서 켜거나 kairos notify setup".to_owned(),
+            "notDetermined" => {
+                found.problems.push("Mac 알림 권한을 아직 받지 않음".to_owned());
+                "Mac 알림: 권한을 아직 받지 않아 알림이 가지 않습니다. kairos notify setup".to_owned()
+            }
+            _ => "Mac 알림: 상태 모름(알림 헬퍼가 답하지 않음)".to_owned(),
+        });
     }
 
     fn launch_agents_installed(&self) -> usize {
@@ -377,6 +404,7 @@ impl Doctor {
             format!("LaunchAgent: {installed}개 설치됨")
         });
 
+        self.notifier_lines(found);
         found.lines.push(format!("표시: {}", display_line(control, gate, at)));
         let lock = kairos_agenda::SessionApproval::new(&self.config.home).lock(control);
         found.lines.push(match control.session_test_passed_at().filter(|_| control.sessions_allowed()) {

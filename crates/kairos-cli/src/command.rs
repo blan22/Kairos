@@ -6,6 +6,7 @@ use kairos_core::text::sanitize;
 use kairos_core::{KairosError, KairosResult};
 
 use crate::app::AppContext;
+use crate::help;
 use crate::reply::Reply;
 
 const JSON_FLAG: &str = "--json";
@@ -38,13 +39,20 @@ pub trait Command: Send + Sync {
             Some(_) => Reply::new(context, true).fail("failed", code, 1),
             None => {
                 context.console().error(&format!("kairos {} 실패: {}", self.name(), sanitize(code)));
+                // 옵션을 잘못 줬으면 받는 옵션을 바로 보여 준다.
+                if code.starts_with(PARSE_ERROR) {
+                    let usage = self.usage().or_else(|| help::find(self.name()).and_then(|entry| entry.usage));
+                    if let Some(usage) = usage {
+                        context.console().error(usage);
+                    }
+                }
                 1
             }
         }
     }
 }
 
-/// 등록 순서가 `usage()`의 순서다.
+/// 명령의 등록부. 도움말의 묶음과 순서는 `help`의 표가 정한다.
 #[derive(Default)]
 pub struct CommandRegistry {
     commands: Vec<Box<dyn Command>>,
@@ -69,26 +77,56 @@ impl CommandRegistry {
         self.commands.iter().find(|command| command.name() == name).map(AsRef::as_ref)
     }
 
-    fn usage(&self, context: &AppContext) {
-        context.console().print("사용법: kairos <명령>");
-        context.console().print(&format!("명령: {}", self.names().join(", ")));
+    /// 명령 앞부분에 `--help`나 `-h`가 있는가. `--` 뒤는 값이라 보지 않는다.
+    fn asks_help(rest: &[String]) -> bool {
+        rest.iter().take_while(|arg| *arg != "--").any(|arg| arg == "--help" || arg == "-h")
     }
 
     /// `argv`는 프로그램 이름을 뺀 인자다. 반환값은 종료 코드다.
     pub fn dispatch(&self, context: &AppContext, argv: &[String]) -> i32 {
+        let console = context.console();
         let Some((name, rest)) = argv.split_first() else {
-            self.usage(context);
+            help::print_overview(console, self, false);
             return 2;
         };
-        if name == "help" || name == "--help" {
-            self.usage(context);
-            return 0;
+        match name.as_str() {
+            "--version" | "-V" | "version" => {
+                console.print(&help::version_line());
+                return 0;
+            }
+            "help" | "--help" | "-h" => {
+                return match rest.first().map(String::as_str) {
+                    None => {
+                        help::print_overview(console, self, false);
+                        0
+                    }
+                    Some("--all") => {
+                        help::print_overview(console, self, true);
+                        0
+                    }
+                    Some(topic) if help::print_command(console, self, topic) => 0,
+                    Some(topic) => self.unknown(context, topic),
+                };
+            }
+            _ => {}
         }
         let Some(command) = self.find(name) else {
-            context.console().print(&format!("알 수 없는 명령: {}", sanitize(name)));
-            self.usage(context);
-            return 2;
+            return self.unknown(context, name);
         };
+        if Self::asks_help(rest) {
+            help::print_command(console, self, name);
+            return 0;
+        }
         command.run(context, rest)
+    }
+
+    fn unknown(&self, context: &AppContext, name: &str) -> i32 {
+        let console = context.console();
+        console.print(&format!("알 수 없는 명령: {}", sanitize(name)));
+        if let Some(near) = help::suggest(self, name) {
+            console.print(&format!("혹시 이 명령인가요: kairos {near}"));
+        }
+        console.print("명령 목록은 kairos help로 봅니다");
+        2
     }
 }

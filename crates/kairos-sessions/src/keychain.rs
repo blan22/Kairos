@@ -54,6 +54,21 @@ impl Keychain {
         }
     }
 
+    /// 토큰을 지운다. 지웠으면 true, 원래 없었으면 false다. 데이터까지 지우는 제거가 쓴다.
+    pub fn delete(&self) -> KairosResult<bool> {
+        let request = ProcessRequest::new(
+            self.bin.clone(),
+            ["delete-generic-password", "-s", KEYCHAIN_SERVICE, "-a", KEYCHAIN_ACCOUNT],
+            TIMEOUT,
+        )
+        .max_output(4096);
+        match self.runner.run(&request).end {
+            ProcessEnd::Exited(0) => Ok(true),
+            ProcessEnd::Exited(NOT_FOUND) => Ok(false),
+            _ => Err(KairosError::new("keychain_delete_failed")),
+        }
+    }
+
     /// 토큰을 쓰거나 바꾼다. 형식은 호출자가 `SessionToken::parse`로 이미 봤다.
     pub fn write(&self, token: &SessionToken) -> KairosResult<()> {
         let command = format!(

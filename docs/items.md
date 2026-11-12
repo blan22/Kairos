@@ -44,7 +44,7 @@
 
 `collect`의 보고와 `doctor`의 `P1 알림 오늘` 줄에 전달, 묶음, 미발송 건수가 나온다. `items.p1_notice`가 표시의 이유를 가른다. 스키마 v6 이전은 그때 이미 있는 P1에 표시를 채운다. 기능을 배포하는 순간에는 울리지 않는다. v7 이전은 기다리던 건을 보류로 잇는다. `doctor`의 보류 건수는 기다리는 정상 상태라 문제로 올리지 않는다. `kairos notify off`는 P1만 끄고 P0와 건강 경고는 끄지 못한다.
 
-알림은 헬퍼 `ops/notifier/KairosNotifier.app`만 보낸다. osascript는 쓰지 않는다. 그 알림은 '스크립트 편집기' 이름으로 뜨고 누르면 Script Editor가 열린다. 실행 파일은 `KAIROS_NOTIFIER`가 있으면 그 값, 없으면 설치 자료 폴더의 번들이다. 헬퍼에는 `post '<json>'`으로 제목, 본문, 항목 ID, 급만 넘긴다. 헬퍼가 없거나 권한이 없거나 실패하면 보내지 못한 것으로 두고 다음 틱이 다시 보낸다. 감시자(`ops/kairos-watchdog.zsh`)도 같은 헬퍼로 `kairos 점검` 알림을 보낸다. 헬퍼 권한은 `KairosNotifier setup`을 한 번 실행해 받는다. 백그라운드 틱은 권한 대화상자를 띄우지 않는다. 설치는 `ops/notifier`에 번들만 놓는다. 소스와 `.build`는 가져가지 않고, 번들은 임시 이름으로 복사한 뒤 바꿔 끼운다. 세션 거부 목록에는 헬퍼 실행 파일의 이름과 설치 경로가 들어 있다.
+알림은 헬퍼 `ops/notifier/KairosNotifier.app`만 보낸다. osascript는 쓰지 않는다. 그 알림은 '스크립트 편집기' 이름으로 뜨고 누르면 Script Editor가 열린다. 실행 파일은 `KAIROS_NOTIFIER`가 있으면 그 값, 없으면 설치 자료 폴더의 번들이다. 헬퍼에는 `post '<json>'`으로 제목, 본문, 항목 ID, 급만 넘긴다. 헬퍼가 없거나 권한이 없거나 실패하면 보내지 못한 것으로 두고 다음 틱이 다시 보낸다. 감시자(`ops/kairos-watchdog.zsh`)도 같은 헬퍼로 `kairos 점검` 알림을 보낸다. 헬퍼 권한은 `kairos setup`이나 `kairos notify setup`이 macOS 권한 창을 띄워 받는다. 터미널에서 따로 묻지 않는다. 백그라운드 틱은 권한 대화상자를 띄우지 않는다. 설치는 `ops/notifier`에 번들만 놓는다. 소스와 `.build`는 가져가지 않고, 번들은 임시 이름으로 복사한 뒤 바꿔 끼운다. 세션 거부 목록에는 헬퍼 실행 파일의 이름과 설치 경로가 들어 있다.
 
 헬퍼 알림을 누르면 헬퍼가 `kairos reveal <ID>...`를 부른다. reveal은 ID 1~20개를 검사하고 `reveal.json`(`{"items":[..],"at":<ms>}`, 0600)을 쓴 뒤 `orca plugin open`으로 패널을 열고 `open -b com.stablyai.orca`로 Orca를 앞으로 끌어온다. Orca가 꺼져 있어 패널을 열지 못했고 끌어오기는 성공했으면, Orca가 뜰 때까지 0.5초 간격으로 8초 동안 패널을 다시 연다. Orca 단계가 실패해도 성공으로 답한다. `next --json`은 10분 안에 쓴 reveal.json만 `reveal` 필드로 싣는다. 형식 번호는 그대로다.
 

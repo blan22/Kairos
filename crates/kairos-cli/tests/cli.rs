@@ -68,6 +68,8 @@ fn doctor는_수집_전의_notion을_기록_없음으로_드러낸다() {
     assert!(doctor.out.contains("권한 700"));
     assert!(doctor.out.contains("스키마 v8, wal, 권한 600"));
     assert!(doctor.out.contains("근거 없는 종료 0건"));
+    // 끝에 확인할 것을 모아 보여 준다. 없으면 한 줄이다.
+    assert_eq!((doctor.status, doctor.out.ends_with("\n\n문제 없음\n")), (0, true), "{}", doctor.out);
     assert_eq!(doctor.err, "");
 }
 

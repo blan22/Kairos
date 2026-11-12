@@ -2,6 +2,7 @@ mod allowlist;
 mod binary;
 mod launchctl;
 mod plan;
+mod remove;
 mod runtime;
 
 use std::fs::{self, DirBuilder, OpenOptions, Permissions};
@@ -21,6 +22,7 @@ use launchctl::Launchctl;
 pub use plan::{
     InstallPaths, InstallPlan, PlanInput, PlistFile, VERSION, default_launch_agents_dir, plan_install, render_template,
 };
+pub use remove::{RemovalPlan, plan_runtime_removal, purge_refusal, remove_data, remove_runtime, runtime_refusal};
 
 use crate::fs_util::remove_if_present;
 
@@ -96,6 +98,9 @@ pub struct InstallResult {
     pub failed: bool,
 }
 
+/// `launchctl print`가 그 이름의 서비스가 없을 때 내는 코드.
+const NO_SERVICE: i32 = 113;
+
 #[derive(Clone, Debug, Default)]
 pub struct UninstallOptions {
     /// None이면 `~/Library/LaunchAgents`다.
@@ -103,6 +108,9 @@ pub struct UninstallOptions {
     pub dry_run: bool,
     /// launchctl을 부르지 않고 plist만 지운다.
     pub skip_launchctl: bool,
+    /// 실행본이나 데이터까지 지우는 호출의 앞 단계다. 끝의 안내 두 줄(남긴 것)은 호출자가 직접 알리므로 찍지 않고,
+    /// 내리지 못한 잡이 아직 올라 있는지 확인해 실패로 알린다. 남은 잡은 지운 경로를 계속 가리킨다.
+    pub before_removal: bool,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -207,27 +215,34 @@ impl Installer {
                 continue;
             }
             if let Some(domain) = &domain {
-                let code = launchctl.run(&["bootout", &format!("{domain}/{label}")]);
-                // 이미 내려가 있으면 실패 코드가 나온다. 목록에서 사라졌는지로 판단하지 않고 그대로 알린다.
-                let status = if code == 0 {
-                    "내림".to_owned()
-                } else {
-                    format!("내릴 것 없음 또는 실패(코드 {code})")
+                let target = format!("{domain}/{label}");
+                let code = launchctl.run(&["bootout", &target]);
+                // 이미 내려가 있으면 실패 코드가 나온다. 지우기 앞 단계에서만 아직 올라 있는지 다시 묻는다.
+                // 없다는 답(NO_SERVICE)일 때만 없다고 본다. 시간 초과나 실행 실패는 모르는 것이라 실패로 센다.
+                let check = (code != 0 && options.before_removal).then(|| launchctl.run(&["print", &target]));
+                failed |= check.is_some_and(|code| code != NO_SERVICE);
+                let status = match (code, check) {
+                    (0, _) => "내림".to_owned(),
+                    (_, Some(0)) => format!("내리지 못함(코드 {code})"),
+                    (_, Some(NO_SERVICE)) | (_, None) => format!("내릴 것 없음 또는 실패(코드 {code})"),
+                    (_, Some(other)) => format!("내려갔는지 확인하지 못함(코드 {code}, 확인 {other})"),
                 };
                 lines.push(format!("{label}: {status}"));
             }
             remove_if_present(&plist)?;
             failed |= plist.exists();
         }
-        lines.push(
-            "데이터 폴더와 DB는 지우지 않았습니다. 실행본을 지우려면 데이터 폴더 아래의 버전 폴더를 직접 삭제하세요."
-                .to_owned(),
-        );
-        // 플러그인 승인은 사용자가 했으므로 내리는 것도 사용자가 한다. 내리지 않으면 워커가 설치본 kairos를 계속 부른다.
-        lines.push(
-            "Orca 패널 플러그인은 내리지 않았습니다. 올린 적이 있다면 orca plugin dev unload <설치본의 plugins/orca-panel 경로>로 내리세요."
-                .to_owned(),
-        );
+        if !options.before_removal {
+            lines.push(
+                "데이터 폴더와 DB는 지우지 않았습니다. 실행본까지 지우려면 kairos uninstall --runtime, 데이터까지 지우려면 --purge."
+                    .to_owned(),
+            );
+            // 플러그인 승인은 사용자가 했으므로 내리는 것도 사용자가 한다. 내리지 않으면 워커가 설치본 kairos를 계속 부른다.
+            lines.push(
+                "Orca 패널 플러그인은 내리지 않았습니다. 올린 적이 있다면 orca plugin dev unload <설치본의 plugins/orca-panel 경로>로 내리세요."
+                    .to_owned(),
+            );
+        }
         Ok(UninstallResult { lines, failed })
     }
 }
