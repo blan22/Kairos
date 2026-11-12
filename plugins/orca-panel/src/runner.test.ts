@@ -88,6 +88,8 @@ test('호출은 겹치지 않고 앞이 실패해도 뒤가 돈다', async () =>
 test('버튼 이름과 ID를 계약의 argv로 바꾼다', () => {
   assert.deepEqual(argvFor('start', [7]), ['accept', '7', '--json'])
   assert.deepEqual(argvFor('later', [7, 8]), ['later', '7', '8', '--json'])
+  assert.deepEqual(argvFor('later_hour', [7, 8]), ['later', '7', '8', '--when', 'hour', '--json'])
+  assert.deepEqual(argvFor('later_tomorrow', [7]), ['later', '7', '--when', 'tomorrow', '--json'])
   assert.deepEqual(argvFor('done', [7, 8]), ['done', '7', '8', '--json'])
   assert.deepEqual(argvFor('keep', [7]), ['keep', '7', '--json'])
   assert.deepEqual(argvFor('keep_deploy', [7]), ['keep', '7', '--until-deploy', '--json'])
@@ -153,4 +155,16 @@ test('할 일 제목은 정리하고 자르며 비었거나 글자가 아니면 
 
 test('항목 조작은 제목을 받아도 인자에 넣지 않는다', () => {
   assert.deepEqual(argvFor('later', [1], '합성'), ['later', '1', '--json'])
+})
+
+test('다시 볼 때는 고정 낱말 둘뿐이고 ID 검사는 나중에와 같다', () => {
+  for (const action of ['later_hour', 'later_tomorrow']) {
+    assert.equal(argvFor(action, []), null, action)
+    assert.equal(argvFor(action, [0]), null, action)
+    assert.equal(argvFor(action, ['7; rm -rf ~']), null, action)
+    assert.equal(argvFor(action, Array.from({ length: 101 }, (_, index) => index + 1)), null, action)
+    // 제목이나 다른 값은 argv에 들어가지 않는다.
+    assert.equal(argvFor(action, [1], '--when=week')?.includes('--when=week'), false, action)
+  }
+  for (const action of ['later_week', 'later_', 'later --when hour', 'later_hour ']) assert.equal(argvFor(action, [1]), null, action)
 })

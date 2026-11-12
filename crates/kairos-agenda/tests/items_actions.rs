@@ -5,8 +5,8 @@ mod common;
 
 use common::*;
 use kairos_agenda::{
-    ActionContext, ActionStatus, ItemCloseReason, ItemRepo, ItemState, ItemTier, ItemTransitions, ParkTrigger,
-    TriageDecision,
+    ActionContext, ActionStatus, ItemCloseReason, ItemRepo, ItemState, ItemTier, ItemTransitions, LaterWhen,
+    ParkTrigger, TriageDecision,
 };
 use kairos_core::OffDates;
 use kairos_core::model::{ActorKind, EventType, NormalizedEvent, NormalizedObject, SourceName};
@@ -102,6 +102,39 @@ fn 나중에는_다음_묶음_시각까지_대기하고_그_시각에_열린다(
     let woken = item(&db, 1);
     assert_eq!((woken.state, woken.park_trigger, woken.parked_until), (ItemState::Open, None, None));
     assert!(woken.bundle_queued);
+}
+
+#[test]
+fn 나중에의_때를_고르면_한_시간_뒤나_다음_근무일_아침까지_대기한다() {
+    let db = test_db();
+    prime_slack(&db);
+    slack(T0).events(vec![mention("1", T0), mention("2", T0)]).run(&db);
+    refresh(&db, T0);
+    let none = none();
+    let hour = actions(&db).later_when(&[1], &acting(T0, &none), LaterWhen::Hour).unwrap();
+    assert_eq!((hour[0].status, hour[0].message.as_str()), (ActionStatus::Changed, "1시간 뒤에 다시 보여 줍니다"));
+    let row = item(&db, 1);
+    assert_eq!((row.state, row.park_trigger), (ItemState::Parked, Some(ParkTrigger::NextBundle)));
+    assert_eq!((row.parked_until, row.push_count), (Some(kst(MON, "11:00")), 1));
+    let tomorrow = actions(&db).later_when(&[2], &acting(T0, &none), LaterWhen::Tomorrow).unwrap();
+    assert_eq!(tomorrow[0].message, "다음 근무일 아침에 다시 보여 줍니다");
+    assert_eq!(item(&db, 2).parked_until, Some(kst(TUE, "10:00")));
+    // 깨어나는 길은 다음 묶음과 같다. 그 시각에 열리고 다음 묶음에 실린다.
+    assert_eq!(refresh(&db, &kst(MON, "10:59")).woken, 0);
+    assert_eq!(refresh(&db, &kst(MON, "11:00")).woken, 1);
+    let woken = item(&db, 1);
+    assert_eq!((woken.state, woken.parked_until), (ItemState::Open, None));
+    assert!(woken.bundle_queued);
+    assert_eq!(item(&db, 2).state, ItemState::Parked);
+}
+
+#[test]
+fn 내일_아침은_쉬는_날을_건너뛴다() {
+    let db = test_db();
+    seeded_mention(&db);
+    let off_dates = off(&[TUE]);
+    actions(&db).later_when(&[1], &acting(T0, &off_dates), LaterWhen::Tomorrow).unwrap();
+    assert_eq!(item(&db, 1).parked_until, Some(kst("2026-03-04", "10:00")));
 }
 
 #[test]

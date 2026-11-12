@@ -56,7 +56,7 @@ test('시작할 때 next --json을 불러 상태 표시줄을 그린다', async 
   assert.deepEqual(state.calls, [['next', '--json']])
   assert.deepEqual(updates(worker).at(-1), {
     id: STATUS_ITEM_ID,
-    text: 'kairos 2',
+    text: 'kairos 2 · 긴급 1',
     icon: 'bell',
     tone: 'danger',
     tooltip: '긴급 1, 오늘 1, 여유 있을 때 0 / 할 일 0, 미룬 일 0, 세션 0 / 지금 먼저 볼 일은 없습니다.',
@@ -201,6 +201,46 @@ test('seen은 true일 때만 인정한다', async () => {
   state.calls.length = 0
   for (const input of [{ seen: 'true' }, { seen: 1 }, {}, null, 'seen']) await worker.request('kairos.snapshot', input as never)
   assert.ok(state.calls.every(argv => !argv.includes('--seen')))
+})
+
+const READY_NEXT = ['next', '--seen-ready', '--surface', 'panel', '--json']
+
+test('ready는 세션 소식만 확인으로 적는 읽기이고 seen이 함께 오면 seen을 따른다', async () => {
+  const state = rig()
+  const worker = await mountRig(state)
+  state.calls.length = 0
+  await worker.request('kairos.snapshot', { seen: false, ready: true })
+  assert.deepEqual(state.calls, [READY_NEXT, ['list', '--json']])
+  state.calls.length = 0
+  await worker.request('kairos.snapshot', { seen: true, ready: true })
+  assert.deepEqual(state.calls[0], ['next', '--seen', '--surface', 'panel', '--json'])
+  state.calls.length = 0
+  for (const input of [{ seen: false, ready: 'true' }, { seen: false, ready: 1 }, { ready: null }]) await worker.request('kairos.snapshot', input as never)
+  assert.ok(state.calls.every(argv => argv[0] !== 'next' || argv.length === 2))
+  state.calls.length = 0
+  await worker.request('kairos.action', { action: 'done', ids: [1], seen: false, ready: true })
+  assert.deepEqual(state.calls, [['done', '1', '--json'], READY_NEXT, ['list', '--json']])
+})
+
+test('설치된 kairos가 ready 읽기를 모르면 기록 없이 읽고 다시 묻지 않는다', async () => {
+  const usage: ExecOutcome = { exitCode: 2, stdout: JSON.stringify({ schema: 1, ok: false, error: { code: 'usage', message: '사용법: kairos next' } }), fault: null }
+  const state = rig(argv => (argv[0] === 'list' ? ok(listJson()) : argv.includes('--seen-ready') ? usage : ok(nextJson({ counts: counts({ P1: 2 }) }))))
+  const worker = await mountRig(state)
+  state.calls.length = 0
+  const first = await worker.request('kairos.snapshot', { seen: false, ready: true })
+  assert.deepEqual(state.calls, [READY_NEXT, ['next', '--json'], ['list', '--json']])
+  assert.equal(first.error, null)
+  assert.equal(first.next?.counts.P1, 2)
+  state.calls.length = 0
+  await worker.request('kairos.snapshot', { seen: false, ready: true })
+  assert.deepEqual(state.calls, [['next', '--json'], ['list', '--json']])
+  // 다른 실패는 그대로 알린다. 기록 없는 읽기로 바꾸지 않는다.
+  const broken = rig(argv => (argv[0] === 'list' ? ok(listJson()) : argv.includes('--seen-ready') ? { exitCode: 1, stdout: '', fault: 'timeout' } : ok(nextJson())))
+  const other = await mountRig(broken)
+  broken.calls.length = 0
+  const failed = await other.request('kairos.snapshot', { seen: false, ready: true })
+  assert.deepEqual(broken.calls, [READY_NEXT, ['list', '--json']])
+  assert.equal(failed.error?.code, 'timeout')
 })
 
 test('목록이 실패해도 카드는 넘기고 실패를 함께 알린다', async () => {

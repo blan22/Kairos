@@ -16,6 +16,6 @@ pub use control::{ControlFile, DisplayMode, FocusControl, INDEFINITE, KairosCont
 pub use gate::{DisplayGate, DisplayStart, GateReason, earliest_t0};
 pub use health::{
     CoverageGap, GAP_NOTICE_DAYS, HealthStatus, MIN_ALERT_SECONDS, NOTION_FORMAT_THRESHOLD, NOTION_FORMAT_WINDOW_MS,
-    SourceHealth, SourceHealthBook,
+    SourceHealth, SourceHealthBook, SourceStatus,
 };
 pub use reveal::{REVEAL_FILE, REVEAL_MAX_ITEMS, REVEAL_WINDOW_MS, RevealFile, RevealView, is_item_id};

@@ -53,7 +53,7 @@ cargo test -p <크레이트> [--test <파일>] <이름>   # 테스트 하나
 
 - golden 픽스처(`crates/*/tests/fixtures/golden`)를 테스트에 맞추려고 고치지 않는다. 삭제한 TS 구현의 출력이라 다시 만들 수 없다. 출력이 바뀐 것이 의도인지 사용자에게 묻는다.
 - 생성 파일을 직접 고치지 않는다: `storybook/src/stories/OrcaPanel.stories.tsx`(`npm --prefix storybook run gen`), `plugins/collector/hooks/allowed.ts`(설치기 출력과 같아야 한다), lockfile.
-- 운영 환경을 건드리지 않는다: `~/Library/Application Support/kairos`(운영 데이터), `~/Library/LaunchAgents`, `kairos install --apply|--register`, `kairos uninstall`(`--dry-run`만 허용), `kairos sessions on`, `next --seen`(노출 예산), Orca 플러그인 승인과 로드, `orca plugin shot local.kairos`, `kairos notify setup|test`(화면에 권한 창과 알림을 띄운다).
+- 운영 환경을 건드리지 않는다: `~/Library/Application Support/kairos`(운영 데이터), `~/Library/LaunchAgents`, `kairos install --apply|--register`, `kairos uninstall`(`--dry-run`만 허용), `kairos sessions on`, `next --seen`(노출 예산)과 `next --seen-ready`(세션 소식 확인), Orca 플러그인 승인과 로드, `orca plugin shot local.kairos`, `kairos notify setup|test`(화면에 권한 창과 알림을 띄운다).
 - 외부에 쓰지 않는다(push, PR, 코멘트, 메시지, 태그와 릴리스). 사용자가 요청할 때만 한다.
 - 설치 스크립트를 테스트할 때는 `HOME`과 `KAIROS_HOME`을 임시 폴더로 돌리고 가짜 실행 파일을 준다(`scripts/harness/install.test.mjs`). 실제 `~/.zshrc`와 운영 데이터 폴더에 쓰지 않는다.
 - 공개 저장소다. 실제 사람, 조직, 저장소, 캘린더, 토큰을 코드, 테스트 값, 문서, 커밋 메시지에 쓰지 않는다. 테스트 값에는 합성 표식(Slack ID의 `SYNTH`, `contoso.example` 같은 예약 도메인, 캘린더 ID의 `synthetic`)을 쓴다. `scripts/check-personal-data.sh`가 일반 규칙으로 막고, 막아야 할 실제 값은 git이 무시하는 `.personal-patterns`에 둔다.

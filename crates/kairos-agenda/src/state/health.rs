@@ -1,5 +1,6 @@
 //! 소스 건강과 사용자가 알아야 할 수집 사실.
 
+use std::cmp::Ordering;
 use std::collections::BTreeSet;
 
 use kairos_core::model::{Outcome, QuerySpec, Source, SourceMode, SourceName};
@@ -52,6 +53,42 @@ pub struct SourceHealth {
     pub delay_minutes: Option<i64>,
     pub note: Option<String>,
     pub status: HealthStatus,
+}
+
+/// 소스 하나의 건강. 질의가 여럿이면 가장 나쁜 상태의 질의를 쓴다. 호스트가 수집 상태로 그리는 값이라 고정 낱말과 시각뿐이다.
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SourceStatus {
+    pub source: SourceName,
+    pub label: String,
+    pub status: HealthStatus,
+    /// 상태를 정한 질의의 마지막 정상 수집 시각. 주기가 다른 질의의 시각은 섞지 않는다.
+    pub last_ok_at: Option<String>,
+    pub delay_minutes: Option<i64>,
+}
+
+/// 사용자가 먼저 알아야 하는 순서. 지금 늦는 것이 맨 앞이다.
+const fn severity(status: HealthStatus) -> u8 {
+    match status {
+        HealthStatus::Delayed => 4,
+        HealthStatus::Never => 3,
+        HealthStatus::NotConnected => 2,
+        HealthStatus::Quiet => 1,
+        HealthStatus::Ok => 0,
+    }
+}
+
+/// 같은 상태의 질의 둘에서 보여 줄 시각. 늦는 중이면 가장 오래 밀린 것을, 아니면 가장 최근에 성공한 것을 쓴다.
+/// 주기가 하루인 질의가 정상인 소스를 '23시간 전 수집'으로 보이게 하지 않기 위해서다.
+fn shown_last_ok(status: HealthStatus, left: Option<String>, right: Option<&str>) -> Option<String> {
+    let wanted = if status == HealthStatus::Delayed { Ordering::Less } else { Ordering::Greater };
+    match (left, right) {
+        (Some(left), Some(right)) => {
+            let take_right = Instant::compare_texts(right, &left) == Some(wanted);
+            Some(if take_right { right.to_owned() } else { left })
+        }
+        (left, right) => left.or_else(|| right.map(str::to_owned)),
+    }
 }
 
 /// 최근의 덮지 못한 구간.
@@ -146,6 +183,36 @@ impl<'a> SourceHealthBook<'a> {
             }
         }
         Ok(health)
+    }
+
+    /// 질의별 건강을 소스별 한 줄로 줄인다. 순서는 처음 나온 소스 순서다.
+    pub fn summary(health: &[SourceHealth]) -> Vec<SourceStatus> {
+        let mut rows: Vec<SourceStatus> = Vec::new();
+        for row in health {
+            let Some(found) = rows.iter_mut().find(|status| status.source == row.source) else {
+                rows.push(SourceStatus {
+                    source: row.source,
+                    label: row.source.label().to_owned(),
+                    status: row.status,
+                    last_ok_at: row.last_ok_at.clone(),
+                    delay_minutes: row.delay_minutes,
+                });
+                continue;
+            };
+            match severity(row.status).cmp(&severity(found.status)) {
+                Ordering::Greater => {
+                    found.status = row.status;
+                    found.last_ok_at.clone_from(&row.last_ok_at);
+                    found.delay_minutes = row.delay_minutes;
+                }
+                Ordering::Equal => {
+                    found.last_ok_at = shown_last_ok(row.status, found.last_ok_at.take(), row.last_ok_at.as_deref());
+                    found.delay_minutes = found.delay_minutes.max(row.delay_minutes);
+                }
+                Ordering::Less => {}
+            }
+        }
+        rows
     }
 
     /// 지연 문구. 분을 모르면 지연 사실만 쓴다.

@@ -92,6 +92,61 @@ fn later_done_keep은_항목_id만_받고_결과를_낸다() {
 }
 
 #[test]
+fn later의_when은_hour와_tomorrow만_받는다() {
+    let cli = cli_with_item();
+    for bad in ["soon", "next_bundle", "", "1;rm"] {
+        let refused = cli.json(&["later", "1", "--when", bad]);
+        assert_eq!((refused.status, &refused.body()["error"]["code"]), (2, &json!("usage")), "{bad}");
+    }
+    assert!(items(&cli.db())[0].parked_until.is_none());
+    let before = now();
+    let later = cli.json(&["later", "1", "--when", "hour"]);
+    let body = later.body();
+    assert_eq!((later.status, &body["results"][0]["state"]), (0, &json!("parked")));
+    assert_eq!(body["results"][0]["message"], "1시간 뒤에 다시 보여 줍니다");
+    let until = Instant::parse(items(&cli.db())[0].parked_until.as_deref().unwrap()).unwrap();
+    let waited = until.ms_since(before);
+    assert!((3_600_000..3_660_000).contains(&waited), "{waited}");
+    let cli = cli_with_item();
+    let tomorrow = cli.json(&["later", "1", "--when", "tomorrow"]);
+    assert_eq!(tomorrow.body()["results"][0]["message"], "다음 근무일 아침에 다시 보여 줍니다");
+}
+
+#[test]
+fn next_json은_소스별_수집_상태를_싣는다() {
+    let cli = cli_with_item();
+    let body = cli.json(&["next"]).body();
+    assert_eq!(body["display"]["open"], false, "표시 게이트가 닫혀 있어도 수집 상태는 낸다");
+    let sources = body["sources"].as_array().unwrap();
+    let labels: Vec<&str> = sources.iter().map(|row| row["label"].as_str().unwrap()).collect();
+    assert_eq!(labels, ["Calendar", "GitHub", "Slack", "Gmail", "Notion"]);
+    let allowed = ["ok", "delayed", "never", "not_connected", "quiet"];
+    for row in sources {
+        assert!(allowed.contains(&row["status"].as_str().unwrap()), "{row}");
+        let keys: Vec<&String> = row.as_object().unwrap().keys().collect();
+        assert_eq!(keys, ["source", "label", "status", "lastOkAt", "delayMinutes"], "{row}");
+    }
+    // 목록 응답은 그대로다. 수집 상태는 next에만 있다.
+    assert!(cli.json(&["list"]).body().get("sources").is_none());
+}
+
+#[test]
+fn next의_seen_ready는_같은_응답을_내고_카드_노출을_적지_않는다() {
+    let cli = cli_with_item();
+    let plain = cli.json(&["next"]).body();
+    let ready = cli.json(&["next", "--seen-ready", "--surface", "panel"]);
+    assert_eq!(ready.status, 0);
+    let body = ready.body();
+    for key in ["ok", "display", "card", "ready", "counts", "budget"] {
+        assert_eq!(body[key], plain[key], "{key}");
+    }
+    let after = cli.json(&["next"]).body();
+    assert_eq!((&after["card"], &after["budget"]), (&plain["card"], &plain["budget"]));
+    // 호스트 이름 검사는 그대로다.
+    assert_eq!(cli.json(&["next", "--seen-ready", "--surface", "bogus"]).status, 2);
+}
+
+#[test]
 fn keep과_done_drop도_cli로_바뀐다() {
     let cli = cli_with_item();
     assert_eq!(cli.json(&["keep", "1"]).body()["results"][0]["state"], "parked");

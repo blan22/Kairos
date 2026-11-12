@@ -14,11 +14,13 @@ import type {
   ItemActionId,
   ItemRow,
   ListView,
+  BudgetView,
   NextView,
   PanelAction,
   ReadyView,
   RevealView,
   RunView,
+  SourceView,
   Tier,
 } from './protocol.ts'
 import { sectionOf, sortRows, trimRows } from './rows.ts'
@@ -39,6 +41,10 @@ const CARD_KINDS: readonly string[] = ['item', 'bundle', 'carryover']
 const MOVE: PanelAction = { id: 'move', label: '이동' }
 /** kairos reveal이 받는 ID 수의 상한과 같다. */
 const REVEAL_LIMIT = 20
+const SOURCE_NAME = /^[a-z][a-z0-9_]{0,31}$/
+const SOURCE_STATES: readonly string[] = ['ok', 'delayed', 'never', 'not_connected', 'quiet']
+/** kairos의 소스는 다섯이다. 넉넉히 받고 나머지는 버린다. */
+const SOURCE_LIMIT = 12
 
 type Json = Record<string, unknown>
 
@@ -209,6 +215,33 @@ function parseReveal(value: unknown): RevealView | null {
   return items.length === raw.length ? { items: [...new Set(items)], at } : null
 }
 
+/** 이름과 상태가 고정 낱말이 아니면 그 줄을 버린다. 이름이 같은 줄은 처음 것만 쓴다. */
+function parseSources(value: unknown): SourceView[] {
+  const rows: SourceView[] = []
+  for (const raw of list(value)) {
+    if (rows.length >= SOURCE_LIMIT) break
+    if (!isRecord(raw)) continue
+    const { source, status, delayMinutes } = raw
+    if (typeof source !== 'string' || !SOURCE_NAME.test(source) || typeof status !== 'string' || !SOURCE_STATES.includes(status)) continue
+    if (rows.some(row => row.source === source)) continue
+    const delay = typeof delayMinutes === 'number' && Number.isFinite(delayMinutes) && delayMinutes >= 0 ? Math.floor(delayMinutes) : null
+    rows.push({ source, label: cleanText(raw.label, LABEL_LIMIT) || source, status, lastOkAt: optional(raw.lastOkAt, 40), delayMinutes: delay })
+  }
+  return rows
+}
+
+function parseBudget(value: unknown): BudgetView | null {
+  if (!isRecord(value)) return null
+  return {
+    hourUsed: count(value.p1HourUsed),
+    hourLimit: count(value.p1HourLimit),
+    dayUsed: count(value.p1DayUsed),
+    dayLimit: count(value.p1DayLimit),
+    bundlesToday: count(value.bundlesToday),
+    shownToday: count(value.shownToday),
+  }
+}
+
 /** 필수 값이 없으면 null이다. 호출한 쪽이 형식 오류로 표시한다. */
 export function parseNext(value: Json): NextView | null {
   const display = parseGate(value.display)
@@ -226,6 +259,8 @@ export function parseNext(value: Json): NextView | null {
     health: optional(value.health, LINE_LIMIT),
     nextBundleAt: isRecord(value.budget) ? optional(value.budget.nextBundleAt, 40) : null,
     reveal: parseReveal(value.reveal),
+    sources: parseSources(value.sources),
+    budget: parseBudget(value.budget),
   }
 }
 

@@ -2,7 +2,7 @@ import { assert, test } from 'orca/testing'
 import { accepted, item, listJson, manual, offered, parked, startable } from './fixtures.ts'
 import { parseList } from './parse.ts'
 import type { ItemRow } from './protocol.ts'
-import { canStart, defaultOpen, DISPLAY_ORDER, groupRows, hasOffer, isCompact, ROW_LIMIT, sectionOf, sortReady, sortRows, trimRows, visibleCount, type Section } from './rows.ts'
+import { canStart, defaultOpen, groupRows, hasOffer, isCompact, isTabId, ROW_LIMIT, sectionOf, sortReady, sortRows, TAB_ORDER, TAB_SECTIONS, tabCount, tabOf, trimRows, visibleCount, type Section } from './rows.ts'
 
 const rows = (...raw: Record<string, unknown>[]): ItemRow[] => parseList(listJson(raw))?.items ?? []
 const row = (raw: Record<string, unknown>): ItemRow => rows(raw)[0] as ItemRow
@@ -80,23 +80,41 @@ test('정렬은 입력을 바꾸지 않는다', () => {
   assert.deepEqual(idsOf(input), before)
 })
 
-test('화면 순서에서만 긴급이 진행 중 위로 간다', () => {
-  assert.deepEqual(DISPLAY_ORDER, ['urgent', 'running', 'offer', 'today', 'relaxed', 'parked', 'baseline'])
+test('자르기 순서에서는 세션이 긴급보다 앞이다', () => {
   assert.deepEqual(idsOf(sortRows(rows(item(1, { tier: 'P0' }), accepted(2)))), [2, 1])
 })
 
-test('접기 기본값은 미룸과 기준선은 접힘, 여유는 6건 이상일 때만 접을 수 있고 오늘이 있으면 접힘이다', () => {
+test('탭은 묶음을 빠짐없이 한 번씩 나눠 갖고 긴급과 제안은 지금에 있다', () => {
+  assert.deepEqual(TAB_ORDER, ['now', 'waiting', 'sessions', 'status'])
+  assert.deepEqual(TAB_SECTIONS.now, ['urgent', 'offer', 'today'])
+  assert.deepEqual(TAB_SECTIONS.waiting, ['relaxed', 'parked', 'baseline'])
+  assert.deepEqual(TAB_SECTIONS.sessions, ['running'])
+  assert.deepEqual(TAB_SECTIONS.status, [])
+  const all: Section[] = ['running', 'urgent', 'offer', 'today', 'relaxed', 'parked', 'baseline']
+  assert.deepEqual([...TAB_ORDER.flatMap(tab => TAB_SECTIONS[tab])].sort(), [...all].sort())
+  assert.deepEqual(all.map(tabOf), ['sessions', 'now', 'now', 'now', 'waiting', 'waiting', 'waiting'])
+  for (const value of ['now', 'waiting', 'sessions', 'status']) assert.equal(isTabId(value), true, value)
+  for (const value of ['', 'theory', 'constructor', '__proto__', null, undefined, 1]) assert.equal(isTabId(value), false, String(value))
+})
+
+test('탭 건수는 그 탭의 묶음을 더하고 넘기지 않은 줄도 센다', () => {
+  const groups = groupRows(rows(item(1, { tier: 'P0' }), startable(2), item(3), item(4, { tier: 'P2' }), parked(5), item(6, { baseline: true }), accepted(7)))
+  assert.deepEqual([tabCount('now', groups, {}), tabCount('waiting', groups, {}), tabCount('sessions', groups, {}), tabCount('status', groups, {})], [3, 3, 1, 0])
+  assert.equal(tabCount('waiting', groups, { relaxed: 4, today: 9, constructor: 7 }), 7)
+})
+
+test('접기 기본값은 기준선은 접힘이고 미룬 일은 여유 있을 때가 길 때만 접힌다', () => {
   const groupsOf = (today: number, relaxed: number): Record<Section, ItemRow[]> =>
     groupRows([
       ...rows(...Array.from({ length: today }, (_, index) => item(index + 1))),
       ...rows(...Array.from({ length: relaxed }, (_, index) => item(index + 100, { tier: 'P2' }))),
     ])
-  assert.equal(defaultOpen('parked', groupsOf(0, 0)), false)
   assert.equal(defaultOpen('baseline', groupsOf(0, 0)), false)
-  assert.equal(defaultOpen('relaxed', groupsOf(1, 5)), undefined)
-  assert.equal(defaultOpen('relaxed', groupsOf(0, 6)), true)
-  assert.equal(defaultOpen('relaxed', groupsOf(1, 6)), false)
-  for (const section of ['urgent', 'running', 'today'] as const) assert.equal(defaultOpen(section, groupsOf(1, 6)), undefined)
+  assert.equal(defaultOpen('parked', groupsOf(0, 0)), true)
+  assert.equal(defaultOpen('parked', groupsOf(3, 5)), true)
+  assert.equal(defaultOpen('parked', groupsOf(0, 6)), false)
+  // 여유 있을 때는 대기 탭의 주인이라 늘 펼쳐져 있다.
+  for (const section of ['urgent', 'running', 'offer', 'today', 'relaxed'] as const) assert.equal(defaultOpen(section, groupsOf(1, 6)), undefined)
 })
 
 test('자르기는 묶음마다 줄을 남기고 앞쪽 묶음부터 채운다', () => {

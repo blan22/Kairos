@@ -18,8 +18,8 @@ mod repo;
 mod state;
 
 pub use actions::{
-    ActionContext, ActionResult, ActionStatus, IdSource, ItemActions, ItemTransitions, RandomIds, TRIAGE_BATCH,
-    TriageBatch, TriageDecision,
+    ActionContext, ActionResult, ActionStatus, IdSource, ItemActions, ItemTransitions, LaterWhen, RandomIds,
+    TRIAGE_BATCH, TriageBatch, TriageDecision,
 };
 pub use alerts::*;
 pub use cards::*;

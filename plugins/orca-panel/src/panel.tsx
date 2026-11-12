@@ -7,6 +7,7 @@
  */
 import {
   atom,
+  Badge,
   Box,
   Button,
   Callout,
@@ -15,6 +16,7 @@ import {
   Heading,
   IconButton,
   Input,
+  KeyValue,
   List,
   ListItem,
   plugin,
@@ -27,15 +29,36 @@ import {
   Skeleton,
   Spinner,
   Stack,
+  Tab,
+  Tabs,
   Text,
   update,
   type PanelContext,
 } from 'orca'
 import { ADD_TITLE_LIMIT, PANEL_ACTION_TIMEOUT_MS, PANEL_SNAPSHOT_TIMEOUT_MS } from './config.ts'
-import type { ActionId, ActionOutcome, CardView, Failure, GateView, ItemActionId, ItemRow, ListView, NextView, PanelAction, ReadyView, RevealView, Snapshot } from './protocol.ts'
-import { canStart, defaultOpen, DISPLAY_ORDER, groupRows, hasOffer, isCompact, sectionOf, sortReady, visibleCount, type Section } from './rows.ts'
+import type { ActionId, ActionOutcome, CardView, Failure, GateView, ItemActionId, ItemRow, ListView, NextView, PanelAction, ReadyView, RevealView, Snapshot, SourceView } from './protocol.ts'
+import { canStart, defaultOpen, groupRows, hasOffer, isCompact, isTabId, sectionOf, sortReady, TAB_ORDER, TAB_SECTIONS, tabCount, tabOf, visibleCount, type Section, type TabId } from './rows.ts'
 import { badgeOf } from './status.ts'
-import { actionFailure, carriedWord, cleanText, clip, dayLabel, failureCopy, holdLine, holdSentence, joinLine, lookup, openableUrl, whenLabel } from './text.ts'
+import {
+  actionFailure,
+  carriedWord,
+  cleanText,
+  clip,
+  dayLabel,
+  failureCopy,
+  guideOf,
+  holdLine,
+  holdSentence,
+  isSourceTrouble,
+  joinLine,
+  lookup,
+  matchesSearch,
+  openableUrl,
+  SEARCH_LIMIT,
+  searchWords,
+  sourceWord,
+  whenLabel,
+} from './text.ts'
 
 /** 지금까지 읽은 값. next나 list가 비어 오면 이전 값을 지우지 않고 그 부분만 stale로 표시한다. */
 interface Reading {
@@ -81,7 +104,7 @@ interface Trace {
 }
 
 type IconName = 'edit' | 'search' | 'flag' | 'branch' | 'calendar' | 'rocket' | 'wrench' | 'file-text' | 'bell' | 'terminal'
-type Tool = 'focus' | 'add'
+type Tool = 'focus' | 'add' | 'search'
 
 interface Trouble {
   title: string
@@ -95,6 +118,8 @@ interface RowPlace {
   nested: boolean
   /** 합친 카드의 줄이다. 행동은 카드 끝에서 한 번에 하고 줄에는 원문 열기만 둔다. */
   merged: boolean
+  /** 검색 결과의 줄이다. 묶음 머리글이 없으므로 사유와 제안을 줄에 쓴다. */
+  flat?: boolean
 }
 
 /** 항목 ID에서 화면에 떠 있는 세션 소식 문구로 가는 표. 같은 일을 두 곳에서 다른 말로 부르지 않게 한다. */
@@ -105,6 +130,8 @@ const ACTION_WORDS: Record<ActionId, string> = {
   move: '세션으로 이동',
   pr: 'PR 올리기',
   later: '나중에',
+  later_hour: '1시간 뒤',
+  later_tomorrow: '내일 아침',
   keep: '새 소식이 오면 다시',
   keep_deploy: '배포 때 다시',
   done: '완료',
@@ -122,6 +149,8 @@ const FAILURE_TITLES: Record<ActionId, string> = {
   move: '세션으로 이동하지 못했습니다',
   pr: 'PR을 올리지 못했습니다',
   later: '미루지 못했습니다',
+  later_hour: '미루지 못했습니다',
+  later_tomorrow: '미루지 못했습니다',
   keep: '남기지 못했습니다',
   keep_deploy: '남기지 못했습니다',
   done: '완료하지 못했습니다',
@@ -158,6 +187,11 @@ const GROUP_WORDS: Record<Section, string> = {
   baseline: '이전부터 있던 일',
 }
 const HEAD_TONES: Partial<Record<Section, 'danger' | 'accent'>> = { urgent: 'danger', offer: 'accent' }
+const TAB_WORDS: Record<TabId, string> = { now: '지금', waiting: '대기', sessions: '세션', status: '상태' }
+/** 시작을 누르면 무슨 일이 일어나는지. 색 바탕 위라 muted를 쓰지 않는다. */
+const START_STEPS = '시작하면 작업 공간을 만들고 세션 창을 엽니다. 진행은 세션 탭에서 봅니다.'
+/** 검색 결과가 길면 여기까지만 그린다. 낱말을 더하면 줄어든다. */
+const SEARCH_ROWS = 30
 /** 무슨 일을 요구받았는지 형태로 읽게 한다. 색은 쓰지 않는다. */
 const REASON_ICONS: Record<string, IconName> = {
   reply_owed: 'edit',
@@ -211,6 +245,12 @@ const refreshing = atom(false)
 const tool = atom<Tool | null>(null)
 /** 쓰다 만 할 일. 실패해도 지우지 않는다. */
 const draft = atom('')
+/** 보고 있는 탭. 패널을 새로 열면 지금으로 돌아온다. */
+const tab = atom<TabId>('now')
+/** 검색어. 화면의 줄을 거르는 데만 쓰고 kairos로 보내지 않는다. */
+const query = atom('')
+/** 다시 볼 때를 고르는 중인 자리. 한 번에 하나다. */
+const laterFor = atom<string | null>(null)
 /** 사용자가 고른 값만 남긴다. 없으면 묶음의 기본값을 따른다. */
 const folds = atom<Record<string, boolean>>('folds', {}, { persist: 'plugin', version: 1 })
 /** 알림에서 연 일. 띠에 들어 올린 항목 ID와 누른 시각이다. */
@@ -226,6 +266,10 @@ let wasVisible = false
 let loadSeq = 0
 /** 도는 seen 읽기의 수. 그동안 온 틱은 읽지 않는다. 틱이 seen 응답을 버리게 하면 누른 알림이 맡아 둔 틱 뒤로 밀린다. */
 let seenLoads = 0
+/** 도는 읽기 가운데 카드 노출을 청한 것의 수. 그동안에는 카드가 다시 화면에 들어도 또 읽지 않는다. 탭을 오가며 누른 만큼 호출이 쌓이지 않게 한다. */
+let cardReads = 0
+/** 이번 검색에서 검색어로 화면을 거른 적이 있는가. 그동안의 읽기는 카드 노출을 적지 않았으므로 검색을 닫을 때 한 번 읽는다. */
+let filteredOnce = false
 let heldTicks = 0
 let traceTimer: ReturnType<typeof setTimeout> | null = null
 /** 닫은 세션 소식. 틱은 --seen 없이 읽어 kairos가 같은 카드를 또 주므로 패널이 기억한다. 종류가 바뀌면 새 소식이다. */
@@ -328,6 +372,8 @@ function absorb(value: Snapshot): void {
     if (!shown.items.some(id => listed.has(id))) set(reveal, null)
   }
   applyReveal(after)
+  // 펼친 줄이 다른 탭의 묶음으로 옮겨 갔으면 접는다. 세션을 시작했거나 미룬 줄이 그렇다.
+  dropHiddenRow()
 }
 
 function takeHeld(): void {
@@ -347,17 +393,86 @@ function bridgeFailure(error: unknown): Failure {
 /** 펼쳐 둔 줄이 틱으로 움직이지 않게 미룬다. 늦어진 시작은 결과를 기다리는 중이라 미루지 않는다. */
 function shouldHold(): boolean {
   const opened = read(openRow)
-  return opened !== null && heldTicks < HOLD_TICKS && read(notice)?.kind !== 'late' && rowIdsOf(read(reading)).has(opened)
+  return opened !== null && heldTicks < HOLD_TICKS && read(notice)?.kind !== 'late' && rowInView(opened)
 }
 
-/** 답을 화면에 반영했고 고장이 없으면 참이다. */
+/** 검색이 견주는 칸. 제목, 사유, 출처, 묶음 이름이다. */
+const searchFields = (item: ItemRow): string[] => [item.title, item.reasonLabel, item.sourceLabel, GROUP_WORDS[sectionOf(item)]]
+
+/**
+ * 먼저 볼 일 카드를 그리는 화면인가. 지금 탭이 아니거나 검색어가 카드와 맞지 않으면 카드를 그리지 않는다.
+ * 그때 --seen을 보내면 보지 않은 카드가 노출로 기록되고 예산을 쓴다. 게이트가 닫히면 탭이 없어 예전처럼 보낸다.
+ */
+function cardInView(): boolean {
+  const { next } = read(reading)
+  if (next?.display.open === false) return true
+  const words = activeWords()
+  if (words.length === 0) return read(tab) === 'now'
+  return next?.card?.items.some(item => matchesSearch(words, searchFields(item))) === true
+}
+
+/** 먼저 볼 일 카드가 있는가. 없으면 화면에 들어올 것도 없어 노출을 적으러 읽지 않는다. */
+function hasCard(): boolean {
+  const { next } = read(reading)
+  return next?.display.open === true && next.card !== null
+}
+
+/** 지금 걸러 내는 검색어. 검색창을 닫았으면 없다. */
+function activeWords(): string[] {
+  return read(tool) === 'search' ? searchWords(read(query)) : []
+}
+
+/**
+ * 펼칠 수 있는 줄이 지금 화면에 있는가. 띠의 줄은 늘 보이고, 카드의 줄은 카드가 보일 때, 목록의 줄은 제 탭이거나 검색에 맞을 때 보인다.
+ * 보이지 않는 줄이 펼친 채 남으면 틱 결과를 붙잡으므로, 펼침을 다루는 곳은 이 값으로 판정한다.
+ */
+function rowInView(id: number): boolean {
+  const state = read(reading)
+  const row = listedRows(state).find(item => item.id === id)
+  if (row === undefined) {
+    const card = state.next?.display.open === true ? state.next.card : null
+    return card !== null && !isSingle(card) && card.items.some(item => item.id === id) && cardInView()
+  }
+  if (read(reveal)?.items.includes(id) === true) return true
+  const words = activeWords()
+  return words.length > 0 ? matchesSearch(words, searchFields(row)) : tabOf(sectionOf(row)) === read(tab)
+}
+
+/** 화면에서 사라진 줄의 펼침을 지운다. 그 줄에 붙은 안내도 함께 지운다. */
+function dropHiddenRow(): void {
+  const opened = read(openRow)
+  if (opened === null || rowInView(opened)) return
+  set(openRow, null)
+  set(openNote, null)
+  set(laterFor, null)
+}
+
+/**
+ * 사용자가 부른 읽기와 조작이 무엇을 봤다고 적을지. 카드가 보이면 seen, 아니면 어느 탭에서나 보이는 세션 소식만(ready) 적는다.
+ * 검색어로 거르는 동안에는 카드가 보여도 seen을 청하지 않는다. 답으로 온 카드가 검색어와 맞지 않으면 그리지 않은 카드가 노출로 남기 때문이다.
+ * 그 카드의 노출은 검색을 닫아 카드가 걸러지지 않고 보일 때 적는다.
+ */
+function seenInput(user: boolean): { seen: boolean; ready?: true } {
+  if (!user) return { seen: false }
+  const filtering = read(reading).next?.display.open !== false && activeWords().length > 0
+  return !filtering && cardInView() ? { seen: true } : { seen: false, ready: true }
+}
+
+/** 카드가 다시 화면에 들었다. 패널을 연 순간처럼 읽어 노출을 적는다. 카드가 없거나 그런 읽기가 이미 돌고 있으면 읽지 않는다. */
+function readCard(): void {
+  if (hasCard() && cardReads === 0) void load(true)
+}
+
+/** 답을 화면에 반영했고 고장이 없으면 참이다. seen은 사용자가 부른 읽기라는 뜻이고, 노출 기록은 카드가 보일 때만 청한다. */
 async function load(seen: boolean): Promise<boolean> {
   if (locked || !isVisible() || (!seen && seenLoads > 0)) return false
   loadSeq += 1
   const seq = loadSeq
+  const input = seenInput(seen)
   if (seen) seenLoads += 1
+  if (input.seen) cardReads += 1
   try {
-    const answer = await plugin.request('kairos.snapshot', { seen }, { timeoutMs: PANEL_SNAPSHOT_TIMEOUT_MS })
+    const answer = await plugin.request('kairos.snapshot', input, { timeoutMs: PANEL_SNAPSHOT_TIMEOUT_MS })
     if (seq !== loadSeq) {
       holdReady(answer)
       return false
@@ -376,6 +491,8 @@ async function load(seen: boolean): Promise<boolean> {
     return false
   } finally {
     if (seen) seenLoads -= 1
+    // 패널을 다시 세우면 수를 0으로 되돌린다. 그 전에 떠난 읽기가 돌아와도 음수로 내려가지 않게 한다.
+    if (input.seen) cardReads = Math.max(0, cardReads - 1)
   }
 }
 
@@ -404,10 +521,15 @@ function bundleWord(): string | null {
   return whenLabel(next?.nextBundleAt ?? null, next?.at ?? null)
 }
 
-function laterTrace(count: number): string {
+function laterTrace(count: number, when: string | null): string {
   const head = count > 1 ? `${count}건을 미뤘습니다` : '미뤘습니다'
+  return when === null ? head : `${head} · ${when} 다시`
+}
+
+/** 다음 묶음 시각을 못 읽으면 때를 쓰지 않는다. */
+function bundleTrace(count: number): string {
   const when = bundleWord()
-  return when === null ? head : `${head} · ${when}에 다시`
+  return laterTrace(count, when === null ? null : `${when}에`)
 }
 
 function traceText(action: ActionId, count: number, outcome: ActionOutcome): string | null {
@@ -415,7 +537,11 @@ function traceText(action: ActionId, count: number, outcome: ActionOutcome): str
     case 'start':
       return startTrace(outcome)
     case 'later':
-      return laterTrace(count)
+      return bundleTrace(count)
+    case 'later_hour':
+      return laterTrace(count, '1시간 뒤에')
+    case 'later_tomorrow':
+      return laterTrace(count, '다음 근무일 아침에')
     case 'keep':
       return '새 소식이 오면 보여 드립니다'
     case 'keep_deploy':
@@ -427,7 +553,7 @@ function traceText(action: ActionId, count: number, outcome: ActionOutcome): str
     case 'pr':
       return outcome.message
     case 'ack':
-      return '남은 일은 아래 목록에 있습니다'
+      return '남은 일은 목록에 있습니다'
     case 'focus_25':
     case 'focus_50':
     case 'focus_90':
@@ -435,7 +561,8 @@ function traceText(action: ActionId, count: number, outcome: ActionOutcome): str
     case 'focus_end':
       return '포커스를 끝냈습니다'
     case 'add':
-      return '추가했습니다'
+      // 직접 추가한 일은 대기 탭의 여유 있을 때로 간다. 다른 탭에서는 어디로 갔는지 말해 준다.
+      return read(tab) === 'waiting' || read(reading).next?.display.open !== true ? '추가했습니다' : '대기 탭에 추가했습니다'
     case 'display_auto':
       return '제안을 다시 켰습니다'
     default:
@@ -448,7 +575,7 @@ function pin(value: Notice, spot: Spot): void {
   set(notice, value)
   const opened = read(openRow)
   const free = opened === null || opened === spot.rowId
-  if (spot.rowId !== null && free && rowIdsOf(read(reading)).has(spot.rowId)) set(openRow, spot.rowId)
+  if (spot.rowId !== null && free && rowInView(spot.rowId)) set(openRow, spot.rowId)
 }
 
 /**
@@ -474,6 +601,8 @@ function applyReveal(state: Reading): void {
     pin({ where: REVEAL_SPOT.where, kind: 'info', title: '이미 정리된 일입니다', message: null, code: null }, REVEAL_SPOT)
     return
   }
+  // 누른 일이 카드에 있으면 카드를 그리는 화면이어야 보인다. 지금 탭으로 돌아오고 검색을 닫는다.
+  showNow()
   const [only] = found
   if (found.length !== 1 || only === undefined || !rowIdsOf(state).has(only)) return
   const opened = read(openRow)
@@ -508,7 +637,7 @@ function startBlocked(outcome: ActionOutcome, ids: readonly number[]): boolean {
 
 function succeed(action: ActionId, ids: readonly number[], spot: Spot, outcome: ActionOutcome): void {
   if (action === 'start' && startBlocked(outcome, ids)) {
-    pin({ where: spot.where, kind: 'info', title: '같은 이슈의 세션이 이미 있습니다', message: '세션 묶음에서 그 세션으로 이동할 수 있습니다.', code: null }, spot)
+    pin({ where: spot.where, kind: 'info', title: '같은 이슈의 세션이 이미 있습니다', message: '세션 탭에서 그 세션으로 이동할 수 있습니다.', code: null }, spot)
     return
   }
   if (action === 'move' || action === 'cancel') dropReady(card => !ids.includes(card.itemId))
@@ -544,9 +673,11 @@ async function press(action: ActionId, ids: readonly number[], spot: Spot, title
   set(pressing, { where: spot.where, action, startedAt: Date.now() })
   set(notice, null)
   set(openNote, null)
+  set(laterFor, null)
   clearTrace()
   try {
-    const input = title === undefined ? { action, ids: [...ids], seen: isVisible() } : { action, ids: [...ids], seen: isVisible(), title }
+    const base = { action, ids: [...ids], ...seenInput(isVisible()) }
+    const input = title === undefined ? base : { ...base, title }
     const outcome = await plugin.request('kairos.action', input, { timeoutMs: PANEL_ACTION_TIMEOUT_MS })
     if (outcome.snapshot) absorb(outcome.snapshot)
     else takeHeld()
@@ -581,6 +712,7 @@ function settle(): void {
 function toggleRow(id: number): void {
   const opened = read(openRow)
   set(openNote, null)
+  set(laterFor, null)
   if (opened !== null && read(notice)?.where === `row-${opened}`) set(notice, null)
   set(openRow, opened === id ? null : id)
   if (opened !== id) return
@@ -601,8 +733,51 @@ function toggleFold(key: Section, open: boolean, rows: readonly ItemRow[]): void
   if (open && opened !== null && rows.some(row => row.id === opened)) toggleRow(opened)
 }
 
+/** 탭이나 검색으로 화면에서 사라진 줄은 접는다. 보이지 않는 줄이 틱 결과를 붙잡아 두지 않게 한다. 카드 안의 줄도 카드가 사라지면 접는다. */
+function foldHiddenRow(): void {
+  const opened = read(openRow)
+  if (opened !== null && !rowInView(opened)) toggleRow(opened)
+}
+
+/** 카드를 그리는 화면으로 돌아온다. 패널을 다시 열었을 때와 누른 알림을 보여 줄 때 쓴다. kairos를 부르지 않는다. */
+function showNow(): void {
+  if (read(tool) === 'search') {
+    set(tool, null)
+    set(query, '')
+  }
+  filteredOnce = false
+  set(tab, 'now')
+  foldHiddenRow()
+}
+
+function selectTab(value: unknown): void {
+  if (!isTabId(value) || value === read(tab)) return
+  set(tab, value)
+  foldHiddenRow()
+  // 지금 탭으로 돌아오면 카드가 다시 화면에 든다. 다른 탭으로 갈 때는 읽지 않는다.
+  if (value === 'now') readCard()
+}
+
+/** 검색을 닫으면 검색어도 지운다. 도구는 한 번에 하나만 연다. */
 function toggleTool(value: Tool): void {
-  set(tool, read(tool) === value ? null : value)
+  const next = read(tool) === value ? null : value
+  const filtered = filteredOnce
+  filteredOnce = false
+  if (read(tool) === 'search' || next === 'search') set(query, '')
+  set(tool, next)
+  foldHiddenRow()
+  // 검색어로 거르던 화면이 끝나고 카드가 보이면 지금 탭으로 돌아온 것과 같다. 거르는 동안의 읽기는 노출을 적지 않았다.
+  if (filtered && cardInView()) readCard()
+}
+
+function typeQuery(value: string): void {
+  set(query, value)
+  if (activeWords().length > 0) filteredOnce = true
+  foldHiddenRow()
+}
+
+function toggleLater(where: string): void {
+  set(laterFor, read(laterFor) === where ? null : where)
 }
 
 /** 빈 제목은 보내지 않는다. 제목은 kairos에 저장만 되고 다른 명령이나 세션으로 가지 않는다. */
@@ -616,12 +791,20 @@ export function setup(ctx: PanelContext): void {
   locked = false
   loadSeq = 0
   seenLoads = 0
+  cardReads = 0
+  filteredOnce = false
   heldTicks = 0
   closedNews.clear()
   wasVisible = read(ctx.visible)
   ctx.signal.addEventListener('abort', stopTraceTimer)
   ctx.subscriptions.push(plugin.on('kairos.tick', () => void load(false)))
-  ctx.subscriptions.push(plugin.on('kairos.reveal', () => void load(true)))
+  // 알림을 눌렀으면 그 일을 보러 온 것이다. 카드를 그리는 화면으로 돌아와 읽는다.
+  ctx.subscriptions.push(
+    plugin.on('kairos.reveal', () => {
+      showNow()
+      void load(true)
+    }),
+  )
   void load(true)
 }
 
@@ -675,7 +858,7 @@ function offerBlock(item: ItemRow) {
     <Callout tone="accent" icon="bot" title={SCOPE_WORD}>
       <Stack gap="xs">
         <Text size="xs">{item.scope}</Text>
-        {canStart(item) ? null : (
+        {canStart(item) ? <Text size="xs">{START_STEPS}</Text> : (
           <Stack gap="xs">
             <Text size="xs">세션이 잠겨 있습니다. 터미널에서 켠 뒤 새로고침하세요.</Text>
             <Code>kairos sessions on</Code>
@@ -686,8 +869,49 @@ function offerBlock(item: ItemRow) {
   )
 }
 
-/** 지금 카드와 펼친 행이 같이 쓴다. 제안, 주 행동(시작, 이동, 원문), 뒷줄, 제자리 알림의 네 층이고 빈 층은 그리지 않는다. */
-function actionZone(item: ItemRow, spot: Spot, key: string) {
+function parkedWord(item: ItemRow, at: string | null): string {
+  if (item.parkTrigger === 'deploy') return '배포 때 다시'
+  if (item.parkTrigger === 'kept') return '새 소식이 오면 다시'
+  const when = whenLabel(item.parkedUntil, at)
+  return when === null ? '미룸' : `${when}에 다시`
+}
+
+/** 왜 올라왔는지와 권장 행동. 고정 문구라 외부 문자열이 섞이지 않는다. 미룬 일은 다시 올 때를 권장 자리에 쓴다. */
+function guideBlock(item: ItemRow, at: string | null) {
+  const guide = guideOf({
+    reason: item.reason,
+    run: item.run?.state ?? null,
+    accepted: item.state === 'accepted',
+    startable: canStart(item),
+    canPr: hasAction(item.actions, 'pr'),
+  })
+  if (guide === null) return null
+  const word = item.state === 'parked' ? parkedWord(item, at) : null
+  const suggest = word === null ? guide.suggest : word === '미룸' ? '미뤄 둔 일입니다.' : `${word} 보여 드립니다.`
+  return (
+    <Stack gap="none">
+      <Text size="xs"><Text size="xs" muted>이유 · </Text>{guide.why}</Text>
+      <Text size="xs"><Text size="xs" muted>권장 · </Text>{suggest}</Text>
+    </Stack>
+  )
+}
+
+/** 다음 묶음 말고 다른 때를 고른다. 나중에 곁의 버튼으로 열고, 고르면 닫힌다. */
+function laterChoices(ids: readonly number[], spot: Spot, key: string, busy: boolean) {
+  return (
+    <Row gap="xs" align="center" wrap>
+      <Text size="xs" muted>언제 다시 볼까요</Text>
+      {(['later_hour', 'later_tomorrow'] as const).map(id => (
+        <Button key={`${key}-${id}`} size="xs" variant="outline" disabled={busy} onPress={() => press(id, ids, spot)}>
+          {ACTION_WORDS[id]}
+        </Button>
+      ))}
+    </Row>
+  )
+}
+
+/** 지금 카드와 펼친 행이 같이 쓴다. 이유와 권장, 제안, 주 행동(시작, 이동, 원문), 뒷줄, 제자리 알림의 다섯 층이고 빈 층은 그리지 않는다. */
+function actionZone(item: ItemRow, spot: Spot, key: string, at: string | null) {
   const now = read(pressing)
   if (now?.where === spot.where) return progress(now)
   const busy = isBusy()
@@ -719,12 +943,16 @@ function actionZone(item: ItemRow, spot: Spot, key: string) {
     ) : null,
     url === null ? null : originalButton(url, spot.where, key),
   ].filter(button => button !== null)
-  const left = [back('later'), back('keep'), back('keep_deploy'), back('cancel')].filter(button => button !== null)
+  const pick = has('later') ? (
+    <IconButton key={`${key}-later-more`} icon="more" label="다시 볼 때 고르기" size="xs" variant="ghost" disabled={busy} onPress={() => toggleLater(spot.where)} />
+  ) : null
+  const left = [back('later'), pick, back('keep'), back('keep_deploy'), back('cancel')].filter(button => button !== null)
   const right = back('done')
   const lifted = primary.length > 0 && left.length === 0 ? right : null
   const backRow = left.length > 0 || (right !== null && lifted === null)
   return (
     <Stack gap="sm">
+      {guideBlock(item, at)}
       {hasOffer(item) ? offerBlock(item) : null}
       {primary.length === 0 ? null : (
         <Stack gap="xs">
@@ -741,6 +969,7 @@ function actionZone(item: ItemRow, spot: Spot, key: string) {
           {right === null ? null : <Box shrink={false}>{right}</Box>}
         </Row>
       ) : null}
+      {pick !== null && read(laterFor) === spot.where ? laterChoices(ids, spot, key, busy) : null}
       {placedNotes(spot.where)}
     </Stack>
   )
@@ -757,13 +986,6 @@ function mergedZone(item: ItemRow, where: string, key: string) {
       {notes}
     </Stack>
   )
-}
-
-function parkedWord(item: ItemRow, at: string | null): string {
-  if (item.parkTrigger === 'deploy') return '배포 때 다시'
-  if (item.parkTrigger === 'kept') return '새 소식이 오면 다시'
-  const when = whenLabel(item.parkedUntil, at)
-  return when === null ? '미룸' : `${when}에 다시`
 }
 
 function metaRight(item: ItemRow, pending: boolean, at: string | null) {
@@ -841,14 +1063,14 @@ function rowView(item: ItemRow, place: RowPlace, news: NewsWords, at: string | n
   const boxed = open && !place.nested
   const word = news.get(item.id) ?? null
   // 제안 묶음의 머리글과 펼친 행에는 이미 같은 말이 있다. 카드 안의 줄은 머리글 아래가 아니라서 낱말을 쓴다.
-  const offerWord = !open && hasOffer(item) && (place.nested || sectionOf(item) !== 'offer')
+  const offerWord = !open && hasOffer(item) && (place.nested || place.flat === true || sectionOf(item) !== 'offer')
   // 소식이 떠 있으면 이동은 소식에 있고, 끝난 세션의 다음 할 일은 펼쳐서 고른다.
   const quickMove = place.group === 'running' && !open && !pending && word === null && item.run?.state !== 'ended' && hasAction(item.actions, 'move')
-  const zone = open ? (place.merged ? mergedZone(item, where, where) : actionZone(item, spot, where)) : null
+  const zone = open ? (place.merged ? mergedZone(item, where, where) : actionZone(item, spot, where, at)) : null
   const detail = open ? detailLine(item) : null
   // 카드 안의 접힌 줄은 이미 묶인 일이라 아이콘 없이 한 줄 제목을 쓴다.
   const oneLine = place.nested && !open
-  const compact = !open && !place.nested && isCompact(sectionOf(item))
+  const compact = !open && !place.nested && place.flat !== true && isCompact(sectionOf(item))
   return (
     <Box key={where} direction="column" radius="md" background={boxed ? 'card' : 'none'} border={boxed}>
       <Box direction="row" align="center" gap="xs">
@@ -886,6 +1108,18 @@ function rowView(item: ItemRow, place: RowPlace, news: NewsWords, at: string | n
   )
 }
 
+/** 카드에는 묶음 머리글이 없다. 제안이 붙었는지와 밀린 일인지를 고정 낱말로 알린다. 없으면 층을 그리지 않는다. */
+function cardBadges(item: ItemRow) {
+  const offer = hasOffer(item) && sectionOf(item) !== 'running'
+  if (!offer && !item.carried) return null
+  return (
+    <Row gap="xs" wrap>
+      {offer ? <Badge tone="accent">{GROUP_WORDS.offer}</Badge> : null}
+      {item.carried ? <Badge tone="warning">밀린 일</Badge> : null}
+    </Row>
+  )
+}
+
 /** 카드는 kairos가 고른 한 건이고 목록의 최신순과 별개다. 맨 위 줄이 왜 오래됐는지 낱말로 알린다. */
 function eyebrowOf(card: CardView, running: boolean, ended: boolean): string {
   if (card.kind === 'bundle') return `모아 둔 일 ${card.items.length + card.more}건`
@@ -920,7 +1154,7 @@ function ackEnd(card: CardView, spot: Spot) {
   const remains = card.kind === 'bundle' && card.more > 0
   return (
     <Row justify={remains ? 'between' : 'end'} align="center" gap="sm">
-      {remains ? <Text size="xs" muted>{`나머지 ${card.more}건은 아래 목록에 있습니다.`}</Text> : null}
+      {remains ? <Text size="xs" muted>{`나머지 ${card.more}건은 목록에 있습니다.`}</Text> : null}
       {hasAction(card.actions, 'ack') ? (
         <Box shrink={false}>
           <Button key="card-ack" size="xs" variant="outline" disabled={isBusy()} onPress={() => press('ack', [], spot)}>
@@ -948,6 +1182,7 @@ function cardView(card: CardView, news: NewsWords, at: string | null) {
       {single ? (
         <Box paddingX="sm" direction="column" gap="xs">
           <Text weight="medium">{clip(first.title, 120)}</Text>
+          {cardBadges(first)}
           {metaRow(first, false, false, news.get(first.id) ?? null, at)}
           {detailLine(first)}
         </Box>
@@ -955,7 +1190,7 @@ function cardView(card: CardView, news: NewsWords, at: string | null) {
         <Stack gap="xs">{card.items.map(item => rowView(item, place, news, at))}</Stack>
       )}
       {single ? (
-        <Box paddingX="sm">{actionZone(first, spot, 'card')}</Box>
+        <Box paddingX="sm">{actionZone(first, spot, 'card', at)}</Box>
       ) : (
         <Box paddingX="sm" direction="column" gap="xs">
           {pending !== null ? progress(pending) : card.kind === 'item' ? mergedEnd(card, spot) : ackEnd(card, spot)}
@@ -1152,9 +1387,9 @@ function focusBar(next: NextView) {
 }
 
 function nowZone(state: Reading, card: CardView | null, rows: number, unsure: boolean, news: NewsWords, at: string | null) {
-  const { next, list } = state
-  if (next === null) return null
-  if (!next.display.open) return gateView(next.display, list?.hidden ?? 0, next.at)
+  const { next } = state
+  // 게이트가 닫히면 탭 자체를 그리지 않는다. 사유는 Panel이 탭 자리에 그린다.
+  if (next === null || !next.display.open) return null
   if (card !== null) return cardView(card, news, at)
   if (rows > 0) return holdNote(next)
   return unsure ? null : emptyView(next)
@@ -1311,6 +1546,7 @@ function header(next: NextView | null, note: string | null, offers: number) {
                 포커스
               </Button>
             )}
+            {counted === null ? null : <IconButton icon="search" label={opened === 'search' ? '검색 닫기' : '검색'} size="xs" variant="ghost" onPress={() => toggleTool('search')} />}
             <IconButton icon="add" label={opened === 'add' ? '할 일 추가 닫기' : '할 일 추가'} size="xs" variant="ghost" onPress={() => toggleTool('add')} />
             <IconButton icon="refresh" label="새로고침" size="xs" variant="ghost" disabled={busy} onPress={() => refresh()} />
           </Box>
@@ -1352,6 +1588,122 @@ function addTool() {
   )
 }
 
+/** 검색어는 화면의 줄을 거르는 데만 쓴다. kairos를 부르지 않고 노출로도 세지 않는다. */
+function searchTool() {
+  return (
+    <Box key="search" paddingX="sm">
+      <Input label="일 찾기" labelHidden type="search" placeholder="제목, 사유, 출처로 찾기" maxLength={SEARCH_LIMIT} value={read(query)} onChange={(value: string) => typeQuery(value)} />
+    </Box>
+  )
+}
+
+/** 검색 결과. 묶음 머리글 없이 한 줄로 늘어놓고, 길면 앞쪽만 그린다. */
+function searchZone(found: readonly ItemRow[], cardHit: boolean, news: NewsWords, at: string | null) {
+  if (found.length === 0) return cardHit ? null : <EmptyState key="search-empty" icon="search" title="찾는 일이 없습니다" description="제목, 사유, 출처로 찾습니다" />
+  const shown = found.slice(0, SEARCH_ROWS)
+  return (
+    <Stack key="search-rows" gap="none">
+      <List key="head">
+        <ListItem>{groupLabel(`검색 결과 ${found.length}`, 'muted')}</ListItem>
+      </List>
+      <Stack gap="xs">
+        {shown.map(row => rowView(row, { group: sectionOf(row), nested: false, merged: false, flat: true }, news, at))}
+        {found.length > shown.length ? <Box paddingX="sm"><Text size="xs" muted>{`${found.length - shown.length}건이 더 있습니다. 낱말을 더해 좁혀 보세요.`}</Text></Box> : null}
+      </Stack>
+    </Stack>
+  )
+}
+
+function sourceLine(row: SourceView) {
+  const trouble = isSourceTrouble(row.status)
+  const last = row.lastOkAt === null ? Number.NaN : Date.parse(row.lastOkAt)
+  return (
+    <Box key={`source-${row.source}`} direction="row" justify="between" align="center" gap="sm" paddingX="sm" paddingY="xs">
+      <Text>{row.label}</Text>
+      <Box shrink={false}>
+        <Text size="xs" muted>
+          <Text size="xs" tone={trouble ? 'warning' : undefined} weight={trouble ? 'medium' : undefined} muted={!trouble}>{sourceWord(row.status, row.delayMinutes)}</Text>
+          {Number.isNaN(last) ? null : ' · 마지막 수집 '}
+          {Number.isNaN(last) ? null : <RelativeTime at={last} format="long" muted />}
+        </Text>
+      </Box>
+    </Box>
+  )
+}
+
+/** 소스별 수집 상태. 낱말과 시각뿐이고 kairos가 정한 값을 그대로 그린다. */
+function sourcesBlock(sources: readonly SourceView[]) {
+  return (
+    <Stack key="sources" gap="xs">
+      <Box paddingX="sm">{groupLabel('수집 상태', 'muted')}</Box>
+      {sources.length === 0 ? (
+        <Box paddingX="sm"><Text size="xs" muted>소스별 상태를 받지 못했습니다. 터미널의 kairos doctor로 볼 수 있습니다.</Text></Box>
+      ) : (
+        <Box background="card" border radius="md" direction="column">
+          {sources.flatMap((row, index) => (index === 0 ? [sourceLine(row)] : [<Separator key={`source-line-${row.source}`} />, sourceLine(row)]))}
+        </Box>
+      )}
+    </Stack>
+  )
+}
+
+/** 상태 탭. 수집이 도는지, 남은 일이 얼마인지, 먼저 볼 일을 얼마나 냈는지를 숫자로 보여 준다. 조작은 없다. */
+function statusTab(next: NextView | null) {
+  if (next === null) return <Box paddingX="sm"><Text size="xs" muted>상태를 읽지 못했습니다. 새로고침해 주세요.</Text></Box>
+  const { counts, budget } = next
+  const tally = [
+    counts.P0 > 0 ? { label: '긴급', value: counts.P0, tone: 'danger' as const } : { label: '긴급', value: counts.P0 },
+    { label: '오늘', value: counts.P1 },
+    { label: '여유 있을 때', value: counts.P2 },
+    { label: '밀린 일', value: counts.carried },
+    { label: '미룬 일', value: counts.parked },
+    { label: '세션', value: counts.accepted },
+  ]
+  const bundle = whenLabel(next.nextBundleAt, next.at)
+  const spend = budget === null ? [] : [
+    { label: '이번 시간', value: `${budget.hourUsed} / ${budget.hourLimit}` },
+    { label: '오늘', value: `${budget.dayUsed} / ${budget.dayLimit}` },
+    { label: '오늘 낸 묶음', value: budget.bundlesToday },
+    ...(bundle === null ? [] : [{ label: '다음 묶음', value: bundle }]),
+  ]
+  return (
+    <Stack gap="md">
+      {sourcesBlock(next.sources)}
+      <Stack gap="xs">
+        <Box paddingX="sm">{groupLabel('열린 일', 'muted')}</Box>
+        <Box paddingX="sm"><KeyValue label="열린 일" items={tally} /></Box>
+      </Stack>
+      {spend.length === 0 ? null : (
+        <Stack gap="xs">
+          <Box paddingX="sm">{groupLabel('먼저 볼 일 카드', 'muted')}</Box>
+          <Box paddingX="sm"><KeyValue label="먼저 볼 일 카드" items={spend} /></Box>
+          <Box paddingX="sm"><Text size="xs" muted>횟수 제한은 먼저 볼 일 카드에만 있습니다. 목록과 알림은 그대로 보입니다.</Text></Box>
+        </Stack>
+      )}
+      <Box paddingX="sm" direction="column" gap="xs">
+        <Text size="xs" muted>자세한 점검은 터미널에서 합니다.</Text>
+        <Code>kairos doctor</Code>
+      </Box>
+    </Stack>
+  )
+}
+
+/** 지금 탭이 비었을 때 다른 탭에 남은 일로 가는 길. 남은 것이 없으면 그리지 않는다. */
+function jumpRow(waiting: number, sessions: number) {
+  if (waiting === 0 && sessions === 0) return null
+  return (
+    <Row key="jump" justify="center" gap="xs" wrap>
+      {waiting > 0 ? <Button key="jump-waiting" size="xs" variant="ghost" onPress={() => selectTab('waiting')}>{`대기 ${waiting}건 보기`}</Button> : null}
+      {sessions > 0 ? <Button key="jump-sessions" size="xs" variant="ghost" onPress={() => selectTab('sessions')}>{`세션 ${sessions}건 보기`}</Button> : null}
+    </Row>
+  )
+}
+
+const EMPTY_TABS: Partial<Record<TabId, { icon: IconName; title: string; description: string }>> = {
+  waiting: { icon: 'file-text', title: '기다리는 일이 없습니다', description: '여유 있을 때 볼 일과 미룬 일이 여기에 모입니다' },
+  sessions: { icon: 'terminal', title: '맡긴 세션이 없습니다', description: '에이전트 제안에서 세션 열고 시작을 누르면 여기에 나타납니다' },
+}
+
 /** 고장이 없을 때의 믿음 신호. 지연이 있으면 위쪽 경고가 말하므로 시각만 남긴다. */
 function trustLine(state: Reading, health: string | null) {
   if (state.nextAt === null) return null
@@ -1366,7 +1718,7 @@ function trustLine(state: Reading, health: string | null) {
   )
 }
 
-/** 누른 자리가 화면에 남아 있는가. 없으면 실패를 믿음 구간으로 띄운다. */
+/** 누른 자리가 화면에 남아 있는가. 없으면 실패를 믿음 구간으로 띄운다. card는 지금 그려진 카드다. 다른 탭에 있으면 null이다. */
 function isPlaced(value: Notice, card: CardView | null, rows: ReadonlySet<number>, alerts: readonly ReadyView[]): boolean {
   if (value.where.startsWith('ready-')) return alerts.some(other => `ready-${other.runId}` === value.where)
   if (value.where.startsWith('row-')) {
@@ -1376,15 +1728,24 @@ function isPlaced(value: Notice, card: CardView | null, rows: ReadonlySet<number
   return card !== null && value.where === `card-${card.id}`
 }
 
+const tabLabel = (id: TabId, count: number): string => (count > 0 ? `${TAB_WORDS[id]} ${count}` : TAB_WORDS[id])
+
 export default function Panel() {
   const visible = context ? read(context.visible) : false
   // 다시 보일 때 읽는다. 그리는 도중에는 상태를 바꿀 수 없어 미룬다.
-  if (visible && !wasVisible) queueMicrotask(() => void load(true))
+  if (visible && !wasVisible) {
+    queueMicrotask(() => {
+      // 다시 연 패널은 지금 탭에서 시작한다. 손댈 일과 카드가 먼저 보여야 한다.
+      showNow()
+      void load(true)
+    })
+  }
   wasVisible = visible
 
   const state = read(reading)
   const { next, list } = state
   const gateOpen = next?.display.open === true
+  const gateClosed = next?.display.open === false
   const card = gateOpen ? next.card : null
   const trouble = troubleOf(state, read(bridgeError))
   const at = list?.at ?? next?.at ?? null
@@ -1393,36 +1754,80 @@ export default function Panel() {
   const shownReveal = read(reveal)
   const revealed = new Set(shownReveal?.items ?? [])
   const lifted = listed.filter(item => revealed.has(item.id))
-  const groups = groupRows(lifted.length === 0 ? listed : listed.filter(item => !revealed.has(item.id)))
+  const rest = lifted.length === 0 ? listed : listed.filter(item => !revealed.has(item.id))
+  const groups = groupRows(rest)
+  const omittedBy = list?.omittedBy ?? {}
 
   const alerts = sortReady(read(readyCards).filter(other => gateOpen || other.kind === 'failed'))
   const shownAlerts = read(alertsOpen) ? alerts : alerts.slice(0, ALERT_LIMIT)
   const news: NewsWords = new Map(shownAlerts.filter(other => other.kind !== 'failed').map(other => [other.itemId, lookup(READY_WORDS, other.kind) ?? other.headline]))
 
-  const shownRows = new Set([
-    ...lifted.map(item => item.id),
-    ...(card !== null && !isSingle(card) ? card.items : []).map(item => item.id),
-    ...DISPLAY_ORDER.flatMap(key => (isSectionOpen(key, groups) ? shownRowsOf(key, groups[key]).map(item => item.id) : [])),
-  ])
-  const failed = read(notice)
-  const floating = failed !== null && !isPlaced(failed, card, shownRows, shownAlerts) ? failed : null
+  // 탭과 검색. 검색은 탭을 가로질러 찾으므로 탭 자리에 결과를 그린다. 게이트가 닫히면 둘 다 없다.
+  const opened = read(tool)
+  const activeTab = read(tab)
+  const words = opened === 'search' && !gateClosed ? searchWords(read(query)) : []
+  const searching = words.length > 0
+  const hit = (item: ItemRow): boolean => matchesSearch(words, searchFields(item))
+  const found = searching ? rest.filter(hit) : []
+  const shownCard = card !== null && (searching ? card.items.some(hit) : activeTab === 'now') ? card : null
+  const tabRows = searching
+    ? found.slice(0, SEARCH_ROWS)
+    : TAB_SECTIONS[activeTab].flatMap(key => (isSectionOpen(key, groups) ? shownRowsOf(key, groups[key]) : []))
 
-  // 자취를 쓸 머리글이 없으면 머리말에 쓴다.
+  const shownRows = new Set([...lifted, ...(shownCard !== null && !isSingle(shownCard) ? shownCard.items : []), ...tabRows].map(item => item.id))
+  const failed = read(notice)
+  const floating = failed !== null && !isPlaced(failed, shownCard, shownRows, shownAlerts) ? failed : null
+
+  // 자취를 쓸 머리글이 화면에 없으면 머리말에 쓴다. 다른 탭의 묶음과 검색 중이 그렇다.
   const mark = read(trace)
-  const headNote = mark !== null && (mark.group === NOW_GROUP || groups[mark.group as Section]?.length === 0) ? mark.text : null
+  const headShown = (group: string): boolean => !searching && group !== NOW_GROUP && activeTab === tabOf(group as Section) && (groups[group as Section]?.length ?? 0) > 0
+  const headNote = mark !== null && !headShown(mark.group) ? mark.text : null
 
   const health = gateOpen ? next.health : null
   const hasTrust = trouble !== null || floating !== null || health !== null
   const offers = [...listed, ...(card?.items ?? [])].filter(canStart).length
-  const opened = read(tool)
   const unsure = trouble !== null || state.nextStale || state.listStale || list === null
-  const omitted = next?.display.open === false ? 0 : (list?.omitted ?? 0)
+  const omitted = gateClosed ? 0 : (list?.omitted ?? 0)
+
+  // 카드는 그린 줄만 센다. 묶음 카드가 접어 둔 일은 목록에 있어 제 탭에서 센다.
+  const cardCount = card === null ? 0 : card.items.length
+  // 띠로 올린 줄도 제 탭의 일이다. 건수와 빈 상태 판정에서 빼지 않는다.
+  const liftedIn = (id: TabId): number => lifted.filter(item => tabOf(sectionOf(item)) === id).length
+  const totals: Record<TabId, number> = {
+    now: tabCount('now', groups, omittedBy) + liftedIn('now') + cardCount,
+    waiting: tabCount('waiting', groups, omittedBy) + liftedIn('waiting'),
+    sessions: tabCount('sessions', groups, omittedBy) + liftedIn('sessions'),
+    status: 0,
+  }
+  const sections = (id: TabId) => TAB_SECTIONS[id].map(key => sectionView(key, groups, omittedBy, news, at))
+  const emptyTab = (id: TabId) => {
+    const copy = EMPTY_TABS[id]
+    return copy === undefined || unsure || totals[id] > 0 ? null : <EmptyState icon={copy.icon} title={copy.title} description={copy.description} />
+  }
+  // 그리는 것은 고른 탭뿐이다. 나머지 탭의 줄은 만들지 않는다.
+  const tabBody = (id: TabId) => {
+    if (id !== activeTab) return null
+    if (id === 'status') return statusTab(next)
+    if (id !== 'now') return <Stack gap="md">{sections(id)}{emptyTab(id)}</Stack>
+    const nowRows = tabCount('now', groups, {}) + liftedIn('now')
+    return (
+      <Stack gap="md">
+        {nowZone(state, card, nowRows, unsure, news, at)}
+        {sections('now')}
+        {card === null && nowRows === 0 && !unsure ? jumpRow(totals.waiting, totals.sessions) : null}
+      </Stack>
+    )
+  }
+  const tabsOn = !gateClosed && !searching && (next !== null || list !== null)
+  // 상태 탭에 볼 것이 있을 때만 표시한다. 경고 한 줄에는 세션 상태를 못 읽은 것도 들어 있어 소스의 지연으로 판정한다.
+  const late = next?.sources.some(row => row.status === 'delayed') === true
 
   return (
     <Stack gap="md">
       {header(read(heldSnapshot)?.next ?? next, headNote, offers)}
       {opened === 'focus' && gateOpen && !isFocused(next) ? focusTool() : null}
       {opened === 'add' ? addTool() : null}
+      {opened === 'search' && !gateClosed ? searchTool() : null}
       {hasTrust ? (
         <Stack gap="xs">
           {trouble === null ? null : troubleView(trouble)}
@@ -1434,8 +1839,19 @@ export default function Panel() {
       {alertsZone(shownAlerts, alerts.length, list, gateOpen)}
       {shownReveal === null || lifted.length === 0 ? null : revealZone(shownReveal, lifted, news, at)}
       {next === null && list === null && trouble === null ? <Skeleton shape="text" lines={4} label="불러오는 중" /> : null}
-      {nowZone(state, card, listed.length, unsure, news, at)}
-      {DISPLAY_ORDER.map(key => sectionView(key, groups, list?.omittedBy ?? {}, news, at))}
+      {gateClosed ? gateView(next.display, list?.hidden ?? 0, next.at) : null}
+      {gateClosed && next.sources.length > 0 ? sourcesBlock(next.sources) : null}
+      {searching && shownCard !== null ? cardView(shownCard, news, at) : null}
+      {searching ? searchZone(found, shownCard !== null, news, at) : null}
+      {tabsOn ? (
+        <Tabs label="kairos 보기" value={activeTab} onChange={(value: string) => selectTab(value)}>
+          {TAB_ORDER.map(id => (
+            <Tab key={id} value={id} label={id === 'status' && late ? `${TAB_WORDS.status} !` : tabLabel(id, totals[id])}>
+              {tabBody(id)}
+            </Tab>
+          ))}
+        </Tabs>
+      ) : null}
       {omitted > 0 ? <Box paddingX="sm"><Text size="xs" muted>{`목록이 길어 ${omitted}건은 여기에 나오지 않습니다.`}</Text></Box> : null}
       {gateOpen && trouble === null ? trustLine(state, health) : null}
     </Stack>

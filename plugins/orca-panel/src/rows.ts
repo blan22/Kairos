@@ -5,9 +5,8 @@ export type Section = 'running' | 'urgent' | 'offer' | 'today' | 'relaxed' | 'pa
 
 /** 자르기 우선순위이기도 하다. 세션이 있는 줄은 잘리면 패널에서 그 세션으로 갈 길이 없어 맨 앞에 둔다. */
 const SORT_ORDER: readonly Section[] = ['running', 'urgent', 'offer', 'today', 'relaxed', 'parked', 'baseline']
-/** 화면 순서. 긴급을 진행 중 위에 둔다. 진행 중은 재촉하지 않는 구간이다. */
-export const DISPLAY_ORDER: readonly Section[] = ['urgent', 'running', 'offer', 'today', 'relaxed', 'parked', 'baseline']
 
+/** 여유 있을 때가 이보다 길면 미룬 일을 접어 둔다. */
 const FOLD_FROM = 6
 /** 한 묶음에서 먼저 보이는 줄 수. 최신이 위라서 여기까지가 최신 줄이다. */
 export const ROW_LIMIT = 8
@@ -73,9 +72,35 @@ export function groupRows(rows: readonly ItemRow[]): Record<Section, ItemRow[]> 
 
 /** 사용자가 고른 값이 없을 때의 펼침 상태. undefined이면 접는 머리글이 없는 묶음이다. */
 export function defaultOpen(section: Section, groups: Record<Section, readonly ItemRow[]>): boolean | undefined {
-  if (section === 'parked' || section === 'baseline') return false
-  if (section === 'relaxed' && groups.relaxed.length >= FOLD_FROM) return groups.today.length === 0
+  if (section === 'baseline') return false
+  // 대기 탭의 주인은 여유 있을 때다. 그 묶음이 길면 미룬 일은 접어 둔다.
+  if (section === 'parked') return groups.relaxed.length < FOLD_FROM
   return undefined
+}
+
+/** 패널의 탭. 지금은 손댈 일, 대기는 기다려도 되는 일, 세션은 맡긴 일, 상태는 수집과 예산이다. */
+export type TabId = 'now' | 'waiting' | 'sessions' | 'status'
+
+export const TAB_ORDER: readonly TabId[] = ['now', 'waiting', 'sessions', 'status']
+
+/** 탭마다 그리는 묶음. 순서가 화면 순서다. 긴급과 제안은 놓치면 안 되므로 지금에 둔다. */
+export const TAB_SECTIONS: Record<TabId, readonly Section[]> = {
+  now: ['urgent', 'offer', 'today'],
+  waiting: ['relaxed', 'parked', 'baseline'],
+  sessions: ['running'],
+  status: [],
+}
+
+export const isTabId = (value: unknown): value is TabId => typeof value === 'string' && (TAB_ORDER as readonly string[]).includes(value)
+
+/** 묶음이 속한 탭. */
+export function tabOf(section: Section): TabId {
+  return TAB_ORDER.find(tab => TAB_SECTIONS[tab].includes(section)) ?? 'now'
+}
+
+/** 탭의 건수. 목록이 길어 넘기지 않은 줄도 센다. */
+export function tabCount(tab: TabId, groups: Record<Section, readonly ItemRow[]>, omittedBy: Readonly<Record<string, number>>): number {
+  return TAB_SECTIONS[tab].reduce((sum, section) => sum + groups[section].length + (omittedBy[section] ?? 0), 0)
 }
 
 /** 줄 높이가 곧 중요도다. 손댈 일은 제목을 다 읽게 두 줄로, 기다려도 되는 일은 한 줄로 그린다. */

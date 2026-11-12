@@ -5,9 +5,9 @@ kairos help [<명령> | --all]
 kairos --version
 kairos hello [--json]
 kairos list [--would-show | --items | --json [--all]]
-kairos next [--seen] [--surface panel|orca|claude-code|vscode] [--ack] [--json]
+kairos next [--seen | --seen-ready] [--surface panel|orca|claude-code|vscode] [--ack] [--json]
 kairos watch --json
-kairos later <항목 ID>... [--json]
+kairos later <항목 ID>... [--when hour|tomorrow] [--json]
 kairos done <항목 ID>... [--drop] [--json]
 kairos keep <항목 ID>... [--until-deploy] [--json]
 kairos add <제목> [--json]
@@ -43,6 +43,18 @@ KAIROS_HOME=<비어 있는 새 폴더> kairos demo [--json]
 - `kairos help <명령>`과 `kairos <명령> --help`는 그 명령의 설명과 사용법을 출력한다.
 - 옵션을 잘못 주면 오류 코드 아래에 사용법이 함께 나온다.
 - 잘못 입력한 명령에는 비슷한 이름을 제안한다.
+
+## next
+
+- `--seen`은 지금 볼 일 카드의 노출과 예산, 세션 소식 확인을 함께 적는다.
+- `--seen-ready`는 세션 소식만 확인으로 적는다. 카드 노출과 예산은 건드리지 않는다. 카드를 그리지 않는 화면이 쓴다.
+- 둘을 함께 주면 `--seen`을 따른다. 출력은 어느 쪽이든 같다.
+
+## later
+
+- 옵션 없이 쓰면 다음 묶음 시각까지 미룬다.
+- `--when hour`는 1시간 뒤까지, `--when tomorrow`는 다음 근무일의 근무 시작 시각까지 미룬다. 쉬는 날은 건너뛴다.
+- 다른 값은 사용법 오류다. 미룬 횟수는 어느 쪽이든 한 번으로 센다.
 
 ## notify
 

@@ -1,6 +1,6 @@
 import { assert, test } from 'orca/testing'
 import { LIST_LIMIT } from './config.ts'
-import { DANGEROUS_TITLE, LONG_TITLE, SLACK_TITLE, accepted, bundle, card, counts, failedCard, item, listJson, manyItems, nextJson, parked, readyCard, revivable, startable } from './fixtures.ts'
+import { DANGEROUS_TITLE, LONG_TITLE, SLACK_TITLE, accepted, bundle, card, counts, failedCard, item, listJson, manyItems, nextJson, parked, readyCard, revivable, sourceRows, startable } from './fixtures.ts'
 import { failureOf, parseList, parseNext, resultLine } from './parse.ts'
 import { cleanText } from './text.ts'
 
@@ -267,4 +267,62 @@ test('PR 올리기는 세션 카드와 목록에 남고 결과는 문구와 주�
   assert.deepEqual(ready?.actions.map(action => action.id), ['move', 'pr'])
   assert.equal(resultLine({ pr: { message: 'draft PR을 만들었습니다', url: 'https://github.com/acme/web/pull/3' } }), 'draft PR을 만들었습니다: https://github.com/acme/web/pull/3')
   assert.equal(resultLine({ pr: { message: '열린 PR에 push했습니다', url: 'javascript:alert(1)', uncommitted: true } }), '열린 PR에 push했습니다. 커밋하지 않은 변경은 들지 않았습니다')
+})
+
+test('소스별 수집 상태를 읽고 없으면 빈 목록이다', () => {
+  assert.deepEqual(parseNext(nextJson())?.sources, [])
+  const sources = parseNext(nextJson({ sources: sourceRows() }))?.sources ?? []
+  assert.deepEqual(sources.map(row => [row.source, row.label, row.status, row.delayMinutes]), [
+    ['calendar', 'Calendar', 'not_connected', null],
+    ['github', 'GitHub', 'ok', null],
+    ['slack', 'Slack', 'delayed', 37],
+    ['gmail', 'Gmail', 'quiet', null],
+    ['notion', 'Notion', 'never', null],
+  ])
+  assert.equal(sources[0]?.lastOkAt, null)
+  assert.equal(sources[1]?.lastOkAt, '2026-11-04T01:57:00.000Z')
+})
+
+test('형식이 틀린 소스 줄은 버리고 나머지와 다른 값은 그대로 읽는다', () => {
+  const good = { source: 'github', label: 'GitHub', status: 'ok', lastOkAt: null, delayMinutes: null }
+  const bad = [
+    null,
+    'github',
+    { ...good, source: 'GitHub' },
+    { ...good, source: '../etc' },
+    { ...good, source: '__proto__' },
+    { ...good, source: 'a'.repeat(40) },
+    { ...good, source: 'slack', status: 'broken' },
+    { ...good, source: 'slack', status: 'constructor' },
+    { ...good, source: 'slack', status: 1 },
+    { ...good, source: 7 },
+  ]
+  const view = parseNext(nextJson({ sources: [...bad, good, { ...good, label: '겹친 줄' }], counts: counts({ P1: 2 }) }))
+  assert.deepEqual(view?.sources, [{ source: 'github', label: 'GitHub', status: 'ok', lastOkAt: null, delayMinutes: null }])
+  assert.equal(view?.counts.P1, 2)
+  for (const value of [null, 'x', 1, {}, { 0: good }]) assert.deepEqual(parseNext(nextJson({ sources: value }))?.sources, [], String(value))
+})
+
+test('소스 이름표와 시각은 글자로만 옮기고 지연은 0 이상의 정수만 받는다', () => {
+  const row = (overrides: Record<string, unknown>) => parseNext(nextJson({ sources: [{ source: 'slack', label: 'Slack', status: 'delayed', lastOkAt: null, delayMinutes: 3, ...overrides }] }))?.sources[0]
+  assert.equal(row({ label: DANGEROUS_TITLE })?.label, cleanText(DANGEROUS_TITLE, 40))
+  assert.equal(row({ label: '' })?.label, 'slack')
+  assert.equal(row({ label: null })?.label, 'slack')
+  assert.equal(row({ delayMinutes: 12.9 })?.delayMinutes, 12)
+  for (const value of [-1, Number.NaN, Number.POSITIVE_INFINITY, '12', null, undefined]) assert.equal(row({ delayMinutes: value })?.delayMinutes, null, String(value))
+  assert.equal(row({ lastOkAt: 12 })?.lastOkAt, null)
+  assert.ok((row({ lastOkAt: 'x'.repeat(200) })?.lastOkAt ?? '').length <= 40)
+})
+
+test('소스 줄은 열두 개까지만 받는다', () => {
+  const many = Array.from({ length: 30 }, (_, index) => ({ source: `synthetic_${index}`, label: `합성 ${index}`, status: 'ok', lastOkAt: null, delayMinutes: null }))
+  assert.equal(parseNext(nextJson({ sources: many }))?.sources.length, 12)
+})
+
+test('예산은 쓴 횟수와 한도를 읽고 없거나 틀리면 null 또는 0이다', () => {
+  assert.deepEqual(parseNext(nextJson())?.budget, { hourUsed: 0, hourLimit: 2, dayUsed: 0, dayLimit: 6, bundlesToday: 0, shownToday: 0 })
+  const used = { p1HourUsed: 1, p1HourLimit: 2, p1DayUsed: 4, p1DayLimit: 6, bundlesToday: 2, shownToday: 5 }
+  assert.deepEqual(parseNext(nextJson({ budget: used }))?.budget, { hourUsed: 1, hourLimit: 2, dayUsed: 4, dayLimit: 6, bundlesToday: 2, shownToday: 5 })
+  assert.deepEqual(parseNext(nextJson({ budget: { p1HourUsed: -3, p1HourLimit: '2', p1DayUsed: 1.8 } }))?.budget, { hourUsed: 0, hourLimit: 0, dayUsed: 1, dayLimit: 0, bundlesToday: 0, shownToday: 0 })
+  for (const value of [null, 'x', 3, []]) assert.equal(parseNext(nextJson({ budget: value }))?.budget, null, String(value))
 })

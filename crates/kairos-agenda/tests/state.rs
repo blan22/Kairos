@@ -172,6 +172,96 @@ fn 건강_한_줄은_0건이_아니라_지연과_미연결을_말한다() {
     assert_eq!(SourceHealthBook::health_line(&[]), None);
 }
 
+fn health_row(
+    source: SourceName,
+    query: &str,
+    status: HealthStatus,
+    last_ok_at: Option<&str>,
+    delay: Option<i64>,
+) -> SourceHealth {
+    SourceHealth {
+        source,
+        query: query.to_owned(),
+        last_outcome: None,
+        last_error_code: None,
+        last_ok_at: last_ok_at.map(str::to_owned),
+        delay_minutes: delay,
+        note: None,
+        status,
+    }
+}
+
+#[test]
+fn 소스별_요약은_가장_나쁜_상태와_그_상태를_정한_질의의_시각을_쓴다() {
+    let row = health_row;
+    let rows = [
+        row(SourceName::Github, "tick", HealthStatus::Ok, Some(T1), None),
+        row(SourceName::Slack, "tick", HealthStatus::Quiet, Some(T0), None),
+        row(SourceName::Github, "slow", HealthStatus::Delayed, Some(T0), Some(12)),
+        row(SourceName::Notion, "tick", HealthStatus::NotConnected, None, None),
+    ];
+    let summary = SourceHealthBook::summary(&rows);
+    let shape: Vec<_> = summary
+        .iter()
+        .map(|status| {
+            (status.source, status.label.as_str(), status.status, status.last_ok_at.as_deref(), status.delay_minutes)
+        })
+        .collect();
+    assert_eq!(
+        shape,
+        [
+            (SourceName::Github, "GitHub", HealthStatus::Delayed, Some(T0), Some(12)),
+            (SourceName::Slack, "Slack", HealthStatus::Quiet, Some(T0), None),
+            (SourceName::Notion, "Notion", HealthStatus::NotConnected, None, None),
+        ]
+    );
+    assert_eq!(
+        serde_json::to_value(&summary[0]).unwrap(),
+        json!({ "source": "github", "label": "GitHub", "status": "delayed", "lastOkAt": T0, "delayMinutes": 12 })
+    );
+    assert!(SourceHealthBook::summary(&[]).is_empty());
+}
+
+#[test]
+fn 소스별_요약은_주기가_다른_질의의_시각을_섞지_않는다() {
+    let one = |rows: &[SourceHealth]| {
+        let summary = SourceHealthBook::summary(rows);
+        assert_eq!(summary.len(), 1);
+        (summary[0].status, summary[0].last_ok_at.clone(), summary[0].delay_minutes)
+    };
+    let row = |query: &str, status: HealthStatus, last_ok_at: Option<&str>, delay: Option<i64>| {
+        health_row(SourceName::Calendar, query, status, last_ok_at, delay)
+    };
+    // 하루에 한 번 도는 질의가 정상이면 가장 최근에 성공한 질의의 시각을 쓴다. 순서와 무관하다.
+    let fresh = Some(T1.to_owned());
+    assert_eq!(
+        one(&[row("daily", HealthStatus::Ok, Some(T0), None), row("tick", HealthStatus::Ok, Some(T1), None)]),
+        (HealthStatus::Ok, fresh.clone(), None)
+    );
+    assert_eq!(
+        one(&[row("tick", HealthStatus::Ok, Some(T1), None), row("daily", HealthStatus::Ok, Some(T0), None)]),
+        (HealthStatus::Ok, fresh, None)
+    );
+    // 늦는 질의가 여럿이면 가장 오래 밀린 시각과 가장 긴 지연을 쓴다.
+    assert_eq!(
+        one(&[
+            row("tick", HealthStatus::Delayed, Some(T1), Some(5)),
+            row("slow", HealthStatus::Delayed, Some(T0), Some(40)),
+            row("daily", HealthStatus::Ok, Some(T1), None),
+        ]),
+        (HealthStatus::Delayed, Some(T0.to_owned()), Some(40))
+    );
+    // 수집 기록이 없는 질의가 상태를 정하면 다른 질의의 시각과 지연을 붙이지 않는다.
+    assert_eq!(
+        one(&[row("tick", HealthStatus::Ok, Some(T1), None), row("new", HealthStatus::Never, None, None)]),
+        (HealthStatus::Never, None, None)
+    );
+    assert_eq!(
+        one(&[row("new", HealthStatus::Never, None, None), row("tick", HealthStatus::Ok, Some(T1), None)]),
+        (HealthStatus::Never, None, None)
+    );
+}
+
 #[test]
 fn 지연_분을_모르면_지연_사실만_쓴다() {
     assert_eq!(SourceHealthBook::delay_note("Slack", Some(12)), "Slack 12분 지연");

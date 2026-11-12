@@ -49,7 +49,7 @@ fn 판_번호를_찍는다() {
 #[test]
 fn 명령_하나의_도움말은_설명과_사용법_줄이다() {
     let cli = Cli::new();
-    let later = "kairos later: 나중에 다시 본다\n사용법: kairos later <항목 ID>... [--json]\n";
+    let later = "kairos later: 나중에 다시 본다\n사용법: kairos later <항목 ID>... [--when hour|tomorrow] [--json]\n";
     for args in [&["help", "later"][..], &["later", "--help"], &["later", "-h"], &["later", "--json", "--help"]] {
         let done = cli.run(args);
         assert_eq!((done.status, done.out.as_str(), done.err.as_str()), (0, later, ""), "{args:?}");
@@ -166,7 +166,7 @@ fn 사용법_오류의_문구는_답_형식을_따른다() {
     let plain = cli.run(&["next", "--surface", "band"]);
     assert_eq!(
         (plain.status, plain.out.as_str()),
-        (2, "사용법: kairos next [--seen] [--surface panel|orca|claude-code|vscode] [--ack] [--json]\n")
+        (2, "사용법: kairos next [--seen | --seen-ready] [--surface panel|orca|claude-code|vscode] [--ack] [--json]\n")
     );
     assert_eq!(cli.run(&["later"]).out, "항목 ID가 필요합니다\n");
     assert_eq!(cli.run(&["accept", "1", "2"]).out, "항목 ID는 하나만 받습니다\n");

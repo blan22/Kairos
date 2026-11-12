@@ -1,4 +1,4 @@
-use kairos_agenda::{NextOptions, Presenter, RevealFile};
+use kairos_agenda::{NextOptions, Presenter, RevealFile, SourceHealthBook};
 use kairos_core::KairosResult;
 
 use super::shared::line;
@@ -7,8 +7,9 @@ use crate::args::{ArgParser, OptionSpec, flag, text};
 use crate::command::Command;
 use crate::reply::Reply;
 
-const USAGE: &str = "사용법: kairos next [--seen] [--surface panel|orca|claude-code|vscode] [--ack] [--json]";
-const OPTIONS: [OptionSpec; 4] = [flag("json"), flag("seen"), flag("ack"), text("surface")];
+const USAGE: &str =
+    "사용법: kairos next [--seen | --seen-ready] [--surface panel|orca|claude-code|vscode] [--ack] [--json]";
+const OPTIONS: [OptionSpec; 5] = [flag("json"), flag("seen"), flag("seen-ready"), flag("ack"), text("surface")];
 
 pub struct Next;
 
@@ -31,7 +32,17 @@ impl Command for Next {
         let database = context.open_db()?;
         let next_context = context.next_context(&database, context.now())?;
         let options = NextOptions { seen: parsed.flag("seen"), ack: parsed.flag("ack") };
-        let mut response = Presenter::new(&database).next_response(&next_context, options)?;
+        let presenter = Presenter::new(&database);
+        // --seen-ready는 세션 소식만 확인으로 적는다. 카드를 그리지 않는 화면이 쓴다. --seen은 둘 다 적으므로 함께 오면 --seen을 따른다.
+        let mut response = if parsed.flag("seen-ready") && !options.seen {
+            presenter.next_response_ready_seen(&next_context, options)?
+        } else {
+            presenter.next_response(&next_context, options)?
+        };
+        // 소스별 수집 상태. 게이트가 닫혀 있어도 낸다. 기록만 하는 동안에도 수집이 도는지 보여야 한다.
+        let sources =
+            SourceHealthBook::summary(&context.source_health(&database, next_context.now, &next_context.control)?);
+        response.sources = (!sources.is_empty()).then_some(sources);
         drop(database);
         // 알림을 눌러 연 항목. 10분이 지난 요청은 싣지 않는다.
         response.reveal = RevealFile::new(context.home()).recent(response.at);

@@ -66,6 +66,38 @@ pub struct ActionContext<'a> {
     pub off_dates: &'a OffDates,
 }
 
+const HOUR_MS: i64 = 3_600_000;
+
+string_enum! {
+    /// 나중에의 때. next_bundle 다음 묶음, hour 한 시간 뒤, tomorrow 다음 근무일의 근무 시작.
+    pub enum LaterWhen {
+        NextBundle => "next_bundle",
+        Hour => "hour",
+        Tomorrow => "tomorrow",
+    }
+}
+
+impl LaterWhen {
+    /// 다시 열 시각. 깨어난 항목은 다음 묶음에 실린다.
+    fn until(self, context: &ActionContext<'_>) -> Instant {
+        match self {
+            Self::NextBundle => WorkSchedule::new(context.off_dates).next_bundle_at(context.now),
+            Self::Hour => context.now.plus_ms(HOUR_MS),
+            Self::Tomorrow => {
+                Instant::at_local(context.off_dates.next_workday(context.now.local_date()), work_start_minutes())
+            }
+        }
+    }
+
+    const fn message(self) -> &'static str {
+        match self {
+            Self::NextBundle => "다음 묶음에 다시 보여 줍니다",
+            Self::Hour => "1시간 뒤에 다시 보여 줍니다",
+            Self::Tomorrow => "다음 근무일 아침에 다시 보여 줍니다",
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum TriageDecision {
     Keep,
@@ -146,7 +178,7 @@ impl<'a> ItemTransitions<'a> {
         })
     }
 
-    fn later(&self, id: i64, context: &ActionContext<'_>) -> KairosResult<ActionResult> {
+    fn later(&self, id: i64, context: &ActionContext<'_>, when: LaterWhen) -> KairosResult<ActionResult> {
         self.guarded(id, |item| {
             if item.state == ItemState::Accepted {
                 return Ok(ActionResult::of(item, ActionStatus::InvalidState, item.state, "세션이 진행 중입니다"));
@@ -155,11 +187,10 @@ impl<'a> ItemTransitions<'a> {
                 return Ok(ActionResult::of(item, ActionStatus::Unchanged, item.state, "이미 대기 중입니다"));
             }
             let at = context.now.to_iso();
-            let until = WorkSchedule::new(context.off_dates).next_bundle_at(context.now).to_iso();
-            self.items().park_for_bundle(item.id, &until)?;
+            self.items().park_for_bundle(item.id, &when.until(context).to_iso())?;
             answer(self.connection, item.id, SuggestionResponse::Later, &at)?;
             self.record_change(item.id, "later", &at)?;
-            Ok(ActionResult::of(item, ActionStatus::Changed, ItemState::Parked, "다음 묶음에 다시 보여 줍니다"))
+            Ok(ActionResult::of(item, ActionStatus::Changed, ItemState::Parked, when.message()))
         })
     }
 
@@ -273,7 +304,17 @@ impl<'a> ItemActions<'a> {
 
     /// 나중에: 다음 묶음으로 보낸다. 응답한 노출이어도 밀어내기 1회로 센다.
     pub fn later(&self, ids: &[i64], context: &ActionContext<'_>) -> KairosResult<Vec<ActionResult>> {
-        self.each(ids, |transitions, id| transitions.later(id, context))
+        self.later_when(ids, context, LaterWhen::NextBundle)
+    }
+
+    /// 나중에의 때를 고른다. 어느 때든 밀어내기 1회로 세고, 깨어나면 다음 묶음에 실린다.
+    pub fn later_when(
+        &self,
+        ids: &[i64],
+        context: &ActionContext<'_>,
+        when: LaterWhen,
+    ) -> KairosResult<Vec<ActionResult>> {
+        self.each(ids, |transitions, id| transitions.later(id, context, when))
     }
 
     /// `drop`이면 끝이 아니라 버리기다.

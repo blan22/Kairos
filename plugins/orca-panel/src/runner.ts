@@ -100,15 +100,19 @@ export function argvFor(action: unknown, ids: readonly unknown[], title?: unknow
     return id === undefined ? null : build(id)
   }
   const none = (argv: string[]): string[] | null => (ids.length === 0 ? argv : null)
-  const many = (name: string): string[] | null => {
+  const many = (name: string, ...options: string[]): string[] | null => {
     const values = checkedIds(ids, 1, IDS_LIMIT)
-    return values === null ? null : [name, ...values, '--json']
+    return values === null ? null : [name, ...values, ...options, '--json']
   }
   switch (action) {
     case 'start':
       return one(id => ['accept', id, '--json'])
     case 'later':
       return many('later')
+    case 'later_hour':
+      return many('later', '--when', 'hour')
+    case 'later_tomorrow':
+      return many('later', '--when', 'tomorrow')
     case 'done':
       return many('done')
     case 'keep':

@@ -1,6 +1,6 @@
 /** 패널과 워커의 약속. 패널은 argv를 보지 않고, 항목 ID와 고정 버튼 이름만 워커로 보낸다. */
 export type Tier = 'P0' | 'P1' | 'P2'
-export type ItemActionId = 'start' | 'later' | 'done' | 'keep' | 'keep_deploy' | 'ack' | 'move' | 'cancel' | 'pr'
+export type ItemActionId = 'start' | 'later' | 'later_hour' | 'later_tomorrow' | 'done' | 'keep' | 'keep_deploy' | 'ack' | 'move' | 'cancel' | 'pr'
 /** 항목에 달리지 않은 패널 조작. kairos가 주는 버튼이 아니라 패널이 고정으로 그린다. */
 export type PanelActionId = 'focus_25' | 'focus_50' | 'focus_90' | 'focus_end' | 'add' | 'display_auto'
 export type ActionId = ItemActionId | PanelActionId
@@ -104,6 +104,25 @@ export interface FocusLine {
   heldLine: string | null
 }
 
+/** 소스 하나의 수집 상태. status는 ok, delayed, never, not_connected, quiet 가운데 하나다. */
+export interface SourceView {
+  source: string
+  label: string
+  status: string
+  lastOkAt: string | null
+  delayMinutes: number | null
+}
+
+/** '먼저 볼 일' 카드의 예산 사용량. 목록과 알림에는 적용되지 않는다. */
+export interface BudgetView {
+  hourUsed: number
+  hourLimit: number
+  dayUsed: number
+  dayLimit: number
+  bundlesToday: number
+  shownToday: number
+}
+
 /** 사용자가 누른 알림의 항목. at은 kairos reveal이 쓴 시각(ms)이고 패널은 같은 at을 한 번만 적용한다. */
 export interface RevealView {
   items: number[]
@@ -126,6 +145,9 @@ export interface NextView {
   nextBundleAt: string | null
   /** 10분 안에 누른 알림. 없거나 형식이 틀리면 null이다. */
   reveal: RevealView | null
+  /** 소스별 수집 상태. 오래된 kairos는 주지 않아 빈 배열이다. */
+  sources: SourceView[]
+  budget: BudgetView | null
 }
 
 export interface ListView {
@@ -163,13 +185,17 @@ export interface ActionOutcome {
 }
 
 export interface SnapshotInput {
+  /** 먼저 볼 일 카드를 그리는 화면에서 사용자가 부른 읽기다. 카드 노출과 세션 소식 확인을 적는다. */
   seen: boolean
+  /** 카드는 그리지 않고 세션 소식만 그리는 화면이다. 세션 소식 확인만 적는다. seen이 참이면 쓰지 않는다. */
+  ready?: boolean
 }
 
 export interface ActionInput {
   action: ActionId
   ids: number[]
   seen: boolean
+  ready?: boolean
   /** add에만 있다. 사용자가 패널에 직접 쓴 제목이다. */
   title?: string
 }

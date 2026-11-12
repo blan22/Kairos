@@ -8,7 +8,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use kairos_agenda::{
-    ControlFile, KairosControl, NOTIFIER_APP_REL, NativeNotifier, NextContext, ORCA_BIN, OrcaPanelOpener,
+    ControlFile, KairosControl, NOTIFIER_APP_REL, NativeNotifier, NextContext, ORCA_BIN, OrcaPanelOpener, SourceHealth,
     SourceHealthBook, StateBuilder,
 };
 use kairos_core::model::Source;
@@ -327,21 +327,30 @@ impl AppContext {
     }
 
     /// 건강 경고 한 줄.
+    /// 질의별 건강. 건강 경고 한 줄과 소스별 수집 상태가 같은 값에서 나온다.
+    pub fn source_health(
+        &self,
+        database: &Database,
+        at: Instant,
+        control: &KairosControl,
+    ) -> KairosResult<Vec<SourceHealth>> {
+        let off_dates = OffDateBook::new(database.connection()).load_watch_off_dates(&control.off_date_set())?;
+        let resumed_at = self.resumed_at();
+        SourceHealthBook::new(database.connection()).source_health(
+            &self.sources(),
+            at,
+            &off_dates,
+            resumed_at.as_deref(),
+        )
+    }
+
     pub fn health_line(
         &self,
         database: &Database,
         at: Instant,
         control: &KairosControl,
     ) -> KairosResult<Option<String>> {
-        let off_dates = OffDateBook::new(database.connection()).load_watch_off_dates(&control.off_date_set())?;
-        let resumed_at = self.resumed_at();
-        let health = SourceHealthBook::new(database.connection()).source_health(
-            &self.sources(),
-            at,
-            &off_dates,
-            resumed_at.as_deref(),
-        )?;
-        Ok(SourceHealthBook::health_line(&health))
+        Ok(SourceHealthBook::health_line(&self.source_health(database, at, control)?))
     }
 
     /// 카드를 고르는 데 쓰는 값. 표시 게이트가 처음 열리는 순간을 여기서도 남긴다.

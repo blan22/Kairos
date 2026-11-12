@@ -240,6 +240,18 @@ export function merged(rows: Json[]): Json {
   })
 }
 
+/** 소스별 수집 상태. 이름과 시각은 합성이다. healthy이면 손볼 소스가 없는 날이다. */
+export function sourceRows(healthy: boolean = false): Json[] {
+  const ok = (source: string, label: string): Json => ({ source, label, status: 'ok', lastOkAt: '2026-11-04T01:57:00.000Z', delayMinutes: null })
+  return [
+    healthy ? ok('calendar', 'Calendar') : { source: 'calendar', label: 'Calendar', status: 'not_connected', lastOkAt: null, delayMinutes: null },
+    ok('github', 'GitHub'),
+    healthy ? ok('slack', 'Slack') : { source: 'slack', label: 'Slack', status: 'delayed', lastOkAt: '2026-11-04T01:20:00.000Z', delayMinutes: 37 },
+    { source: 'gmail', label: 'Gmail', status: 'quiet', lastOkAt: '2026-11-03T10:00:00.000Z', delayMinutes: null },
+    healthy ? ok('notion', 'Notion') : { source: 'notion', label: 'Notion', status: 'never', lastOkAt: null, delayMinutes: null },
+  ]
+}
+
 export function nextJson(overrides: Json = {}): Json {
   return {
     schema: 1,

@@ -11,7 +11,7 @@ use super::views::{Card, Hold, ItemView, NextContext, ReadyCard};
 use crate::engine::{expire_cards, hold_cards, wake_parked};
 use crate::item::Item;
 use crate::repo::{ItemCounts, ItemRepo, ReadOnlyRunRepo, SuggestionRepo};
-use crate::state::{DisplayGate, RevealView};
+use crate::state::{DisplayGate, RevealView, SourceStatus};
 
 /// 활성 run 수. 패널은 이 값이 0보다 크면 kairos runs를 부른다. 항목 상태와 무관하다.
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
@@ -37,6 +37,9 @@ pub struct NextResponse {
     /// 10분 안에 알림을 눌러 연 항목. 없으면 키가 없다. 데이터 폴더의 파일이라 CLI가 채운다.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub reveal: Option<RevealView>,
+    /// 소스별 수집 상태. 소스 구성을 아는 CLI가 채운다. 없으면 키가 없다.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sources: Option<Vec<SourceStatus>>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize)]
@@ -116,6 +119,7 @@ fn next(connection: &Connection, context: &NextContext, options: NextOptions) ->
         focus,
         health: context.health.clone(),
         reveal: None,
+        sources: None,
     })
 }
 
@@ -157,6 +161,19 @@ impl<'a> Presenter<'a> {
 
     pub fn next_response(&self, context: &NextContext, options: NextOptions) -> KairosResult<NextResponse> {
         self.database.transaction(|connection| next(connection, context, options))
+    }
+
+    /// 카드는 그리지 않고 세션 소식만 그리는 화면의 읽기. 낸 세션 소식을 확인으로 적고, 카드 노출과 예산은 건드리지 않는다.
+    pub fn next_response_ready_seen(&self, context: &NextContext, options: NextOptions) -> KairosResult<NextResponse> {
+        self.database.transaction(|connection| {
+            let response = next(connection, context, options)?;
+            let suggestions = SuggestionRepo::new(connection);
+            let at = context.now.to_iso();
+            for card in &response.ready {
+                suggestions.mark_ready_seen(&card.run_id, &at)?;
+            }
+            Ok(response)
+        })
     }
 
     /// 패널의 목록. 사용자가 스스로 여는 것이라 예산을 쓰지 않고 노출을 기록하지 않는다.

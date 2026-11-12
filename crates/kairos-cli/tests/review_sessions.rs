@@ -208,6 +208,30 @@ fn r13_항목이_닫혀도_살아_있는_세션의_준비됨_카드와_이동_�
 }
 
 #[test]
+fn 세션_소식만_확인하는_읽기는_소식을_한_번만_내고_카드_노출은_적지_않는다() {
+    let db = same_issue_twice();
+    let orca = FakeOrca::with("worktree ps", ps_with(&["waiting"]));
+    accept(&db, &orca);
+    sync(&db, &orca, 0);
+    let peek = next(&db);
+    assert_eq!(peek.ready.len(), 1);
+    let context = context(at(AT), &control());
+    let first = Presenter::new(&db).next_response_ready_seen(&context, NextOptions::default()).unwrap();
+    assert_eq!(first.ready, peek.ready, "확인으로 적는 읽기도 소식을 싣는다");
+    assert_eq!(first.card, peek.card, "카드는 노출로 적지 않는다");
+    let after = next(&db);
+    assert!(after.ready.is_empty(), "한 번만 낸다");
+    assert_eq!((&after.card, &after.budget), (&peek.card, &peek.budget), "카드와 예산은 그대로다");
+    // 대조. --seen은 카드도 노출로 적는다.
+    let seen = next_at(&db, at(AT), true);
+    assert_eq!(seen.card.is_some(), peek.card.is_some());
+    if let Some(card) = seen.card {
+        assert!(card.shown_at.is_some());
+        assert!(peek.card.is_some_and(|card| card.shown_at.is_none()));
+    }
+}
+
+#[test]
 fn r13_대조_세션이_끝난_닫힌_항목은_목록과_카드에_나오지_않는다() {
     let (db, orca) = seeded();
     accept(&db, &orca);
