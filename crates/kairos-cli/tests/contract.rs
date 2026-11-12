@@ -8,7 +8,7 @@ use std::fs;
 use common::*;
 use serde_json::json;
 
-const NAMES: &str = "hello, list, next, watch, reveal, accept, move, pr, runs, later, done, keep, add, triage, focus, display, sessions, notify, doctor, pause, off, collect, plan-tick, page-info, ingest, setup, config, sources, mcp, connect, install, uninstall, demo";
+const NAMES: &str = "hello, list, next, watch, reveal, accept, move, pr, runs, later, done, keep, add, triage, focus, display, sessions, notify, doctor, pause, off, collect, plan-tick, page-info, ingest, setup, config, sources, mcp, connect, install, uninstall, demo, update, completions";
 
 #[test]
 fn 도움말은_명령을_묶어_설명하고_내부_명령은_all에만_나온다() {

@@ -23,8 +23,12 @@ const RUN_A: &str = RUN;
 #[test]
 fn r21_uninstall_문구는_사실과_맞고_플러그인을_내리는_방법을_알린다() {
     let (dir, _home) = temp_home();
-    let options =
-        UninstallOptions { launch_agents_dir: Some(dir.path().join("agents")), dry_run: true, skip_launchctl: false };
+    let options = UninstallOptions {
+        launch_agents_dir: Some(dir.path().join("agents")),
+        dry_run: true,
+        skip_launchctl: false,
+        before_removal: false,
+    };
     // dry-run은 launchctl을 부르지 않는다. 불리면 시험이 깨지도록 orca 대역을 넘긴다.
     let text = Installer::new(FakeOrca::new()).uninstall(&options).unwrap().lines.join("\n");
     assert!(!text.contains("밴드 플러그인"));

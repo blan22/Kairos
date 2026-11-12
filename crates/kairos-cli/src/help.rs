@@ -48,7 +48,7 @@ const fn with_usage(name: &'static str, group: Group, summary: &'static str, usa
 }
 
 /// 묶음 안의 순서가 도움말에 나오는 순서다.
-pub const ENTRIES: [Entry; 33] = [
+pub const ENTRIES: [Entry; 35] = [
     entry("next", Group::Daily, "지금 볼 일 하나"),
     entry("list", Group::Daily, "열린 항목"),
     entry("later", Group::Daily, "나중에 다시 본다"),
@@ -77,13 +77,20 @@ pub const ENTRIES: [Entry; 33] = [
         "실행본을 설치하고 launchd에 등록한다",
         "사용법: kairos install [--dry-run [--preview-dir 폴더]] | --apply | --register [--claude 경로] [--gh 경로] [--root 폴더]",
     ),
-    with_usage("uninstall", Group::Setup, "launchd 잡을 내린다", "사용법: kairos uninstall [--dry-run]"),
+    with_usage(
+        "uninstall",
+        Group::Setup,
+        "launchd 잡을 내린다(--runtime은 실행본까지, --purge는 데이터까지 지운다)",
+        "사용법: kairos uninstall [--dry-run] [--runtime | --purge] [--yes]",
+    ),
     with_usage(
         "collect",
         Group::Setup,
         "수집을 한 번 돌리거나 멈춘 수집을 푼다",
         "사용법: kairos collect [--force] | --resume | --skip-slack-until <Message_ts 또는 ISO 시각> | --reread-notion",
     ),
+    entry("update", Group::Setup, "지금 판과 업데이트하는 명령을 알려 준다"),
+    entry("completions", Group::Setup, "셸 자동 완성 스크립트를 낸다(zsh, bash)"),
     entry("demo", Group::Setup, "계정 없이 합성 데이터로 본다"),
     entry("hello", Group::Internal, "호스트가 시작할 때 계약 판과 구성을 읽는다"),
     entry("watch", Group::Internal, "상태가 바뀌면 한 줄을 낸다"),

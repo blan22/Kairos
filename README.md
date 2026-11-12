@@ -11,9 +11,9 @@
 
 ## 요구 사항
 
-- Apple Silicon Mac, Xcode Command Line Tools(`xcode-select --install`)
-- Rust(rustup. 판은 `rust-toolchain.toml`이 받는다)
+- Apple Silicon Mac
 - 로그인한 gh(`gh auth login`), Claude Code
+- 저장소에서 빌드할 때만: Xcode Command Line Tools(`xcode-select --install`), Rust(rustup. 판은 `rust-toolchain.toml`이 받는다)
 - Orca 1.4.248 이상(패널을 쓸 때만)
 
 ## 계정 없이 보기
@@ -27,16 +27,39 @@ KAIROS_HOME="$demo" cargo run -q -p kairos-cli --bin kairos -- next
 KAIROS_HOME="$demo" cargo run -q -p kairos-cli --bin kairos -- list --items
 ```
 
+`next`는 수집 상태 한 줄과 지금 볼 일 하나를, `list --items`는 열린 항목을 급한 순서로 낸다.
+
+```
+$ kairos next
+Calendar 수집 기록 없음, GitHub 수집 기록 없음, Slack 수집 기록 없음, Gmail 수집 기록 없음, Notion 수집 기록 없음
+P1 답장 필요
+#4 P1 답장 필요 Slack 합성 멘션: 오늘 배포 전에 확인 부탁드려요
+
+$ kairos list --items
+#2 P1 내 PR 확인 GitHub 합성 PR: 로그인 오류 수정
+#4 P1 답장 필요 Slack 합성 멘션: 오늘 배포 전에 확인 부탁드려요
+#1 P2 리뷰 요청 GitHub 합성 PR: 장바구니 정리
+#3 P2 답장 필요 GitHub 합성 이슈: 결제 화면 문구 오류
+```
+
 패널 화면은 스토리북(`storybook/`)에서 합성 시나리오로 본다.
 
 ## 설치
+
+저장소에서 빌드한다.
 
 ```
 git clone https://github.com/blan22/Kairos.git kairos && cd kairos
 scripts/install.sh
 ```
 
-스크립트가 실행 파일과 알림 헬퍼를 빌드하고 `~/.local/bin/kairos`를 건 뒤 `kairos setup`으로 넘긴다. setup은 조직 프로필, 켤 서비스, 계정 연결, 설치, Orca 패널을 차례로 묻는다. 알림은 다른 Mac 앱처럼 macOS 권한 창이 묻고, 허용하면 그때부터 온다. 업그레이드도 같은 명령이다. 묻지 않고 끝까지 가는 `--yes`, 단계별 명령, 설정 파일의 모양은 [설치와 설정](docs/install.md)에 있다.
+빌드 없이 릴리스 묶음으로 설치한다. Rust와 Xcode가 필요 없다.
+
+```
+curl --proto '=https' --tlsv1.2 -fsSL https://raw.githubusercontent.com/blan22/Kairos/main/scripts/install-release.sh | zsh
+```
+
+스크립트가 빠진 도구를 한 번에 알려 주고, 실행 파일과 알림 헬퍼를 준비해 `~/.local/bin/kairos`를 건 뒤 `kairos setup`으로 넘긴다. setup은 조직 프로필, 켤 서비스, 계정 연결, 설치, Orca 패널을 차례로 묻는다. 알림은 다른 Mac 앱처럼 macOS 권한 창이 묻고, 허용하면 그때부터 온다. 업그레이드도 같은 명령이고 `kairos update`가 맞는 명령을 알려 준다. 묻지 않고 끝까지 가는 `--yes`, PATH와 자동 완성, 단계별 명령, 설정 파일의 모양은 [설치와 설정](docs/install.md)에 있다. 막히면 [문제 해결](docs/troubleshooting.md)을 본다.
 
 조직 프로필은 저장소에 넣지 않는다. 관리자가 따로 나눠 주고 지문(SHA256)을 알려 준다. `examples/org.toml`이 합성 값으로 쓴 예시다.
 
@@ -50,6 +73,7 @@ kairos done <ID>       # 끝냄
 kairos doctor          # 수집과 설정 상태
 kairos sources         # 연동 서비스 켜고 끄기
 kairos notify test     # Mac 알림이 오는지 시험(권한은 kairos notify setup)
+kairos update          # 지금 판과 업데이트하는 명령
 kairos help            # 명령 전체와 한 줄 설명
 ```
 
@@ -71,7 +95,7 @@ kairos help            # 명령 전체와 한 줄 설명
 - 데이터 폴더는 git 작업 트리 밖에 둔다. 안에 두면 kairos가 거부한다. 개인 데이터가 저장소에 커밋되지 않게 하기 위해서다.
 - Orca 패널은 `trusted-worker` 플러그인이다. 패널은 kairos 실행 파일을 셸 없이 부르기만 하지만, Orca의 권한 목록을 파일 접근 샌드박스로 읽으면 안 된다.
 - Mac 알림에는 고정 낱말과 건수만 나온다. 잠금 화면 표시는 macOS 알림 설정에서 정한다.
-- 지우기: `kairos uninstall`이 launchd 잡을 내린다. 데이터 폴더와 Orca 패널은 직접 지운다.
+- 지우기: `kairos uninstall`이 launchd 잡을 내린다. `--runtime`은 실행본과 `kairos` 명령까지, `--purge`는 데이터 폴더와 키체인의 세션 토큰까지 지운다. 지울 것을 먼저 보여 주고 묻는다. Orca 패널은 내리는 명령을 알려 준다.
 
 보안 바닥값과 남은 위험은 [SECURITY.md](SECURITY.md)에 있다.
 
@@ -79,7 +103,8 @@ kairos help            # 명령 전체와 한 줄 설명
 
 | 문서 | 내용 |
 |---|---|
-| [docs/install.md](docs/install.md) | 설치, setup, 설정 파일, 조직 프로필 |
+| [docs/install.md](docs/install.md) | 설치, 업데이트, 지우기, setup, 설정 파일, 조직 프로필 |
+| [docs/troubleshooting.md](docs/troubleshooting.md) | 자주 막히는 곳과 푸는 명령 |
 | [docs/commands.md](docs/commands.md) | 명령 목록과 복구 명령 |
 | [docs/items.md](docs/items.md) | 항목, 표시 게이트, 예산, 알림 |
 | [docs/sessions.md](docs/sessions.md) | 수락, 세션 프로필, 샌드박스, PR 올리기 |
@@ -88,10 +113,11 @@ kairos help            # 명령 전체와 한 줄 설명
 | [docs/surface-protocol.md](docs/surface-protocol.md) | 표시면(호스트) 계약 |
 | [docs/development.md](docs/development.md) | 개발과 시험 |
 | [AGENTS.md](AGENTS.md) | 코딩 에이전트가 이 저장소에서 일하는 규칙 |
+| [CHANGELOG.md](CHANGELOG.md) | 판마다 바뀐 것 |
 
 ## 기여
 
-이슈와 PR을 받는다. 시작 전에 [개발과 시험](docs/development.md)을 읽고, 올리기 전에 `scripts/verify.sh full`을 돌린다. 시험 값은 합성 데이터만 쓴다(`scripts/check-personal-data.sh`가 검사한다). 보안 문제는 공개 이슈 대신 [SECURITY.md](SECURITY.md)의 방법으로 알린다.
+이슈와 PR을 받는다. 버그를 알릴 때는 `kairos --version`과 `kairos doctor`의 출력을 개인 값을 가리고 붙인다. 시작 전에 [개발과 시험](docs/development.md)을 읽고, 올리기 전에 `scripts/verify.sh full`을 돌린다. 시험 값은 합성 데이터만 쓴다(`scripts/check-personal-data.sh`가 검사한다). 보안 문제는 공개 이슈 대신 [SECURITY.md](SECURITY.md)의 방법으로 알린다.
 
 ## 라이선스
 

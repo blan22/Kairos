@@ -25,7 +25,9 @@ kairos pause [분] | --resume
 kairos off [YYYY-MM-DD] [--clear]
 kairos collect [--force] | --resume | --skip-slack-until <Message_ts 또는 ISO 시각> | --reread-notion
 kairos install [--dry-run [--preview-dir 폴더]] | --apply | --register [--claude 경로] [--gh 경로] [--root 폴더]
-kairos uninstall [--dry-run]
+kairos uninstall [--dry-run] [--runtime | --purge] [--yes]
+kairos update [--json]
+kairos completions zsh|bash
 kairos setup [--org <파일> [--sha256 <값>]] [--yes] [--no-install] [--google <주소>] [--slack <ID>] [--name <이름>]
 kairos sources [on|off <소스>...] [--json]
 kairos config validate | show [--origin] | path | init [--org <파일> [--sha256 <값>]] [--force]
@@ -39,6 +41,12 @@ KAIROS_HOME=<비어 있는 새 폴더> kairos demo [--json]
 `notify setup`은 macOS 알림 권한 창을 띄운다. 터미널에서 묻지 않는다. 이미 받았으면 아무것도 띄우지 않고, 전에 거절했으면 권한 창이 다시 뜨지 않으므로 시스템 설정의 알림 화면을 연다. `notify test`는 고정 문구의 시험 알림 하나를 보낸다. 둘 다 설치본의 헬퍼를 쓰고 세션 안에서는 하지 않는다.
 
 `doctor`는 끝에 확인할 것을 모아 다시 보여 준다. 없으면 `문제 없음`이다. `Mac 알림` 줄은 알림 권한 상태다. 권한을 아직 받지 않았으면 문제로 올린다.
+
+`uninstall`은 launchd 잡만 내린다. `--runtime`은 실행본(`<데이터 폴더>/<판>`, `current`, `~/.local/bin/kairos` 링크)까지 지우고 수집 기록과 설정은 남긴다. `--purge`는 데이터 폴더 전체와 키체인의 세션 토큰까지 지운다. 둘 다 지울 것을 먼저 보여 주고 `y`일 때만 지운다(`--yes`면 묻지 않는다). `--dry-run`은 보여 주기만 한다. 둘 다 데이터 폴더가 링크이거나 홈 폴더이거나 그 위이면 거절한다. `KAIROS_HOME`을 잘못 준 채로 남의 폴더를 지우지 않기 위해서다. 실행본으로 보는 것은 데이터 폴더 바로 아래에서 이름이 판 번호이고 `bin/kairos`와 `bin/kairos-run`이 든 폴더뿐이다. `--purge`는 kairos만 쓰는 이름의 파일(`kairos.db`, `connections.toml`, `install-source`)이 하나도 없으면 거절한다. `~/.local/bin/kairos`는 이 데이터 폴더를 가리키는 링크일 때만 지운다. 잡을 내리지 못했으면 지우지 않고 멈춘다. 남은 잡이 지운 경로를 계속 가리키기 때문이다. Orca 패널은 내리는 명령을 알려 주기만 한다. 승인을 사용자가 했으므로 내리는 것도 사용자가 한다. 세션 안에서는 실행본을 지우지 않는다(`--dry-run`은 된다). 설정이 깨져도 `uninstall`은 돈다. 데이터 폴더를 먼저 지우고 키체인의 토큰을 마지막에 지운다.
+
+`update`는 지금 판, 설치 방식, 업데이트하는 명령을 알려 준다. 아무것도 내려받거나 바꾸지 않는다. 설치 방식은 설치 스크립트가 데이터 폴더의 `install-source`에 적어 둔다(`release` 또는 `source:<저장소 경로>`). 저장소에서 빌드했으면 `<저장소>/scripts/install.sh --update`, 릴리스 묶음으로 설치했으면 설치 명령 한 줄이다. `--json`은 `update.version`, `update.method`(`source`, `release`, `unknown`), `update.command`를 낸다. 알려 줄 명령이 없으면 `command`는 키째 빠진다. `command`는 사람이 터미널에 붙여 넣는 셸 문자열이다. 호스트가 실행하지 않는다.
+
+`completions`는 셸 자동 완성 스크립트를 표준 출력으로 낸다. `kairos help`에 나오는 명령과 하위 낱말(`on`, `off`, `setup` 등)을 채운다. 명령 바로 뒤 자리에서만 정해진 낱말을 내고, 그 뒤 자리는 파일 이름으로 채운다. zsh는 `~/.zshrc`의 `compinit` 뒤에 `source <(kairos completions zsh)`를, bash는 `~/.bashrc`에 `eval "$(kairos completions bash)"`를 더한다. macOS의 bash 3.2는 `source <(...)`를 읽지 못한다. `completions`와 `update`는 설정이 깨져도 돈다.
 
 `--skip-slack-until`은 Slack 질의가 `parse_error`로 멈췄을 때 쓰는 복구 명령이다. 그 시각까지 건너뛰고, 건너뛴 구간은 7일 동안 `doctor`와 `list` 첫 줄에 나온다. 쪽 상한이나 틱 마감으로 잘린 Slack 질의는 다음 틱이 읽은 마지막 건 1초 앞부터 저절로 이어 읽는다(`page_cap`). 같은 초에 쪽 예산보다 많은 메시지가 몰려 이어 읽어도 앞으로 가지 못할 때만 `page_cap_stalled` 공백으로 알리고, 그때도 이 명령으로 건너뛸 수 있다.
 

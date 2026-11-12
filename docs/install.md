@@ -2,7 +2,9 @@
 
 ## 설치
 
-저장소를 받아 스크립트 하나를 돌린다. 업그레이드도 같은 명령이다. 옛 설치를 먼저 지우지 않는다.
+두 가지 길이 있다. 둘 다 처음 설치와 업그레이드가 같은 명령이고, 옛 설치를 먼저 지우지 않는다. 설정과 데이터는 그대로 둔다.
+
+### 저장소에서 빌드
 
 ```
 git clone https://github.com/blan22/Kairos.git kairos && cd kairos
@@ -11,7 +13,49 @@ scripts/install.sh [--org <파일> [--sha256 <값>]]
 
 미리 있어야 하는 것은 Apple Silicon Mac, Xcode Command Line Tools(`xcode-select --install`), Rust(rustup, 판은 `rust-toolchain.toml`이 받는다), 로그인한 gh(`gh auth login`), Claude Code다. Orca는 패널을 쓸 때만 있으면 된다. 빠진 것이 있으면 스크립트가 빠진 것을 모두 모아 설치 명령과 함께 알려 주고 멈춘다. `scripts/install.sh --help`는 사용법을 보여 준다.
 
-스크립트는 kairos, kairos-run, 알림 헬퍼를 빌드하고 `~/.local/bin/kairos`를 설치본(`current/bin/kairos`)에 건 뒤 `kairos setup`으로 넘긴다. 알림 헬퍼는 키체인의 Apple Development 인증서로 서명하고, 없으면 ad-hoc으로 서명한다. ad-hoc이면 다시 빌드할 때마다 알림 권한을 다시 물을 수 있다. `~/.local/bin`이 PATH에 없으면 더할 줄을 알려 준다.
+스크립트는 kairos, kairos-run, 알림 헬퍼를 빌드하고 `~/.local/bin/kairos`를 설치본(`current/bin/kairos`)에 건 뒤 `kairos setup`으로 넘긴다. 알림 헬퍼는 키체인의 Apple Development 인증서로 서명하고, 없으면 ad-hoc으로 서명한다. ad-hoc이면 다시 빌드할 때마다 알림 권한을 다시 물을 수 있다.
+
+### 릴리스 묶음(빌드 없음)
+
+```
+curl --proto '=https' --tlsv1.2 -fsSL https://raw.githubusercontent.com/blan22/Kairos/main/scripts/install-release.sh | zsh
+```
+
+Rust와 Xcode가 없어도 된다. gh와 Claude Code는 있어야 한다. 스크립트는 GitHub의 최신 릴리스에서 묶음(`kairos-aarch64-apple-darwin.tar.gz`)과 SHA256 파일을 받아 값이 같을 때만 풀고, 묶음 안의 `scripts/install.sh`로 넘긴다. 받은 파일은 임시 폴더에 두고 끝나면 지운다. 그래서 setup의 설치 질문에 `y`로 답해야 `kairos` 명령이 남는다. 설치하지 않고 끝내면 스크립트가 그렇게 알려 준다. 옵션은 `zsh -s -- --yes --google <회사 메일>`처럼 뒤에 붙인다. 실행 전에 읽어 보려면 스크립트를 파일로 받아 `zsh install-release.sh`로 돌린다.
+
+- SHA256 파일은 묶음과 같은 곳에서 받는다. 받는 중에 깨진 파일은 걸러내지만 올린 사람을 증명하지는 않는다. 묶음을 믿지 않으면 저장소에서 빌드한다.
+- 묶음의 알림 헬퍼는 ad-hoc으로 서명되어 있다. 판을 올린 뒤 macOS가 알림 권한을 다시 물을 수 있다.
+- 묶음은 태그(`v<판>`)를 올리면 `.github/workflows/release.yml`이 `scripts/package.sh`로 만든다. 로컬에서도 같은 명령으로 `target/dist/`에 만든다. `KAIROS_RELEASE_URL`을 주면 설치 스크립트가 그 주소에서 받는다(사내 미러).
+
+### kairos 명령과 PATH
+
+`~/.local/bin`이 PATH에 없으면 스크립트가 `~/.zshrc`에 `export PATH="$HOME/.local/bin:$PATH"` 한 줄을 더할지 묻는다. `--yes`면 묻지 않고 더한다. 이미 `.local/bin`이 적혀 있으면 다시 쓰지 않는다. 터미널이 아니거나 zsh가 아니면 더할 줄만 알려 준다. `--no-modify-path`는 셸 설정을 건드리지 않는다. 새 터미널을 열면 `kairos` 명령이 잡힌다.
+
+자동 완성은 `~/.zshrc`의 `compinit` 뒤에 `source <(kairos completions zsh)`를 더한다. bash는 `~/.bashrc`에 `eval "$(kairos completions bash)"`를 더한다.
+
+### 업데이트
+
+`kairos update`가 지금 판과 설치 방식에 맞는 명령을 알려 준다. kairos는 스스로 코드를 내려받지 않는다.
+
+```
+kairos update
+<저장소>/scripts/install.sh --update     # 저장소에서 빌드했을 때. 당기고(pull --ff-only) 다시 설치한다
+```
+
+`--update`는 저장소에 커밋하지 않은 변경이 있으면 멈춘다. 당긴 뒤에는 처음 설치와 같은 질문을 한다. Enter는 지금 값을 지키고, 설치와 Orca 패널 승인은 `y`로 답한다. 묻지 않으려면 `--yes`를 함께 준다. `--yes`는 설치와 패널 승인까지 예로 답하므로 `--update`가 스스로 붙이지 않는다. `~/.zshrc`는 건드리지 않는다. 릴리스 묶음으로 설치했으면 설치 명령 한 줄을 다시 실행한다. 미러(`KAIROS_RELEASE_URL`)로 설치했으면 같은 주소를 주고 다시 실행한다. `kairos update`는 공개 주소의 명령을 알려 준다.
+
+### 지우기
+
+```
+kairos uninstall --dry-run --purge   # 지울 것만 본다
+kairos uninstall                     # launchd 잡만 내린다
+kairos uninstall --runtime           # + 실행본과 ~/.local/bin/kairos. 수집 기록과 설정은 남긴다
+kairos uninstall --purge             # + 데이터 폴더 전체와 키체인의 세션 토큰
+```
+
+`--runtime`과 `--purge`는 지울 것을 보여 주고 `y`일 때만 지운다. Orca 패널은 내리는 명령(`orca plugin dev unload <경로>`)을 알려 준다. `~/.zshrc`에 더한 PATH 줄과 저장소 폴더는 직접 지운다.
+
+### 묻지 않고 설치
 
 묻지 않고 끝까지 가려면 `--yes`와 본인 식별자를 넘긴다. 사람이 할 일은 macOS 알림 권한 창의 허용 한 번이다.
 
@@ -82,7 +126,7 @@ lunch = []
 
 `lunch = []`는 점심 보류를 끈다. `collect`는 수집이 도는 시간이라 `work`를 덮어야 한다. 감시자도 수집이 쓰는 `watch-window.tsv`로 같은 요일과 시간에만 판정한다. 공휴일과 연차는 근무 요일이어도 쉬는 날이다.
 
-설정 파일은 본인 소유이고 그룹이나 남이 쓸 수 없어야 읽는다. 깨진 설정이면 `config`, `connect`, `sources`, `setup`, `help`를 뺀 명령이 멈춘다. 세션 자격에 닿는 값이 바뀌면 세션이 다시 잠기고 `doctor`가 알린다(`session-approval`). MCP 바인딩을 바꾸면 `kairos install --apply`를 다시 해야 수집 훅의 허용 목록(`hooks/allowed.ts`)에 반영된다.
+설정 파일은 본인 소유이고 그룹이나 남이 쓸 수 없어야 읽는다. 깨진 설정이면 `config`, `connect`, `sources`, `setup`, `uninstall`, `update`, `completions`, `help`를 뺀 명령이 멈춘다. 세션 자격에 닿는 값이 바뀌면 세션이 다시 잠기고 `doctor`가 알린다(`session-approval`). MCP 바인딩을 바꾸면 `kairos install --apply`를 다시 해야 수집 훅의 허용 목록(`hooks/allowed.ts`)에 반영된다.
 
 세션 호스트는 `orca`(기본)와 `git`이다. `git`이면 `[hosts.git.repos]`의 로컬 클론에 `kairos/<이름>` 브랜치로 worktree를 만들고 띄울 명령을 돌려준다. VS Code 확장은 그 명령을 터미널로 띄우고, Claude Code는 명령을 보여 준다.
 

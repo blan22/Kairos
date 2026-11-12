@@ -230,7 +230,12 @@ fn uninstall은_우리_라벨_둘만_내리고_dry_run은_아무것도_바꾸지
     installer(&unused).install(&setup.options).unwrap();
     fs::write(setup.agents.join("other.plist"), "x").unwrap();
     let fake = FakeLaunchctl::ok();
-    let dry = UninstallOptions { launch_agents_dir: Some(setup.agents.clone()), dry_run: true, skip_launchctl: false };
+    let dry = UninstallOptions {
+        launch_agents_dir: Some(setup.agents.clone()),
+        dry_run: true,
+        skip_launchctl: false,
+        before_removal: false,
+    };
     installer(&fake).uninstall(&dry).unwrap();
     assert!(fake.calls().is_empty());
     assert_eq!(fs::read_dir(&setup.agents).unwrap().count(), 3);
@@ -306,11 +311,57 @@ fn 내리기만_할_때는_launchctl을_부르지_않고_plist를_지운다() {
     let setup = Setup::new(InstallMode::Apply);
     installer(&FakeLaunchctl::ok()).install(&setup.options).unwrap();
     let fake = FakeLaunchctl::ok();
-    let options =
-        UninstallOptions { launch_agents_dir: Some(setup.agents.clone()), dry_run: false, skip_launchctl: true };
+    let options = UninstallOptions {
+        launch_agents_dir: Some(setup.agents.clone()),
+        dry_run: false,
+        skip_launchctl: true,
+        before_removal: false,
+    };
     assert!(!installer(&fake).uninstall(&options).unwrap().failed);
     assert!(fake.calls().is_empty());
     assert_eq!(fs::read_dir(&setup.agents).unwrap().count(), 0);
+}
+
+#[test]
+fn 지우기_앞_단계는_내리지_못한_잡이_아직_올라_있으면_실패로_알린다() {
+    let options = |setup: &Setup| UninstallOptions {
+        launch_agents_dir: Some(setup.agents.clone()),
+        dry_run: false,
+        skip_launchctl: false,
+        before_removal: true,
+    };
+    // bootout이 실패하고 print가 성공한다. 잡이 아직 올라 있다.
+    let setup = Setup::new(InstallMode::Apply);
+    installer(&FakeLaunchctl::ok()).install(&setup.options).unwrap();
+    let stuck = FakeLaunchctl::replying(|args| i32::from(args[0] == "bootout") * 5);
+    let result = installer(&stuck).uninstall(&options(&setup)).unwrap();
+    assert!(result.failed);
+    assert!(result.lines.iter().any(|line| line == "dev.kairos.collect: 내리지 못함(코드 5)"), "{:?}", result.lines);
+    assert_eq!(stuck.calls()[1], ["print", "gui/501/dev.kairos.collect"]);
+    assert!(!result.lines.iter().any(|line| line.contains("--runtime")), "끝 안내는 호출자가 한다");
+    // bootout도 print도 실패한다. 처음부터 올라 있지 않았다.
+    let setup = Setup::new(InstallMode::Apply);
+    installer(&FakeLaunchctl::ok()).install(&setup.options).unwrap();
+    let absent = FakeLaunchctl::replying(|args| if args[0] == "bootout" { 3 } else { 113 });
+    let result = installer(&absent).uninstall(&options(&setup)).unwrap();
+    assert!(!result.failed, "{:?}", result.lines);
+    // print가 다른 까닭으로 실패한다(시간 초과, 실행 실패). 내려갔는지 모르므로 실패다.
+    let setup = Setup::new(InstallMode::Apply);
+    installer(&FakeLaunchctl::ok()).install(&setup.options).unwrap();
+    let unknown = FakeLaunchctl::replying(|args| if args[0] == "bootout" { 5 } else { 1 });
+    let result = installer(&unknown).uninstall(&options(&setup)).unwrap();
+    assert!(result.failed);
+    assert!(
+        result.lines.iter().any(|line| line.contains("내려갔는지 확인하지 못함(코드 5, 확인 1)")),
+        "{:?}",
+        result.lines
+    );
+    // 내려갔으면 다시 묻지 않는다.
+    let setup = Setup::new(InstallMode::Apply);
+    installer(&FakeLaunchctl::ok()).install(&setup.options).unwrap();
+    let fine = FakeLaunchctl::ok();
+    assert!(!installer(&fine).uninstall(&options(&setup)).unwrap().failed);
+    assert!(fine.calls().iter().all(|call| call[0] == "bootout"));
 }
 
 #[test]

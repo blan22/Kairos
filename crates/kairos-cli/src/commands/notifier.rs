@@ -110,6 +110,16 @@ fn join(base: &Path, parts: &[&str]) -> PathBuf {
     parts.iter().fold(base.to_path_buf(), |path, part| path.join(part))
 }
 
+fn lsregister_bin(context: &AppContext) -> &str {
+    context.env("KAIROS_LSREGISTER").map(str::trim).filter(|value| !value.is_empty()).unwrap_or(LSREGISTER_BIN)
+}
+
+/// 번들을 LaunchServices에서 뺀다. 설치본을 지울 때 쓴다. 뺐으면 true다.
+pub(crate) fn unregister(context: &AppContext, app: &Path) -> bool {
+    let request = ProcessRequest::new(lsregister_bin(context), ["-u", &app.to_string_lossy()], SHORT_TIMEOUT);
+    context.runner().run(&request).success()
+}
+
 /// 설치본의 알림 헬퍼. 개발 트리의 번들은 권한을 따로 받으므로 쓰지 않는다.
 pub(crate) struct NotifierHelper<'a> {
     context: &'a AppContext,
@@ -185,12 +195,7 @@ impl<'a> NotifierHelper<'a> {
 
     /// 번들을 LaunchServices에 등록한다. 실패해도 권한은 받을 수 있다. 알림을 눌렀을 때 패널이 열리지 않을 뿐이다.
     fn register(&self, console: &Console) {
-        let lsregister = self
-            .context
-            .env("KAIROS_LSREGISTER")
-            .map(str::trim)
-            .filter(|value| !value.is_empty())
-            .unwrap_or(LSREGISTER_BIN);
+        let lsregister = lsregister_bin(self.context);
         if !self.run(lsregister, &["-f", &self.app.to_string_lossy()], SHORT_TIMEOUT).success() {
             console.print("LaunchServices 등록에 실패했습니다. 알림을 눌러도 패널이 열리지 않을 수 있습니다");
         }

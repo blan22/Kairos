@@ -20,6 +20,7 @@ mod setup;
 mod shared;
 mod sources;
 mod surface;
+mod tools;
 
 use crate::command::CommandRegistry;
 
@@ -59,4 +60,6 @@ pub fn registry() -> CommandRegistry {
         .with(install::Install)
         .with(install::Uninstall)
         .with(demo::Demo)
+        .with(tools::Update)
+        .with(tools::Completions)
 }

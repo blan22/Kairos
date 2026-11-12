@@ -1,0 +1,42 @@
+name: release
+
+# v0.3.0 같은 태그를 올리면 릴리스 묶음을 만들어 GitHub 릴리스에 붙인다.
+# 묶음은 scripts/install-release.sh가 받는다. 묶는 일은 scripts/package.sh가 한다(로컬에서도 같은 명령이다).
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+# 액션은 태그가 아니라 커밋 SHA로 고정한다. 태그는 옮겨질 수 있다. 올릴 때는 SHA와 주석의 판을 함께 바꾼다.
+jobs:
+  release:
+    runs-on: macos-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - run: rustup show
+      - name: 태그와 판 번호가 같은지 본다
+        run: |
+          version=$(awk -F'"' '/^version = /{ print $2; exit }' Cargo.toml)
+          if [ "v$version" != "$GITHUB_REF_NAME" ]; then
+            echo "태그 $GITHUB_REF_NAME 과 Cargo.toml의 판 $version 이 다르다" >&2
+            exit 1
+          fi
+      # 인증서가 없는 러너라 알림 헬퍼는 ad-hoc으로 서명된다.
+      - run: scripts/package.sh
+      - name: 릴리스에 붙인다
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            target/dist/kairos-aarch64-apple-darwin.tar.gz \
+            target/dist/kairos-aarch64-apple-darwin.tar.gz.sha256 \
+            --title "kairos $GITHUB_REF_NAME" --generate-notes --verify-tag
