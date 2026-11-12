@@ -158,7 +158,7 @@ orca plugin check . --json
 `kairos setup`의 마지막 단계가 아래 로드와 승인을 대신한다. Orca가 보여 주는 권한 문구를 출력하고, 사용자가 `y`라고 답할 때만 지문으로 승인한다. 수동으로 하려면 아래 명령을 실행하고, 출력에 나온 `--approve <지문>`을 붙여 한 번 더 실행한다. 경로의 `0.2.0`은 설치한 버전에 맞춘다. 플러그인 목록에서 켜는 승인(`enable --approve`)으로는 개발 폴더의 승인이 풀리지 않는다.
 
 ```sh
-orca plugin dev load "$HOME/Library/Application Support/kairos/0.2.0/plugins/orca-panel"
+orca plugin dev load "$HOME/Library/Application Support/kairos/0.3.0/plugins/orca-panel"
 ```
 
 - `kairos install --apply`가 `plugins` 폴더를 통째로 복사하므로 이 폴더도 설치본에 들어간다.
