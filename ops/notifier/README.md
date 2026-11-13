@@ -56,10 +56,10 @@ ops/notifier/build.sh
 
 ## 처음 한 번: setup
 
-`kairos setup`의 마지막 단계와 `kairos notify setup`이 아래 두 명령을 대신 실행한다. 터미널에서 묻지 않고 바로 macOS 권한 창을 띄운다. 수동으로 할 때만 아래 명령을 쓴다. 경로의 `0.3.0`은 설치한 버전에 맞춘다.
+`kairos setup`의 마지막 단계와 `kairos notify setup`이 아래 두 명령을 대신 실행한다. 터미널에서 묻지 않고 바로 macOS 권한 창을 띄운다. 수동으로 할 때만 아래 명령을 쓴다. 경로의 `0.4.0`은 설치한 버전에 맞춘다.
 
 ```sh
-app="$HOME/Library/Application Support/kairos/0.3.0/ops/notifier/KairosNotifier.app"
+app="$HOME/Library/Application Support/kairos/0.4.0/ops/notifier/KairosNotifier.app"
 /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -f "$app"
 "$app/Contents/MacOS/KairosNotifier" setup
 ```
