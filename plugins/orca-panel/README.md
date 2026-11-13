@@ -187,7 +187,7 @@ orca plugin dev load "$HOME/Library/Application Support/kairos/0.4.1/plugins/orc
 ```
 
 - `kairos install --apply`가 `plugins` 폴더를 통째로 복사하므로 이 폴더도 설치본에 들어간다.
-- setup은 적재 전에 `orca plugin types <폴더>`로 `.orca/types`를 먼저 만든다. Orca의 무결성 검사는 `.orca`까지 해시에 넣는데, 새 폴더를 처음 적재하면 승인에 해시를 적은 뒤에 이 폴더를 쓴다. 그러면 워커가 `content hash mismatch`로 뜨지 않는다. 손으로 적재할 때도 `types`를 먼저 실행한다.
+- setup은 적재하거나 승인한 뒤 설치본 패널의 `.orca`를 지우고 `orca plugin restart local.kairos`를 실행한다. Orca(1.4.255에서 확인)는 개발 폴더를 승인할 때 `.orca`를 빼고 해시를 적지만, 워커를 띄울 때는 `.orca`까지 넣고 잰다. components 패널이면 `dev load`가 매번 `.orca/types`를 쓰므로 그대로 두면 워커가 `content hash mismatch`로 뜨지 않는다. 손으로 적재했다면 같은 두 단계를 직접 한다. 개발 트리에서 편집기 타입이 필요하면 `orca plugin types`로 다시 만든다.
 - 워커는 `current` 링크를 통해 설치된 kairos를 호출한다. 버전이 바뀌어도 경로 상수를 고칠 필요가 없다. 설치본의 kairos가 오래되어 패널이 호출하는 명령을 지원하지 않으면 상태 표시줄에 `kairos 오류`가 나온다.
 - kairos는 네이티브 실행 파일이므로 워커의 Node 버전과 무관하다.
 - 언로드는 `orca plugin dev unload <같은 경로>`로 한다. `kairos uninstall`은 플러그인을 언로드하지 않고 이 명령만 알려 준다.
