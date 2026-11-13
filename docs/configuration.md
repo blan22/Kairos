@@ -135,6 +135,8 @@ schema = 1
 # enabled = ["orca", "claude-code", "vscode"]
 
 # Orca 저장소 ID는 컴퓨터마다 다릅니다. `orca repo list --json`의 id를 적습니다.
+# 적지 않으면 원격 주소가 같은 Orca 저장소를 찾아 씁니다. 같은 원격의 클론이 여럿이고
+# 폴더 이름으로도 고르지 못할 때만 적으면 됩니다.
 # [hosts.orca.repos]
 # "contoso/atlas" = "00000000-0000-0000-0000-000000000000"
 

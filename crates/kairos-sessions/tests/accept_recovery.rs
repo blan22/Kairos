@@ -209,3 +209,12 @@ fn worktree_create가_missing이면_orca_없음이고_되찾기를_하지_않는
     assert_eq!(accept(&db, &orca).result.status, SessionStatus::OrcaUnavailable);
     assert_eq!(orca.count("reference find"), 1);
 }
+
+#[test]
+fn 설정한_orca_저장소_id가_있으면_repo_list를_부르지_않는다() {
+    let (db, orca) = seeded();
+    assert_eq!(accept(&db, &orca).result.status, SessionStatus::Changed);
+    assert_eq!(orca.count("repo list"), 0);
+    let args = orca.args("worktree create");
+    assert!(args.contains(&"id:0000c0de-0000-4000-8000-000000000001".to_owned()), "{args:?}");
+}

@@ -5,7 +5,7 @@
 mod client;
 mod replies;
 
-pub(crate) use client::LaunchedRun;
+pub(crate) use client::{LaunchedRun, RepoLookup};
 pub use client::{ORCA_READ, ORCA_TERMINAL, ORCA_WORKTREE, OrcaClient, OrcaReply, OrcaResult};
 pub use replies::{
     OrcaLiveAgent, OrcaPane, OrcaTerminal, OrcaWorktree, PsSnapshot, find_workspace_named, focus_navigated,

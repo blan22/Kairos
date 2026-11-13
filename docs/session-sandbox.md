@@ -7,7 +7,7 @@
 `kairos accept`는 `BEGIN IMMEDIATE` 트랜잭션으로 run을 `claimed`로 기록하고 항목을 `accepted`로 바꿉니다. 경쟁에서 진 쪽은 기존 run을 받습니다. 그다음 Orca를 아래 순서로 호출합니다. 도중에 사용자가 끝내기나 취소를 누르면 그 결과를 돌려주고 멈춥니다.
 
 1. `orca reference find <url>`. 기록으로 연결된(`linked`) 살아 있는 에이전트가 있으면 그 세션을 이어받고(`adopted`) 끝냅니다.
-2. `orca worktree create --repo id:<대상 저장소> --name t-<짧은id> --no-parent --setup skip --base-branch <기준 브랜치> --reference <url>`. 기준 브랜치는 조직 프로필의 플레이북 대상에서 가져옵니다. `id:` 뒤의 Orca 저장소 ID는 그 대상의 저장소를 `config.toml`의 `[hosts.orca.repos]`에서 찾은 값입니다. 대상이나 ID가 없으면 Orca를 호출하지 않습니다.
+2. `orca worktree create --repo id:<대상 저장소> --name t-<짧은id> --no-parent --setup skip --base-branch <기준 브랜치> --reference <url>`. 기준 브랜치는 조직 프로필의 플레이북 대상에서 가져옵니다. `id:` 뒤의 Orca 저장소 ID는 그 대상의 저장소를 `config.toml`의 `[hosts.orca.repos]`에서 찾은 값입니다. 설정에 없으면 `orca repo list --json`에서 원격 주소(`github.com/<owner>/<name>`)가 같은 저장소를 고릅니다. 같은 원격의 클론이 여럿이면 폴더 이름이 저장소 이름과 같은 하나를 고릅니다. 하나로 고르지 못하면 worktree를 만들지 않고 `repo_unresolved`로 알립니다.
 3. `orca worktree show`로 경로와 HEAD를 확인하고, 선택자를 run에 저장합니다.
 4. `orca terminal create --worktree <선택자> --title kairos-<짧은id> --command '<kairos-run> <uuid>' --focus`
 

@@ -216,6 +216,7 @@ test('이어 쓸 때만 제목에 마침표를 찍는다', () => {
 
 test('조작 실패 코드를 사용자 문구로 옮기고 모르는 코드는 원문을 쓰지 않는다', () => {
   assert.equal(actionFailure('worktree_failed'), '작업 공간을 만들지 못했습니다.')
+  assert.match(actionFailure('repo_unresolved') ?? '', /\[hosts\.orca\.repos\]/)
   assert.equal(actionFailure('session_gone'), '세션의 터미널이 닫혀 있습니다.')
   assert.equal(actionFailure('move_failed'), null)
   assert.equal(actionFailure('합성 코드'), null)
