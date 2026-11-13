@@ -3,7 +3,34 @@ import { chmodSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
-import { addArgv, argvFor, checkBinary, createClient, launchOf, readReply, type Exec } from './index.ts'
+import {
+  addArgv,
+  argvFor,
+  binaryFor,
+  checkBinary,
+  createClient,
+  homeFor,
+  insideLocalAppData,
+  launchOf,
+  readReply,
+  type Exec,
+} from './index.ts'
+
+test('기본 데이터 폴더와 실행 파일은 OS마다 kairos와 같은 자리다', () => {
+  assert.equal(homeFor('darwin', '/Users/synth'), '/Users/synth/Library/Application Support/kairos')
+  assert.equal(homeFor('linux', '/home/synth'), '/home/synth/.local/share/kairos')
+  assert.equal(homeFor('win32', 'C:\\Users\\synth'), 'C:\\Users\\synth\\AppData\\Local\\kairos')
+  assert.equal(binaryFor('linux', '/home/synth/.local/share/kairos'), '/home/synth/.local/share/kairos/current/bin/kairos')
+  assert.equal(binaryFor('win32', 'C:\\k'), 'C:\\k\\current\\bin\\kairos.exe')
+})
+
+test('Windows는 %LOCALAPPDATA% 아래의 실행 파일만 받는다', () => {
+  const user = 'C:\\Users\\synth'
+  assert.ok(insideLocalAppData('c:\\users\\SYNTH\\AppData\\Local\\kairos\\current\\bin\\kairos.exe', user))
+  assert.ok(!insideLocalAppData('C:\\kairos\\bin\\kairos.exe', user))
+  assert.ok(!insideLocalAppData('C:\\Users\\synth\\AppData\\LocalLow\\kairos.exe', user))
+  assert.ok(!insideLocalAppData('C:\\Users\\synth\\AppData\\Local\\..\\Roaming\\kairos.exe', user))
+})
 
 test('버튼 이름과 검사한 ID로만 인자를 만든다', () => {
   assert.deepEqual(argvFor('later', [1, '2'], 'vscode'), ['later', '1', '2', '--json'])
@@ -41,7 +68,8 @@ test('호출은 큐로 한 번에 하나만 돈다', async () => {
   assert.deepEqual(order, ['start next', 'end next', 'start list', 'end list'])
 })
 
-test('남이 쓸 수 있는 실행 파일은 부르지 않는다', () => {
+// Windows는 권한 비트 대신 자리로 본다(위 시험).
+test('남이 쓸 수 있는 실행 파일은 부르지 않는다', { skip: process.platform === 'win32' }, () => {
   const dir = mkdtempSync(join(tmpdir(), 'kairos-client-'))
   const file = join(dir, 'kairos')
   writeFileSync(file, '#!/bin/sh\n')

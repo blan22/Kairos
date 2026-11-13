@@ -41,7 +41,7 @@ export const execProgram: Exec = (file, args, timeoutMs) =>
       execFile(
         file,
         [...args],
-        { timeout: timeoutMs, killSignal: 'SIGKILL', maxBuffer: MAX_OUTPUT, cwd: '/', shell: false, encoding: 'utf8' },
+        { timeout: timeoutMs, killSignal: 'SIGKILL', maxBuffer: MAX_OUTPUT, cwd: '/', shell: false, windowsHide: true, encoding: 'utf8' },
         (error, stdout) => resolve(outcomeOf(error, String(stdout))),
       )
     } catch {
