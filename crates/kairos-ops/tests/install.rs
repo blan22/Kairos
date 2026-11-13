@@ -224,6 +224,40 @@ fn install_register만_launchctl_bootstrap을_부른다() {
 }
 
 #[test]
+fn 설치본의_kairos로_같은_판을_다시_설치하면_복사하지_않고_다시_등록한다() {
+    let setup = Setup::new(InstallMode::Apply);
+    let unused = FakeLaunchctl::ok();
+    let first = installer(&unused).install(&setup.options).unwrap();
+    let runtime = first.plan.runtime_dir.clone();
+    let binary = runtime.join("bin/kairos");
+    let watchdog = runtime.join("ops/kairos-watchdog.zsh");
+    let before = (fs::read(&binary).unwrap(), fs::read(&watchdog).unwrap());
+    assert!(!before.1.is_empty());
+    fs::remove_file(setup.agents.join("dev.kairos.collect.plist")).unwrap();
+
+    // kairos setup이 설치본의 kairos로 돌면 설치 자료와 실행 파일이 모두 설치본 안에 있다.
+    let again = InstallOptions {
+        mode: InstallMode::Register,
+        root: runtime.clone(),
+        binary_dir: Some(runtime.join("bin")),
+        ..setup.options.clone()
+    };
+    let fake = FakeLaunchctl::ok();
+    let done = installer(&fake).install(&again).unwrap();
+    assert!(!done.failed, "{:?}", done.lines);
+    assert_eq!((fs::read(&binary).unwrap(), fs::read(&watchdog).unwrap()), before);
+    assert_eq!(mode(&watchdog), 0o755);
+    assert!(setup.agents.join("dev.kairos.collect.plist").is_file());
+    assert_eq!(fake.calls().iter().filter(|call| call[0] == "kickstart").count(), 1);
+
+    // 설치 자료만 설치본이고 실행 파일이 다른 곳이면 무엇이 놓일지 모르므로 예전처럼 거절한다.
+    let mixed = InstallOptions { root: runtime.clone(), ..setup.options.clone() };
+    let refused = installer(&FakeLaunchctl::ok()).install(&mixed).unwrap_err();
+    assert_eq!(refused.code(), "install_same_root");
+    assert_eq!((fs::read(&binary).unwrap(), fs::read(&watchdog).unwrap()), before);
+}
+
+#[test]
 fn install_register는_수집_잡을_등록한_뒤_바로_한_번_돌린다() {
     let setup = Setup::new(InstallMode::Register);
     let fake = FakeLaunchctl::ok();

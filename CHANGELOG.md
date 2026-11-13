@@ -9,6 +9,10 @@
 - 설치(`kairos install --register`, `kairos setup`)가 수집 작업을 등록한 뒤 바로 한 번 실행한다. 다음 3분 눈금을 기다리지 않는다.
 - `kairos setup`의 설치 단계가 표시를 켠다. 새로 설치해도 첫 수집부터 카드와 알림을 낸다. 표시 모드를 직접 고른 적이 있으면 그 값을 지킨다. 하루 동안 기록만 하려면 `kairos display auto`를 실행한다.
 
+### 수정
+
+- 설치된 `kairos`로 `kairos setup`을 다시 실행하고 설치에 `y`로 답하면 `install_same_root`로 멈추던 문제. 같은 판이면 파일을 복사하지 않고 launchd 등록만 다시 한다.
+
 ## 0.3.0
 
 ### 추가
