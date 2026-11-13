@@ -4,7 +4,7 @@
 
 # kairos
 
-**흩어진 회사 일을 모아, 지금 볼 일 하나를 골라 주는 macOS 도구**
+**흩어진 회사 일을 모아, 지금 볼 일 하나를 골라 주는 도구(macOS, Linux, Windows)**
 
 [![CI](https://github.com/blan22/Kairos/actions/workflows/ci.yml/badge.svg)](https://github.com/blan22/Kairos/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/blan22/Kairos)](https://github.com/blan22/Kairos/releases)
@@ -52,7 +52,7 @@ $ kairos list --items
 
 ## 설치
 
-**준비할 것**: Apple Silicon Mac, 로그인한 gh(`gh auth login`), Claude Code. Orca 패널을 쓰려면 Orca 1.4.248 이상이 필요합니다.
+**준비할 것**: Apple Silicon Mac, 로그인한 gh(`gh auth login`), Claude Code. Orca 패널을 쓰려면 Orca 1.4.248 이상이 필요합니다. Linux와 Windows는 아래 [Linux와 Windows](#linux와-windows)를 보세요.
 
 릴리스 패키지로 설치하면 빌드하지 않으므로 Rust와 Xcode가 없어도 됩니다.
 
@@ -71,6 +71,24 @@ scripts/install.sh
 
 업그레이드도 같은 명령으로 합니다. `kairos update`가 설치 방식에 맞는 명령을 알려 줍니다. 질문 없이 설치하는 방법, PATH와 자동 완성은 [설치](docs/install.md)에, setup과 설정 파일은 [설정](docs/configuration.md)에 있습니다. 막히면 [문제 해결](docs/troubleshooting.md)을 보세요.
 
+### Linux와 Windows
+
+수집, 카드, 알림, 호스트는 macOS와 같게 동작합니다. [세션](docs/sessions.md)은 샌드박스가 보안 기준을 지킬 수 없어 열지 않습니다. OS마다 다른 점은 [지원하는 OS](docs/platforms.md)에 있습니다.
+
+Linux(x86_64, aarch64)에는 systemd 사용자 세션과 로그인한 gh가 필요합니다.
+
+```sh
+curl --proto '=https' --tlsv1.2 -fsSL https://raw.githubusercontent.com/blan22/Kairos/main/scripts/install-release-linux.sh | sh
+```
+
+Windows 10, 11(x86_64)에는 로그인한 gh가 필요합니다. PowerShell에서 실행하세요.
+
+```powershell
+irm https://raw.githubusercontent.com/blan22/Kairos/main/scripts/install-release.ps1 | iex
+```
+
+저장소에서 빌드하려면 Linux는 `scripts/install-linux.sh`, Windows는 `scripts\install.ps1`을 실행하세요.
+
 조직 프로필은 저장소에 넣지 않습니다. 관리자가 SHA256 지문과 함께 따로 나눠 줍니다. [`examples/org.toml`](examples/org.toml)은 합성 값으로 만든 예시입니다.
 
 ## 사용법
@@ -87,15 +105,15 @@ kairos update          # 현재 버전과 업데이트 명령
 kairos help            # 전체 명령과 한 줄 설명
 ```
 
-수집은 launchd가 3분마다 실행하고, 설치하면 바로 한 번 실행합니다. `kairos setup`으로 설치하면 표시를 켜 두기 때문에 첫 수집부터 카드와 알림이 나옵니다. 하루 동안 기록만 하고 싶다면 `kairos display auto`로 바꾸세요.
+수집은 launchd(Linux는 systemd, Windows는 작업 스케줄러)가 3분마다 실행하고, 설치하면 바로 한 번 실행합니다. `kairos setup`으로 설치하면 표시를 켜 두기 때문에 첫 수집부터 카드와 알림이 나옵니다. 하루 동안 기록만 하고 싶다면 `kairos display auto`로 바꾸세요.
 
-일을 세션에 맡기려면 차단 테스트를 확인한 뒤 `kairos sessions on`으로 켭니다. 세션이 할 수 있는 일과 막힌 일은 [에이전트 세션](docs/sessions.md)에 있습니다.
+일을 세션에 맡기려면 차단 테스트를 확인한 뒤 `kairos sessions on`으로 켭니다. 세션이 할 수 있는 일과 막힌 일은 [에이전트 세션](docs/sessions.md)에 있습니다. 세션은 macOS에서만 씁니다.
 
 ## 데이터와 권한
 
 | 무엇 | 어디에 |
 |---|---|
-| 수집 기록, 항목, 실행 기록 | `~/Library/Application Support/kairos`(`KAIROS_HOME`). 폴더 0700, 파일 0600 |
+| 수집 기록, 항목, 실행 기록 | `~/Library/Application Support/kairos`(`KAIROS_HOME`). 폴더 0700, 파일 0600. Linux와 Windows의 자리는 [지원하는 OS](docs/platforms.md#파일이-놓이는-곳)에 있습니다 |
 | 설정(`org.toml`, `config.toml`, `connections.toml`) | 같은 폴더. 본인 소유이고 다른 사용자가 쓸 수 없을 때만 읽습니다 |
 | 세션용 읽기 전용 GitHub 토큰 | 키체인(`kairos connect session-token`) |
 | launchd 작업 | `~/Library/LaunchAgents/dev.kairos.*.plist` |

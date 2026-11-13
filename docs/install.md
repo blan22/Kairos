@@ -15,6 +15,8 @@ kairos를 설치, 업데이트, 제거하는 방법입니다. 설치한 뒤의 �
 
 빠진 것이 있으면 설치 스크립트가 한꺼번에 모아 설치 명령과 함께 알려 주고 멈춥니다.
 
+이 표는 macOS 기준입니다. Linux와 Windows는 [Linux에 설치하기](#linux에-설치하기)와 [Windows에 설치하기](#windows에-설치하기)를 보세요. OS마다 다른 점은 [지원하는 OS](platforms.md)에 있습니다.
+
 ## 설치하기
 
 방법은 두 가지입니다. 어느 쪽이든 처음 설치와 업그레이드에 같은 명령을 씁니다. 기존 설치를 먼저 지울 필요가 없고, 설정과 데이터는 그대로 남습니다.
@@ -71,6 +73,70 @@ scripts/install.sh --yes --google <회사 메일> --slack <Slack 멤버 ID> [--n
 
 알림 권한은 `--yes`가 없어도 터미널에서 묻지 않습니다.
 
+## Linux에 설치하기
+
+x86_64와 aarch64를 지원합니다. 릴리스 패키지는 glibc 2.35 이상(Ubuntu 22.04, Debian 12 등)에서 돕니다. Linux에서는 [세션](sessions.md)을 열지 않습니다.
+
+| 필요한 것 | 언제 |
+|---|---|
+| systemd 사용자 세션 | 항상. 수집을 systemd 사용자 timer로 돌립니다 |
+| 로그인한 gh(`gh auth login`) | 항상 |
+| `notify-send`(libnotify) | 알림을 받을 때 |
+| Orca | Orca 패널을 쓸 때. PATH의 `orca`를 부릅니다 |
+| Rust(rustup), C 컴파일러 | 저장소에서 빌드할 때 |
+
+릴리스 패키지로 설치합니다.
+
+```sh
+curl --proto '=https' --tlsv1.2 -fsSL https://raw.githubusercontent.com/blan22/Kairos/main/scripts/install-release-linux.sh | sh
+```
+
+저장소에서 빌드합니다.
+
+```sh
+git clone https://github.com/blan22/Kairos.git kairos && cd kairos
+scripts/install-linux.sh
+```
+
+- 옵션은 macOS와 같습니다. 릴리스 설치는 `sh -s -- --yes --google <회사 메일>`처럼 뒤에 붙입니다.
+- 패키지 이름은 `kairos-<x86_64|aarch64>-unknown-linux-gnu.tar.gz`입니다. SHA256이 맞을 때만 풉니다.
+- `~/.local/bin/kairos` 링크를 만듭니다. 셸 설정 파일은 고치지 않습니다. `~/.local/bin`이 PATH에 없으면 더할 줄만 알려 줍니다.
+- WSL2에서는 `/etc/wsl.conf`의 `[boot]`에 `systemd=true`를 켠 뒤 설치하세요.
+
+## Windows에 설치하기
+
+Windows 10, 11(x86_64)을 지원합니다. Windows에서는 [세션](sessions.md)을 열지 않습니다.
+
+| 필요한 것 | 언제 |
+|---|---|
+| 로그인한 gh(`winget install --id GitHub.cli` 뒤 `gh auth login`) | 항상 |
+| Orca | Orca 패널을 쓸 때. PATH의 `orca`를 부릅니다 |
+| Rust(rustup), Visual Studio Build Tools의 C++ 도구 | 저장소에서 빌드할 때 |
+
+릴리스 패키지로 설치합니다. PowerShell에서 실행하세요.
+
+```powershell
+irm https://raw.githubusercontent.com/blan22/Kairos/main/scripts/install-release.ps1 | iex
+```
+
+옵션을 넘기려면 스크립트를 블록으로 만들어 실행합니다.
+
+```powershell
+& ([scriptblock]::Create((irm https://raw.githubusercontent.com/blan22/Kairos/main/scripts/install-release.ps1))) --yes --google <회사 메일>
+```
+
+저장소에서 빌드합니다.
+
+```powershell
+git clone https://github.com/blan22/Kairos.git kairos; cd kairos
+powershell -ExecutionPolicy Bypass -File scripts\install.ps1
+```
+
+- 패키지 이름은 `kairos-x86_64-pc-windows-msvc.zip`입니다. SHA256이 맞을 때만 풉니다.
+- 데이터 폴더는 `%LOCALAPPDATA%\kairos`입니다. `KAIROS_HOME`은 `%LOCALAPPDATA%` 아래의 절대 경로만 쓸 수 있습니다. 다른 곳이면 설치 스크립트가 아무것도 바꾸기 전에 멈춥니다.
+- setup이 설치를 마치면, 설치본의 `bin` 폴더가 사용자 PATH에 없을 때 더할지 묻습니다. 설치하지 않았으면 PATH를 고치지 않습니다. `--yes`면 묻지 않고 더하고, `--no-modify-path`면 건드리지 않습니다. 새 터미널부터 `kairos`를 부를 수 있습니다.
+- 수집은 작업 스케줄러의 `dev.kairos.collect` 작업이 돌립니다. 알림은 토스트로 오고, 누르면 패널이 열립니다.
+
 ## PATH와 자동 완성
 
 `~/.local/bin`이 PATH에 없으면 설치 스크립트가 `~/.zshrc`에 다음 한 줄을 추가할지 묻습니다.
@@ -111,13 +177,15 @@ eval "$(kairos completions bash)"
 - 질문 없이 진행하려면 `--yes`를 함께 주세요. `--yes`는 설치와 패널 승인까지 자동으로 동의하기 때문에 `--update`가 알아서 붙이지는 않습니다.
 - `~/.zshrc`는 건드리지 않습니다.
 
+Linux는 `scripts/install-linux.sh --update`, Windows는 `scripts\install.ps1 --update`가 같은 일을 합니다.
+
 **릴리스 패키지로 설치했다면** 설치 명령 한 줄을 다시 실행하세요. 미러(`KAIROS_RELEASE_URL`)로 설치했다면 같은 주소를 지정하고 실행합니다. `kairos update`가 알려 주는 명령은 공개 주소 기준입니다.
 
 ## 제거
 
 ```sh
 kairos uninstall --dry-run --purge   # 지울 대상만 확인합니다
-kairos uninstall                     # launchd 작업만 해제합니다
+kairos uninstall                     # 예약 작업(launchd, systemd, 작업 스케줄러)만 해제합니다
 kairos uninstall --runtime           # 런타임과 ~/.local/bin/kairos까지 지웁니다. 수집 기록과 설정은 남습니다
 kairos uninstall --purge             # 데이터 폴더 전체와 키체인의 세션 토큰까지 지웁니다
 ```

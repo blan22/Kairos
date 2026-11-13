@@ -235,12 +235,21 @@ fn uninstall은_runtime과_purge를_함께_주면_purge다() {
 
 #[test]
 fn update는_설치_방식에_맞는_명령을_알려_주고_아무것도_바꾸지_않는다() {
+    // OS마다 설치 스크립트와 릴리스 명령의 셸이 다르다. Windows는 이 시험을 돌리지 않는다(경로와 PowerShell 인용은 단위 시험이 본다).
+    let (script, release_command) = if cfg!(target_os = "macos") {
+        ("install.sh", "install-release.sh | zsh")
+    } else {
+        ("install-linux.sh", "install-release-linux.sh | sh")
+    };
+    if cfg!(windows) {
+        return;
+    }
     let cli = Cli::new();
     let unknown = cli.run(&["update"]);
     assert_eq!(unknown.status, 0, "{}{}", unknown.out, unknown.err);
     assert!(unknown.out.contains(&format!("지금 판: kairos {}", env!("CARGO_PKG_VERSION"))), "{}", unknown.out);
     assert!(unknown.out.contains("설치 방식: 기록 없음"), "{}", unknown.out);
-    assert!(unknown.out.contains("scripts/install.sh --update"), "{}", unknown.out);
+    assert!(unknown.out.contains(&format!("scripts/{script} --update")), "{}", unknown.out);
     // 알려 줄 명령이 없으면 키째 뺀다.
     assert_eq!(
         cli.json(&["update"]).body()["update"],
@@ -252,9 +261,9 @@ fn update는_설치_방식에_맞는_명령을_알려_주고_아무것도_바꾸
     fs::write(cli.root.join("install-source"), format!("source:{}\n", repo.display())).unwrap();
     // 저장소가 있지만 스크립트가 없다.
     assert!(cli.run(&["update"]).out.contains("저장소가 그 자리에 없습니다"));
-    fs::write(repo.join("scripts/install.sh"), "#!/bin/zsh\n").unwrap();
+    fs::write(repo.join("scripts").join(script), "#!/bin/sh\n").unwrap();
     let source = cli.run(&["update"]);
-    let command = format!("'{}/scripts/install.sh' --update", repo.display());
+    let command = format!("'{}/scripts/{script}' --update", repo.display());
     assert!(source.out.contains(&format!("\n  {command}\n")), "{}", source.out);
     assert_eq!(
         cli.json(&["update"]).body()["update"],
@@ -264,10 +273,19 @@ fn update는_설치_방식에_맞는_명령을_알려_주고_아무것도_바꾸
     fs::write(cli.root.join("install-source"), "release\n").unwrap();
     let release = cli.run(&["update"]);
     assert!(release.out.contains("설치 방식: 릴리스"), "{}", release.out);
-    assert!(release.out.contains("install-release.sh | zsh"), "{}", release.out);
+    assert!(release.out.contains(release_command), "{}", release.out);
     let body = cli.json(&["update"]).body();
     assert_eq!(body["update"]["method"], "release");
-    assert!(body["update"]["command"].as_str().unwrap().ends_with("install-release.sh | zsh"), "{body}");
+    assert!(body["update"]["command"].as_str().unwrap().ends_with(release_command), "{body}");
+    // 셸이 해석할 글자가 든 저장소 경로는 명령으로 찍지 않는다.
+    let odd_repo = cli.root.join("a&b");
+    fs::create_dir_all(odd_repo.join("scripts")).unwrap();
+    fs::write(odd_repo.join("scripts").join(script), "#!/bin/sh\n").unwrap();
+    fs::write(cli.root.join("install-source"), format!("source:{}\n", odd_repo.display())).unwrap();
+    let refused = cli.run(&["update"]);
+    assert!(refused.out.contains("셸이 해석하는 글자가 있어 명령을 찍지 않습니다"), "{}", refused.out);
+    assert!(!refused.out.contains("--update'"), "{}", refused.out);
+    assert_eq!(cli.json(&["update"]).body()["update"].get("command"), None);
     // 모양이 틀린 기록은 찍지 않는다.
     fs::write(cli.root.join("install-source"), "source:relative\u{1b}[31m\n").unwrap();
     let odd = cli.run(&["update"]);
