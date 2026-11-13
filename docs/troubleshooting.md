@@ -56,7 +56,11 @@
 ## Orca 패널
 
 - 버전을 올리면 설치본 폴더가 바뀌어 Orca가 다시 승인을 요구한다. `kairos setup`을 다시 실행하면 마지막 단계에서 로드와 승인을 묻는다.
-- 패널이 `errored`이고 `orca plugin logs local.kairos`에 `content hash mismatch`가 있으면, 승인한 뒤에 폴더의 `.orca/types`가 새로 생긴 것이다. 0.4.0까지의 setup으로 새 판 폴더를 처음 승인했을 때 생긴다. 적재나 다시 읽기로는 승인 해시가 바뀌지 않는다. 그 판의 `plugins/orca-panel/.orca`를 지우고 `orca plugin restart local.kairos`를 실행하면 승인 때의 해시로 돌아간다.
+- 패널이 `errored`이고 `orca plugin logs local.kairos`에 `content hash mismatch`가 있으면, 패널 폴더에 적재가 쓴 타입 파일(`.orca`)이 남아 있는 것이다. Orca는 승인 해시에서 이 폴더를 빼고, 워커를 띄울 때는 넣고 잰다. 0.4.1까지의 setup이나 손으로 한 `orca plugin dev load`가 남긴다. 다시 적재하거나 읽어도 풀리지 않는다. 그 판의 `plugins/orca-panel/.orca`를 지우고 `orca plugin restart local.kairos`를 실행한다.
+  ```sh
+  rm -rf "$HOME/Library/Application Support/kairos/current/plugins/orca-panel/.orca"
+  orca plugin restart local.kairos
+  ```
 - 새 일 점이 사라지지 않으면 그 칩을 고르고 2초 넘게 본 뒤 다른 칩으로 옮긴다. 잠깐 지나친 화면은 본 것으로 적지 않는다. 패널 권한에 플러그인 저장소가 빠져 있으면 점이 없다. `kairos setup`으로 다시 승인한다.
 - 패널이 비어 있으면 터미널에서 `kairos next`가 같은 내용을 출력하는지 확인한다. 터미널에서도 비어 있으면 위의 "카드나 항목이 보이지 않는다"를 본다.
 

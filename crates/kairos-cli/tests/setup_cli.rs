@@ -60,7 +60,7 @@ fn fakes(status: &str, orca_approved: bool) -> Fakes {
     write_script(
         &orca,
         &format!(
-            "#!/bin/sh\nprintf 'orca %s\\n' \"$*\" >> '{log_text}'\ncase \"$*\" in\n*--approve*) printf 'approved\\n'; exit 0 ;;\nesac\n{pending}\n"
+            "#!/bin/sh\nprintf 'orca %s\\n' \"$*\" >> '{log_text}'\ncase \"$*\" in\n*--approve*) printf 'approved\\n'; exit 0 ;;\n'plugin restart '*) exit 0 ;;\nesac\n{pending}\n"
         ),
     );
     cli.set("KAIROS_NOTIFIER", notifier.to_str().unwrap());
@@ -80,6 +80,9 @@ fn answers(tail: &str) -> Vec<u8> {
 #[test]
 fn setup은_알림_권한을_받고_패널을_승인한다() {
     let fakes = fakes("notDetermined", false);
+    // 적재가 쓴 타입 파일이다. 승인 해시에는 빠지고 워커 검사에는 들어가므로 setup이 지운다.
+    fs::create_dir_all(fakes.panel.join(".orca/types/orca")).unwrap();
+    fs::write(fakes.panel.join(".orca/types/orca/index.d.ts"), "export {}\n").unwrap();
     // 알림은 묻지 않는다. macOS 권한 창이 묻는다. 패널 예(Enter), 승인 y.
     let done = fakes.cli.pipe(&["setup"], &answers("\ny\n"));
     assert_eq!(done.status, 0, "{}{}", done.out, done.err);
@@ -100,14 +103,16 @@ fn setup은_알림_권한을_받고_패널을_승인한다() {
             "notifier status".to_owned(),
             format!("lsregister -f {}", notifier_app.to_str().unwrap()),
             "notifier setup".to_owned(),
-            // 타입 파일을 먼저 쓴다. 승인한 뒤에 쓰면 패널 해시가 달라져 워커가 뜨지 않는다.
-            format!("orca plugin types {panel}"),
             format!("orca plugin dev load {panel}"),
             format!("orca plugin dev load {panel} --approve {FINGERPRINT}"),
+            // 타입 파일을 지운 뒤 워커를 새로 띄운다.
+            "orca plugin restart local.kairos".to_owned(),
         ],
         "{}",
         done.out
     );
+    assert!(!fakes.panel.join(".orca").exists());
+    assert!(fakes.panel.is_dir());
 }
 
 #[test]
@@ -117,7 +122,13 @@ fn setup은_묻지_않으면_패널을_승인하지_않는다() {
     let done = fakes.cli.pipe(&["setup"], b"");
     assert_eq!(done.status, 0, "{}{}", done.out, done.err);
     assert!(done.out.contains("승인하지 않았습니다"), "{}", done.out);
-    assert!(fakes.calls().iter().all(|call| !call.contains("--approve")), "{:?}", fakes.calls());
+    assert!(done.out.contains("kairos setup을 다시 실행"), "{}", done.out);
+    // 승인하지 않았으면 워커를 건드리지 않는다.
+    assert!(
+        fakes.calls().iter().all(|call| !call.contains("--approve") && !call.contains("restart")),
+        "{:?}",
+        fakes.calls()
+    );
 }
 
 #[test]
@@ -128,9 +139,11 @@ fn setup은_이미_받은_권한과_승인을_다시_묻지_않는다() {
     assert!(done.out.contains("권한이 이미 있습니다"), "{}", done.out);
     assert!(done.out.contains("Orca 패널을 올렸습니다"), "{}", done.out);
     let calls = fakes.calls();
+    // 이미 승인돼 있어도 적재가 타입 파일을 다시 쓴다. 지우고 워커를 새로 띄운다.
     assert_eq!(calls.len(), 3, "{calls:?}");
     assert_eq!(calls[0], "notifier status");
-    assert!(calls[1].starts_with("orca plugin types "), "{calls:?}");
+    assert!(calls[1].starts_with("orca plugin dev load "), "{calls:?}");
+    assert_eq!(calls[2], "orca plugin restart local.kairos");
 }
 
 #[test]
@@ -162,7 +175,8 @@ fn setup_yes는_묻지_않고_계정을_기록하고_패널까지_승인한다()
     let calls = fakes.calls();
     let panel = fakes.panel.to_str().unwrap();
     assert!(calls.contains(&"notifier setup".to_owned()), "{calls:?}");
-    assert_eq!(calls.last().unwrap(), &format!("orca plugin dev load {panel} --approve {FINGERPRINT}"));
+    assert_eq!(calls[calls.len() - 2], format!("orca plugin dev load {panel} --approve {FINGERPRINT}"));
+    assert_eq!(calls.last().unwrap(), "orca plugin restart local.kairos");
     let connections = fs::read_to_string(fakes.cli.root.join("connections.toml")).unwrap();
     assert!(connections.contains("someone@example.com"), "{connections}");
     assert!(connections.contains("U0TEST1234"), "{connections}");
