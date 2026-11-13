@@ -2,7 +2,8 @@
 //!
 //! 틱이 잠자기에 끊겼다는 판정은 측정 값 둘 중 하나다.
 //!   심장박동 공백  프로세스가 1초 박동을 `SLEEP_GAP_MS` 넘게 못 돌렸다. 깨어 있는 동안 자식이 멈추면 박동은 계속 돈다.
-//!   잠자기 횟수    pmset -g stats의 Sleep Count가 틱 사이에 늘었다. 짧은 잠자기도 잡는다.
+//!   잠자기 횟수    macOS는 pmset -g stats의 Sleep Count, Linux는 /sys/power/suspend_stats/success가 틱 사이에 늘었다. 짧은 잠자기도 잡는다.
+//!                 Windows는 횟수를 읽지 않고 심장박동만 본다.
 //! 그 틱의 timeout만 `SLEEP_INTERRUPTED`로 바꾼다. 다른 실패는 건드리지 않아 진짜 고장을 숨기지 않는다.
 //!
 //! 깨어난 시각은 건강 판정과 감시자의 하한이다.
@@ -16,6 +17,7 @@ use std::time::Duration;
 
 use kairos_core::home::write_file_atomic;
 use kairos_core::model::Outcome;
+use kairos_core::platform::Os;
 use kairos_core::ports::Clock;
 use kairos_core::process::{ProcessRequest, ProcessRunner};
 use kairos_core::{Instant, KairosHome, KairosResult, js};
@@ -67,6 +69,17 @@ pub fn parse_sleep_count(text: &str) -> Option<i64> {
     })
 }
 
+/// Linux 커널이 센 성공한 절전 횟수. 숫자 한 줄이다.
+pub const LINUX_SUSPEND_COUNT: &str = "/sys/power/suspend_stats/success";
+
+/// `/sys/power/suspend_stats/success`의 내용.
+pub fn parse_suspend_success(text: &str) -> Option<i64> {
+    let digits = text.trim_end_matches('\n');
+    (!digits.is_empty() && digits.len() <= 18 && digits.bytes().all(|byte| byte.is_ascii_digit()))
+        .then(|| digits.parse().ok())
+        .flatten()
+}
+
 /// OS의 잠자기 횟수를 읽는다.
 #[derive(Clone)]
 pub struct SleepDetector {
@@ -80,6 +93,11 @@ impl SleepDetector {
 
     /// 읽지 못하면 None이고 심장박동만으로 판정한다.
     pub fn sleep_count(&self) -> Option<i64> {
+        match Os::current() {
+            Os::MacOs => {}
+            Os::Linux => return parse_suspend_success(&fs::read_to_string(LINUX_SUSPEND_COUNT).ok()?),
+            Os::Windows => return None,
+        }
         let request =
             ProcessRequest::new("/usr/bin/pmset", ["-g", "stats"], PMSET_TIMEOUT).max_output(PMSET_MAX_OUTPUT);
         let output = self.runner.run(&request);

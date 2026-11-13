@@ -64,6 +64,13 @@ impl Wizard<'_> {
     /// 터미널에서 묻지 않는다. 다른 Mac 앱처럼 macOS 권한 창이 묻고, 허용하면 그때부터 알림이 간다.
     /// 전에 거절했으면 권한 창이 다시 뜨지 않는다. 그때만 시스템 설정을 열지 묻는다. `--yes`와 입력이 끝난 실행은 열지 않고 알리기만 한다.
     fn notifier(&self, runtime: &Path) -> KairosResult<()> {
+        // Linux와 Windows의 알림은 앱별 권한 창이 없다.
+        if kairos_core::platform::Os::current() != kairos_core::platform::Os::MacOs {
+            if self.context.notifier().is_none() {
+                self.console.print("알림 도구가 없습니다. Linux는 notify-send(libnotify)를 설치하면 알림이 갑니다");
+            }
+            return Ok(());
+        }
         let Some(helper) = NotifierHelper::in_runtime(self.context, runtime) else {
             self.console.print(Missing::Helper.message());
             return Ok(());

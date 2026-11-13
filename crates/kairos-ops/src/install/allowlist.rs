@@ -1,10 +1,10 @@
 //! 수집 훅의 허용 목록. 설치본의 플러그인 폴더에 이 컴퓨터의 바인딩으로 쓴다.
 
-use std::fs::{self, Permissions};
-use std::os::unix::fs::PermissionsExt;
+use std::fs;
 use std::path::Path;
 
 use kairos_core::KairosResult;
+use kairos_core::platform::set_mode;
 
 /// 수집 훅의 허용 목록 파일. 설치본의 플러그인 폴더에 바인딩으로 다시 쓴다.
 const ALLOWED_CALLS_FILE: &str = "hooks/allowed.ts";
@@ -40,6 +40,6 @@ pub(super) fn write_allowlist(plugin_dir: &Path) -> KairosResult<()> {
         fs::create_dir_all(parent)?;
     }
     kairos_core::home::write_file_atomic(&path, &collector_allowlist())?;
-    fs::set_permissions(&path, Permissions::from_mode(0o644))?;
+    set_mode(&path, 0o644)?;
     Ok(())
 }

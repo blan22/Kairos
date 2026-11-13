@@ -21,6 +21,7 @@ mod shared;
 mod sources;
 mod surface;
 mod tools;
+mod watchdog;
 
 use crate::command::CommandRegistry;
 
@@ -52,6 +53,7 @@ pub fn registry() -> CommandRegistry {
         .with(mode::PlanTick)
         .with(mode::PageInfo)
         .with(mode::Ingest)
+        .with(watchdog::Watchdog)
         .with(setup::Setup)
         .with(config::Config)
         .with(sources::Sources)

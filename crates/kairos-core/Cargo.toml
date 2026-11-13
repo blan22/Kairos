@@ -15,6 +15,9 @@ regex.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 
+[target.'cfg(unix)'.dependencies]
+libc.workspace = true
+
 [features]
 # 시험 빌드에서 설정 없이 읽는 프로필을 합성 프로필로 바꾼다. 배포 빌드에서는 켜지 않는다.
 test-profile = []

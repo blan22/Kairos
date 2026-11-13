@@ -1,5 +1,7 @@
 //! 'PATH의 상대 경로 항목은 실행 파일 후보가 아니다'.
 //! 현재 폴더를 바꾸므로 프로세스를 따로 쓰게 파일을 나눴다. 이 파일에는 시험을 더 두지 않는다.
+// 가짜 실행 파일(sh)과 unix 권한을 쓰는 시험이다. Windows는 단위 시험과 Windows 백엔드 시험으로 본다.
+#![cfg(unix)]
 #![allow(clippy::unwrap_used)]
 
 use std::fs;

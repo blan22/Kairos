@@ -2,6 +2,8 @@
 //! 다시 만들 수 없으니 이 시험이 깨지면 고정값을 고치기 전에 출력이 바뀌는 것이 의도인지부터 본다.
 //! 시나리오는 golden_scenarios.json이다. orca argv와 시간 제한, 결과 JSON, 표 덤프를 단계마다 맞춘다.
 //! `launchCommand`만 지시받은 대로 다르다. Node 쪽도 node 인자를 뺀 문자열을 넘긴다.
+// 가짜 실행 파일(sh)과 unix 권한을 쓰는 시험이다. Windows는 단위 시험과 Windows 백엔드 시험으로 본다.
+#![cfg(unix)]
 #![allow(clippy::unwrap_used)]
 
 mod common;

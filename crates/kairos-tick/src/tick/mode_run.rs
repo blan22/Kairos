@@ -3,7 +3,6 @@
 
 use std::collections::BTreeMap;
 use std::fs::DirBuilder;
-use std::os::unix::fs::DirBuilderExt;
 use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
@@ -11,6 +10,7 @@ use std::time::Duration;
 use kairos_agenda::ControlFile;
 use kairos_core::home::DIR_MODE;
 use kairos_core::model::{Outcome, QuerySpec, Source, SourceResult};
+use kairos_core::platform::CreateMode;
 use kairos_core::ports::Clock;
 use kairos_core::process::ProcessRunner;
 use kairos_core::{Instant, KairosResult};
@@ -105,7 +105,7 @@ impl ModeRun<'_> {
         }
 
         let cwd = collect_cwd(&self.config.home);
-        DirBuilder::new().recursive(true).mode(DIR_MODE).create(&cwd)?;
+        DirBuilder::new().recursive(true).create_mode(DIR_MODE).create(&cwd)?;
         let before = TickRunRepo::new(self.connection).last_run_id()?;
         let started = self.clock.now();
         let extra = BTreeMap::from([

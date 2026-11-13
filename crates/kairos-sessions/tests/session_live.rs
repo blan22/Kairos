@@ -1,4 +1,6 @@
 //! kairos-run의 띄우기 직전 재확인. 수집이 저장하지 못한 글을 가짜 gh로 준다. 실제 gh와 claude를 부르지 않는다.
+// 가짜 실행 파일(sh)과 unix 권한을 쓰는 시험이다. Windows는 단위 시험과 Windows 백엔드 시험으로 본다.
+#![cfg(unix)]
 #![allow(clippy::unwrap_used)]
 
 mod common;

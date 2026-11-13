@@ -444,8 +444,9 @@ impl Wizard<'_> {
     }
 
     fn install(&self) -> KairosResult<i32> {
-        let question = "설치하고 launchd에 등록해 수집을 시작할까요? (kairos install --register)";
-        if !self.agree(question, false)? {
+        let scheduler = kairos_ops::Scheduler::for_os(kairos_core::platform::Os::current()).name();
+        let question = format!("설치하고 {scheduler}에 등록해 수집을 시작할까요? (kairos install --register)");
+        if !self.agree(&question, false)? {
             self.console.print("설치하지 않았습니다. 나중에: kairos install --register");
             self.console.print("소스는 언제든 kairos sources on|off <소스>로 바꿉니다");
             return Ok(0);

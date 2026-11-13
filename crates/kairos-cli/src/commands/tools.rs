@@ -7,6 +7,7 @@ use std::fs;
 use std::path::Path;
 
 use kairos_core::KairosResult;
+use kairos_core::platform::{self, Os};
 use kairos_core::text::{sanitize, sanitize_text};
 use serde_json::json;
 
@@ -23,8 +24,54 @@ const SOURCE_PREFIX: &str = "source:";
 const RELEASE_MARK: &str = "release";
 /// 저장소 경로 길이 상한. 넘으면 모르는 값으로 본다.
 const MAX_SOURCE_BYTES: u64 = 4096;
-/// 릴리스 설치 명령. 다시 돌리면 최신 판으로 올린다.
-const RELEASE_COMMAND: &str = "curl --proto '=https' --tlsv1.2 -fsSL https://raw.githubusercontent.com/blan22/Kairos/main/scripts/install-release.sh | zsh";
+
+/// OS마다 다른 설치 스크립트와 릴리스 설치 명령.
+struct Installer {
+    /// 저장소 안의 설치 스크립트. 경로 조각이다.
+    script: [&'static str; 2],
+    /// 릴리스 설치 명령. 다시 돌리면 최신 판으로 올린다.
+    release: &'static str,
+    /// 붙여 넣을 셸. Windows는 PowerShell이다.
+    powershell: bool,
+}
+
+impl Installer {
+    const fn for_os(os: Os) -> Self {
+        match os {
+            Os::MacOs => Self {
+                script: ["scripts", "install.sh"],
+                release: "curl --proto '=https' --tlsv1.2 -fsSL https://raw.githubusercontent.com/blan22/Kairos/main/scripts/install-release.sh | zsh",
+                powershell: false,
+            },
+            Os::Linux => Self {
+                script: ["scripts", "install-linux.sh"],
+                release: "curl --proto '=https' --tlsv1.2 -fsSL https://raw.githubusercontent.com/blan22/Kairos/main/scripts/install-release-linux.sh | sh",
+                powershell: false,
+            },
+            Os::Windows => Self {
+                script: ["scripts", "install.ps1"],
+                release: "irm https://raw.githubusercontent.com/blan22/Kairos/main/scripts/install-release.ps1 | iex",
+                powershell: true,
+            },
+        }
+    }
+
+    /// 저장소 밖에서 쓰는 스크립트 이름(scripts/install.sh 꼴).
+    fn relative(&self) -> String {
+        self.script.join("/")
+    }
+
+    /// 저장소의 설치 스크립트로 올리는 명령.
+    fn update_command(&self, script: &Path) -> String {
+        let script = script.to_string_lossy();
+        if self.powershell {
+            // 실행 정책이 막아도 돌도록 -File로 넘긴다.
+            format!("powershell -NoProfile -ExecutionPolicy Bypass -File {} --update", powershell_quote(&script))
+        } else {
+            format!("{} --update", shell_quote(&script))
+        }
+    }
+}
 
 /// 설치 방식.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -37,23 +84,23 @@ enum Origin {
 }
 
 impl Origin {
-    fn read(home: &Path) -> Self {
+    fn read(home: &Path, os: Os) -> Self {
         let path = home.join(INSTALL_SOURCE_FILE);
         let small = fs::metadata(&path).is_ok_and(|meta| meta.is_file() && meta.len() <= MAX_SOURCE_BYTES);
         let Some(text) = small.then(|| fs::read_to_string(&path).ok()).flatten() else {
             return Self::Unknown;
         };
-        Self::parse(&text)
+        Self::parse(&text, os)
     }
 
-    fn parse(text: &str) -> Self {
+    fn parse(text: &str, os: Os) -> Self {
         let line = text.lines().next().unwrap_or("").trim();
         if line == RELEASE_MARK {
             return Self::Release;
         }
         match line.strip_prefix(SOURCE_PREFIX) {
             // 절대 경로만 받는다. 그대로 찍을 수 없는 값(제어 문자, bidi 문자)은 모르는 값으로 본다. 붙여 넣을 명령이 된다.
-            Some(repo) if repo.starts_with('/') && is_plain(repo) => Self::Source(repo.to_owned()),
+            Some(repo) if platform::is_absolute(os, repo) && is_plain(repo) => Self::Source(repo.to_owned()),
             _ => Self::Unknown,
         }
     }
@@ -81,6 +128,25 @@ pub(super) fn shell_quote(text: &str) -> String {
     if plain && !text.is_empty() { text.to_owned() } else { format!("'{}'", text.replace('\'', "'\\''")) }
 }
 
+/// 붙여 넣을 명령에 넣어도 되는 경로인가. 글자, 숫자, 공백, 경로 구분자와 `:._-+`만 받는다.
+fn is_safe_path(path: &str) -> bool {
+    path.chars().all(|letter| letter.is_alphanumeric() || " /\\:._-+".contains(letter))
+}
+
+/// PowerShell에 그대로 붙여 넣을 수 있게 작은따옴표로 감싼다. 작은따옴표 안에서는 `$`와 백틱을 해석하지 않는다.
+fn powershell_quote(text: &str) -> String {
+    // PowerShell은 유니코드 따옴표(‘ ’ ‚ ‛)도 작은따옴표로 읽는다. 모두 두 번 써서 닫히지 않게 한다.
+    let mut quoted = String::from("'");
+    for letter in text.chars() {
+        if matches!(letter, '\'' | '\u{2018}' | '\u{2019}' | '\u{201a}' | '\u{201b}') {
+            quoted.push(letter);
+        }
+        quoted.push(letter);
+    }
+    quoted.push('\'');
+    quoted
+}
+
 pub struct Update;
 
 impl Command for Update {
@@ -96,14 +162,18 @@ impl Command for Update {
     fn execute(&self, context: &AppContext, args: &[String]) -> KairosResult<i32> {
         let parsed = ArgParser::new(&JSON_ONLY).parse(args)?;
         let reply = Reply::new(context, parsed.flag("json"));
-        let origin = Origin::read(context.home().root());
+        let os = Os::current();
+        let installer = Installer::for_os(os);
+        let origin = Origin::read(context.home().root(), os);
         let (label, command) = match &origin {
+            // 셸이 해석할 글자가 든 경로는 명령으로 찍지 않는다. 붙여 넣는 셸(cmd, fish 등)마다 인용 규칙이 다르다.
+            Origin::Source(repo) if !is_safe_path(repo) => (format!("소스 빌드({})", sanitize(repo)), None),
             Origin::Source(repo) => {
-                let script = Path::new(repo).join("scripts").join("install.sh");
-                let command = script.is_file().then(|| format!("{} --update", shell_quote(&script.to_string_lossy())));
+                let script = installer.script.iter().fold(Path::new(repo).to_path_buf(), |path, part| path.join(part));
+                let command = script.is_file().then(|| installer.update_command(&script));
                 (format!("소스 빌드({})", sanitize(repo)), command)
             }
-            Origin::Release => ("릴리스".to_owned(), Some(RELEASE_COMMAND.to_owned())),
+            Origin::Release => ("릴리스".to_owned(), Some(installer.release.to_owned())),
             Origin::Unknown => ("기록 없음".to_owned(), None),
         };
         if reply.json() {
@@ -119,15 +189,25 @@ impl Command for Update {
         console.print(&format!("설치 방식: {label}"));
         match (&origin, command) {
             (_, Some(command)) => {
-                console.print("업데이트하려면 터미널에서 다음을 실행하세요. 설정과 데이터는 그대로 둡니다");
+                let shell = if installer.powershell { "PowerShell" } else { "터미널" };
+                console.print(&format!("업데이트하려면 {shell}에서 다음을 실행하세요. 설정과 데이터는 그대로 둡니다"));
                 console.print(&format!("  {command}"));
             }
+            (Origin::Source(repo), None) if !is_safe_path(repo) => {
+                console.print(&format!(
+                    "저장소 경로에 셸이 해석하는 글자가 있어 명령을 찍지 않습니다. 저장소 폴더에서 {} --update를 실행하세요",
+                    installer.relative()
+                ));
+            }
             (Origin::Source(_), None) => {
-                console.print("저장소가 그 자리에 없습니다. 저장소를 다시 받아 scripts/install.sh를 실행하세요");
+                console.print(&format!(
+                    "저장소가 그 자리에 없습니다. 저장소를 다시 받아 {}를 실행하세요",
+                    installer.relative()
+                ));
             }
             _ => {
                 console.print("설치 방식을 적어 두기 전의 판으로 설치했습니다. 받은 저장소에서 다음을 실행하세요");
-                console.print("  scripts/install.sh --update");
+                console.print(&format!("  {} --update", installer.relative()));
             }
         }
         Ok(0)
@@ -244,12 +324,52 @@ mod tests {
 
     #[test]
     fn 설치_방식은_한_줄에서_읽고_모양이_틀리면_모른다고_본다() {
-        assert_eq!(Origin::parse("release\n"), Origin::Release);
-        assert_eq!(Origin::parse("source:/synthetic/repo\n"), Origin::Source("/synthetic/repo".to_owned()));
-        assert_eq!(Origin::parse("source:/with space/repo"), Origin::Source("/with space/repo".to_owned()));
-        for bad in ["", "source:relative/repo", "source:/a\u{1b}[31m", "git:/x", "release extra"] {
-            assert_eq!(Origin::parse(bad), Origin::Unknown, "{bad:?}");
+        for os in [Os::MacOs, Os::Linux] {
+            assert_eq!(Origin::parse("release\n", os), Origin::Release);
+            assert_eq!(Origin::parse("source:/synthetic/repo\n", os), Origin::Source("/synthetic/repo".to_owned()));
+            assert_eq!(Origin::parse("source:/with space/repo", os), Origin::Source("/with space/repo".to_owned()));
+            for bad in ["", "source:relative/repo", "source:/a\u{1b}[31m", "git:/x", "release extra", "source:C:\\repo"]
+            {
+                assert_eq!(Origin::parse(bad, os), Origin::Unknown, "{bad:?}");
+            }
         }
+        let windows = Origin::parse("source:C:\\Users\\synth\\kairos\r\n", Os::Windows);
+        assert_eq!(windows, Origin::Source("C:\\Users\\synth\\kairos".to_owned()));
+        for bad in ["source:/synthetic/repo", "source:repo", "source:C:repo"] {
+            assert_eq!(Origin::parse(bad, Os::Windows), Origin::Unknown, "{bad:?}");
+        }
+    }
+
+    #[test]
+    fn 셸이_해석하는_글자가_든_경로는_명령에_넣지_않는다() {
+        for good in ["/synthetic/my repo", "C:\\Users\\synth\\kairos", "/합성/저장소-1.0+x"] {
+            assert!(is_safe_path(good), "{good}");
+        }
+        for bad in
+            ["/a'b", "/a&b", "/a|b", "/a^b", "/%PATH%", "/a$b", "/a`b", "/a;b", "/a(b)", "/a<b>", "/a!b", "/a\u{2019}b"]
+        {
+            assert!(!is_safe_path(bad), "{bad}");
+        }
+    }
+
+    #[test]
+    fn 업데이트_명령은_os의_설치_스크립트와_셸을_따른다() {
+        let mac = Installer::for_os(Os::MacOs);
+        assert_eq!(
+            mac.update_command(Path::new("/synthetic/repo/scripts/install.sh")),
+            "/synthetic/repo/scripts/install.sh --update"
+        );
+        assert!(mac.release.ends_with("scripts/install-release.sh | zsh"));
+        let linux = Installer::for_os(Os::Linux);
+        assert_eq!(linux.relative(), "scripts/install-linux.sh");
+        assert!(linux.release.ends_with("scripts/install-release-linux.sh | sh"));
+        let windows = Installer::for_os(Os::Windows);
+        assert_eq!(
+            windows.update_command(Path::new("C:\\it's\\$x\\install.ps1")),
+            "powershell -NoProfile -ExecutionPolicy Bypass -File 'C:\\it''s\\$x\\install.ps1' --update"
+        );
+        assert_eq!(powershell_quote("a\u{2019}b"), "'a\u{2019}\u{2019}b'");
+        assert!(windows.release.starts_with("irm https://") && windows.release.ends_with("install-release.ps1 | iex"));
     }
 
     #[test]

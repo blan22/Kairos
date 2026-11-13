@@ -1,9 +1,9 @@
-use std::fs::{self, OpenOptions, Permissions};
-use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
+use std::fs::OpenOptions;
 use std::path::Path;
 use std::time::Duration;
 
 use kairos_core::home::FILE_MODE;
+use kairos_core::platform::{CreateMode, set_mode};
 use kairos_core::{KairosError, KairosHome, KairosResult};
 use rusqlite::Connection;
 
@@ -36,8 +36,8 @@ impl Database {
         home.ensure()?;
         let path = home.db_path();
         // SQLite는 WAL과 SHM을 DB 파일과 같은 권한으로 만든다. 그래서 DB를 먼저 0600으로 만든다.
-        OpenOptions::new().append(true).create(true).mode(FILE_MODE).open(&path)?;
-        fs::set_permissions(&path, Permissions::from_mode(FILE_MODE))?;
+        OpenOptions::new().append(true).create(true).create_mode(FILE_MODE).open(&path)?;
+        set_mode(&path, FILE_MODE)?;
 
         let connection = Connection::open(&path).map_err(sql_error)?;
         connection.busy_timeout(BUSY_TIMEOUT).map_err(sql_error)?;
@@ -50,7 +50,7 @@ impl Database {
         for suffix in ["-wal", "-shm"] {
             let side = side_file(&path, suffix);
             if side.exists() {
-                fs::set_permissions(&side, Permissions::from_mode(FILE_MODE))?;
+                set_mode(&side, FILE_MODE)?;
             }
         }
         Ok(database)

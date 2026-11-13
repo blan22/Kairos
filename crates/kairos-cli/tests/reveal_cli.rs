@@ -1,4 +1,6 @@
 //! 알림을 누르면 헬퍼가 부르는 reveal과 next의 reveal 필드. 가짜 orca와 open만 부른다.
+// 가짜 실행 파일(sh)과 unix 권한을 쓰는 시험이다. Windows는 단위 시험과 Windows 백엔드 시험으로 본다.
+#![cfg(unix)]
 #![allow(clippy::unwrap_used)]
 
 mod common;
@@ -41,9 +43,12 @@ fn reveal은_파일을_0600으로_쓰고_패널을_연_뒤_orca를_앞으로_끌
     assert_eq!(body["reveal"]["items"], json!([3, 7]), "같은 ID는 한 번만 둔다");
     let at = body["reveal"]["at"].as_i64().unwrap();
     assert!((before..=after).contains(&at), "{at}");
-    assert_eq!((&body["panelOpened"], &body["activated"]), (&json!(true), &json!(true)));
+    // 앞으로 끌어오기(`open -b`)는 macOS에만 있다. 다른 OS는 패널만 연다.
+    let mac = cfg!(target_os = "macos");
+    assert_eq!((&body["panelOpened"], &body["activated"]), (&json!(true), &json!(mac)));
     assert_eq!(lines(&orca), PANEL_OPEN_ARGS);
-    assert_eq!(lines(&open), ["-b", ORCA_BUNDLE_ID]);
+    let expected_open: Vec<String> = if mac { vec!["-b".into(), ORCA_BUNDLE_ID.into()] } else { Vec::new() };
+    assert_eq!(lines(&open), expected_open);
     let written: Value = serde_json::from_str(&fs::read_to_string(reveal_file(&cli)).unwrap()).unwrap();
     assert_eq!(written, json!({ "items": [3, 7], "at": at }));
     assert_eq!(fs::metadata(reveal_file(&cli)).unwrap().permissions().mode() & 0o777, 0o600);
@@ -64,6 +69,8 @@ fn reveal은_orca를_열지_못해도_파일을_남기고_성공으로_답한다
     assert_eq!(cli.run(&["reveal", "5", "6"]).out, "알림의 항목 2건을 패널에 보여 줍니다\n");
 }
 
+/// `open -b`로 Orca를 띄우는 것은 macOS에만 있다.
+#[cfg(target_os = "macos")]
 #[test]
 fn reveal은_orca가_꺼져_있으면_띄운_뒤_패널을_다시_연다() {
     let mut cli = Cli::new();
@@ -130,4 +137,26 @@ fn next는_10분_안의_reveal만_싣고_없거나_깨졌으면_키가_없다() 
         let body = cli.json(&["next"]).body();
         assert_eq!((&body["schema"], body.get("reveal")), (&json!(1), None), "{content}");
     }
+}
+
+#[test]
+fn reveal_link는_윈도우_토스트의_링크에서_항목_id만_받는다() {
+    let mut cli = Cli::new();
+    fake(&mut cli, "KAIROS_ORCA", "fake-orca", 0);
+    fake(&mut cli, "KAIROS_OPEN", "fake-open", 0);
+    let done = cli.json(&["reveal", "--link", "kairos-reveal:items=4,9/"]);
+    assert_eq!(done.status, 0, "{}", done.err);
+    assert_eq!(done.body()["reveal"]["items"], json!([4, 9]));
+
+    for bad in ["kairos-reveal:items=4;calc", "https://contoso.example/x", "kairos-reveal:items=0"] {
+        let done = cli.json(&["reveal", "--link", bad]);
+        assert_ne!(done.status, 0, "{bad}");
+    }
+    assert_ne!(cli.json(&["reveal", "3", "--link", "kairos-reveal:items=4"]).status, 0, "둘을 함께 받지 않는다");
+
+    // 감시자 경고처럼 항목이 없는 알림은 아무것도 하지 않는다.
+    fs::remove_file(reveal_file(&cli)).unwrap();
+    let done = cli.run(&["reveal", "--link", "kairos-reveal:items="]);
+    assert_eq!(done.status, 0, "{}", done.err);
+    assert!(!reveal_file(&cli).exists());
 }

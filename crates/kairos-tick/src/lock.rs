@@ -2,15 +2,13 @@
 
 use std::fs::{self, OpenOptions};
 use std::io::{self, Write};
-use std::os::unix::fs::{MetadataExt, OpenOptionsExt};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use kairos_core::home::FILE_MODE;
+use kairos_core::platform::CreateMode;
 use kairos_core::ports::Clock;
 use kairos_core::{KairosHome, KairosResult, js};
-use rustix::io::Errno;
-use rustix::process::{Pid, test_kill_process, test_kill_process_group};
 use serde_json::{Value, json};
 
 use crate::tick::TOTAL_LIMIT_MS;
@@ -21,9 +19,19 @@ pub const LOCK_STALE_MS: i64 = TOTAL_LIMIT_MS * 2;
 pub const LOCK_LIVE_PID_MS: i64 = 24 * 60 * 60 * 1000;
 
 /// `statSync(path).mtimeMs`. Node가 계산하는 식 그대로라 소수점 아래까지 같다.
+#[cfg(unix)]
 pub(crate) fn mtime_ms(path: &Path) -> io::Result<f64> {
+    use std::os::unix::fs::MetadataExt;
     let metadata = fs::metadata(path)?;
     Ok(metadata.mtime() as f64 * 1000.0 + metadata.mtime_nsec() as f64 / 1_000_000.0)
+}
+
+/// unix가 아니면 표준 라이브러리의 수정 시각을 쓴다.
+#[cfg(not(unix))]
+pub(crate) fn mtime_ms(path: &Path) -> io::Result<f64> {
+    let modified = fs::metadata(path)?.modified()?;
+    let since = modified.duration_since(std::time::UNIX_EPOCH).map_err(io::Error::other)?;
+    Ok(since.as_secs_f64() * 1000.0)
 }
 
 /// `rmSync(path, { force: true })`.
@@ -36,7 +44,10 @@ fn remove_if_present(path: &Path) -> io::Result<()> {
 
 /// `process.kill(pid, 0)`이 ESRCH로 끝나는가. 살아 있거나 EPERM이거나 pid가 정수 범위 밖이면 거짓이다.
 /// EPERM은 다른 사용자(root)의 프로세스가 pid를 물려받은 경우다.
+#[cfg(unix)]
 fn pid_is_gone(pid: f64) -> bool {
+    use rustix::io::Errno;
+    use rustix::process::{Pid, test_kill_process, test_kill_process_group};
     let number = pid as i32;
     if f64::from(number) != pid {
         return false;
@@ -47,6 +58,12 @@ fn pid_is_gone(pid: f64) -> bool {
         negative => negative.checked_neg().and_then(Pid::from_raw).map(test_kill_process_group),
     };
     matches!(probe, Some(Err(Errno::SRCH)))
+}
+
+/// unix가 아니면 pid를 확인하지 않는다. 오래된 잠금(`LOCK_STALE_MS`)만 넘겨받는다.
+#[cfg(not(unix))]
+const fn pid_is_gone(_pid: f64) -> bool {
+    false
 }
 
 /// 잠금 파일. 살아 있는 프로세스가 쥐고 있으면 잡지 못하고, 죽었거나 오래된 잠금은 넘겨받는다.
@@ -68,7 +85,7 @@ impl CollectLock {
     }
 
     fn create(&self, now: i64) -> KairosResult<bool> {
-        let opened = OpenOptions::new().write(true).create_new(true).mode(FILE_MODE).open(&self.path);
+        let opened = OpenOptions::new().write(true).create_new(true).create_mode(FILE_MODE).open(&self.path);
         match opened {
             Ok(mut file) => {
                 let text = json!({ "pid": std::process::id(), "at": now }).to_string();
@@ -96,7 +113,7 @@ impl CollectLock {
     /// 표는 찰나만 쥔다. 있으면 다른 프로세스가 넘겨받는 중이므로 양보한다. 죽어서 남긴 표는 치우고 이번 틱은 쉰다.
     fn take_over(&self, now: i64) -> KairosResult<bool> {
         let ticket = self.ticket();
-        match OpenOptions::new().write(true).create_new(true).mode(FILE_MODE).open(&ticket) {
+        match OpenOptions::new().write(true).create_new(true).create_mode(FILE_MODE).open(&ticket) {
             Ok(_) => {}
             Err(error) if error.kind() == io::ErrorKind::AlreadyExists => {
                 // 그사이 표가 사라졌으면 다음 틱에 다시 본다.
@@ -147,7 +164,13 @@ impl CollectLock {
 }
 
 #[cfg(test)]
+#[cfg(unix)]
 mod tests {
+    use std::os::unix::fs::PermissionsExt;
+
+    use rustix::io::Errno;
+    use rustix::process::{Pid, test_kill_process};
+
     use super::*;
     use kairos_core::Instant;
     use kairos_core::ports::{FixedClock, SystemClock};
@@ -196,6 +219,10 @@ mod tests {
     /// 원본은 process.kill을 가짜로 바꿨다. pid 1은 root의 launchd라 실제 EPERM이 돌아온다.
     #[test]
     fn pid가_다른_사용자_프로세스로_재사용되면_eperm_하루가_지난_잠금만_넘겨받는다() {
+        // root로 돌면(컨테이너) pid 1에도 신호를 보낼 수 있어 EPERM이 오지 않는다. 이 장면을 만들 수 없다.
+        if rustix::process::geteuid().is_root() {
+            return;
+        }
         let (_dir, home) = temp_home();
         assert_eq!(test_kill_process(Pid::from_raw(1).unwrap()), Err(Errno::PERM));
         held(&home, 1, 3_600_000);
@@ -227,7 +254,6 @@ mod tests {
 
     #[test]
     fn 잠금_파일은_0600이고_pid와_시각을_적는다() {
-        use std::os::unix::fs::PermissionsExt;
         let (_dir, home) = temp_home();
         let clock = Arc::new(FixedClock(Instant::from_millis(1234)));
         assert!(lock_at(&home, clock.clone()).acquire().unwrap());

@@ -27,4 +27,5 @@ MCP 서버는 기본으로 읽기 도구(`kairos_next`, `kairos_list`)만 엽니
 - 세션 시작 도구는 `claude-code` 호스트까지 켜야 나옵니다.
 - kairos 세션 안(`KAIROS_SESSION`)에서는 수락 명령이 거절됩니다. kairos 세션은 `--strict-mcp-config`로 뜨므로 이 서버를 읽지도 않습니다.
 - 슬래시 명령의 `allowed-tools`는 그 명령이 호출할 도구 하나만 허용합니다. 다른 대화에서 모델이 상태를 바꾸는 도구를 호출하려 하면 Claude Code가 권한을 묻습니다.
-- 실행 파일은 `~/Library/Application Support/kairos/current/bin/kairos`만 씁니다. 본인 소유이고 다른 사용자가 고칠 수 없을 때만 실행합니다.
+- 실행 파일은 설치본의 `current/bin/kairos`만 씁니다. 자리는 macOS가 `~/Library/Application Support/kairos`, Linux가 `~/.local/share/kairos`입니다. 본인 소유이고 다른 사용자가 고칠 수 없을 때만 실행합니다.
+- Windows에서는 Git Bash 같은 sh에서 `%LOCALAPPDATA%\kairos\current\bin\kairos.exe`를 실행합니다. 권한 비트가 없어 소유자와 권한은 검사하지 않습니다.

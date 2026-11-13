@@ -11,6 +11,7 @@ mod command;
 mod commands;
 mod help;
 mod js_number;
+mod launch;
 mod reply;
 mod session;
 
@@ -20,6 +21,14 @@ pub use app::{AppContext, Console, InstallLayout};
 pub use command::{Command, CommandRegistry};
 pub use commands::registry;
 pub use session::run_session;
+
+/// `kairos-launch <명세 파일>`. Windows 작업 스케줄러가 부른다. 설정을 읽지 않는다. 옆의 kairos가 읽는다.
+pub fn kairos_launch_main() -> i32 {
+    let env = std::env::vars_os()
+        .filter_map(|(key, value)| Some((key.into_string().ok()?, value.into_string().ok()?)))
+        .collect();
+    launch::launch_main(&process_args(), &kairos_core::process::SystemProcessRunner, env)
+}
 
 /// 프로그램 이름을 뺀 인자. 깨진 바이트는 U+FFFD가 된다. `std::env::args`는 패닉한다.
 fn process_args() -> Vec<String> {
@@ -45,6 +54,12 @@ fn home_in_worktree() -> Option<String> {
         home.root().display(),
         worktree.display()
     ))
+}
+
+/// Windows에서 데이터 폴더가 본인 전용 자리가 아니면 그 까닭. 설정과 실행기 명세를 소유자 확인 없이 읽게 되므로 멈춘다.
+fn home_not_private() -> Option<String> {
+    let home = kairos_core::KairosHome::from_env();
+    kairos_core::platform::Os::current().private_home_problem(home.root(), &kairos_core::home::user_home())
 }
 
 /// 시작 전에 멈춘다. `--json`이면 계약의 오류 모양으로 낸다.
@@ -75,6 +90,9 @@ pub fn kairos_main() -> i32 {
     if !help && let Some(message) = home_in_worktree() {
         return refuse(&args, "home_in_git_worktree", &message);
     }
+    if !help && let Some(message) = home_not_private() {
+        return refuse(&args, "home_not_private", &message);
+    }
     if let Err(error) = install_profile() {
         let diagnostic = matches!(
             args.first().map(String::as_str),
@@ -90,7 +108,7 @@ pub fn kairos_main() -> i32 {
 
 /// `kairos-run`의 몸통.
 pub fn kairos_run_main() -> i32 {
-    if let Some(message) = home_in_worktree() {
+    if let Some(message) = home_in_worktree().or_else(home_not_private) {
         eprintln!("kairos-run: {message}");
         return 1;
     }

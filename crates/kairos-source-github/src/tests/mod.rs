@@ -11,4 +11,5 @@ mod mention;
 mod parse;
 mod queries;
 mod source;
+#[cfg(unix)]
 mod system;

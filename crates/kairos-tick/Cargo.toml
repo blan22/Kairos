@@ -17,9 +17,11 @@ kairos-policy = { path = "../kairos-policy" }
 kairos-source-github = { path = "../kairos-source-github" }
 kairos-source-mcp = { path = "../kairos-source-mcp" }
 kairos-store.workspace = true
-rustix = { version = "1", features = ["process"] }
 serde.workspace = true
 serde_json.workspace = true
+
+[target.'cfg(unix)'.dependencies]
+rustix = { version = "1", features = ["process"] }
 signal-hook.workspace = true
 
 [dev-dependencies]

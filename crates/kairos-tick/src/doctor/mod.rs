@@ -13,11 +13,12 @@ use kairos_agenda::{
     StateBuilder,
 };
 use kairos_core::model::{Outcome, Source, SourceName};
+use kairos_core::platform::Os;
 use kairos_core::ports::Clock;
 use kairos_core::process::{ProcessRequest, ProcessRunner};
 use kairos_core::{Instant, KairosHome, KairosResult};
 use kairos_ledger::{OffDateBook, check_invariants};
-use kairos_ops::{LABELS, MaintenanceRecord, ResumeFile, SLEEP_INTERRUPTED, ToolResults};
+use kairos_ops::{LABELS, MaintenanceRecord, ResumeFile, SLEEP_INTERRUPTED, Scheduler, ToolResults};
 use kairos_store::Database;
 
 use crate::halt::{HaltFlag, js_number_text};
@@ -42,8 +43,10 @@ pub struct DoctorConfig {
     pub home: KairosHome,
     /// ~/.claude가 있는 폴더.
     pub user_home: PathBuf,
-    /// 프로세스 환경. KAIROS_CLAUDE와 LaunchAgents를 찾을 HOME을 읽는다.
+    /// 프로세스 환경. KAIROS_CLAUDE와 스케줄러 파일 폴더를 찾을 HOME을 읽는다.
     pub env: BTreeMap<String, String>,
+    /// 스케줄러 파일을 찾을 운영체제. 운영은 `Os::current()`다.
+    pub os: Os,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -245,10 +248,24 @@ impl Doctor {
         });
     }
 
-    fn launch_agents_installed(&self) -> usize {
-        let user = self.config.env.get("HOME").map_or("", String::as_str);
-        let agents = Path::new(user).join("Library").join("LaunchAgents");
-        LABELS.iter().filter(|label| agents.join(format!("{label}.plist")).exists()).count()
+    /// 설치된 스케줄러 파일 수. 라벨마다 등록에 쓰는 파일(plist, timer, 작업 XML)을 센다.
+    fn jobs_installed(&self) -> usize {
+        let env = |key: &str| self.config.env.get(key).map_or("", String::as_str);
+        let user = Path::new(env("HOME"));
+        let dir = match self.config.os {
+            Os::MacOs => user.join("Library").join("LaunchAgents"),
+            Os::Linux => {
+                let config = env("XDG_CONFIG_HOME");
+                let config = if config.starts_with('/') { PathBuf::from(config) } else { user.join(".config") };
+                config.join("systemd").join("user")
+            }
+            Os::Windows => self.config.home.root().join("tasks"),
+        };
+        let scheduler = Scheduler::for_os(self.config.os);
+        LABELS
+            .iter()
+            .filter(|label| scheduler.file_names(label).first().is_some_and(|name| dir.join(name).exists()))
+            .count()
     }
 
     fn sources_section(
@@ -397,12 +414,13 @@ impl Doctor {
                 )
             },
         ));
-        let installed = self.launch_agents_installed();
-        found.lines.push(if installed == LABELS.len() {
-            "LaunchAgent: 2개 설치됨".to_owned()
-        } else {
-            format!("LaunchAgent: {installed}개 설치됨")
-        });
+        let installed = self.jobs_installed();
+        let kind = match self.config.os {
+            Os::MacOs => "LaunchAgent",
+            Os::Linux => "systemd timer",
+            Os::Windows => "예약 작업",
+        };
+        found.lines.push(format!("{kind}: {installed}개 설치됨"));
 
         self.notifier_lines(found);
         found.lines.push(format!("표시: {}", display_line(control, gate, at)));
