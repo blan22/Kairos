@@ -150,7 +150,7 @@ fn plist_절대_경로_3분과_5분_간격_shim_없음_자리표시자_없음() 
     assert!(watchdog.content.contains("<string>/bin/zsh</string>"));
     assert!(watchdog.content.contains("<string>-f</string>"));
     assert_eq!(plan.runtime_dir, test.join(VERSION));
-    assert_eq!(VERSION, "0.4.0");
+    assert_eq!(VERSION, "0.4.1");
 }
 
 #[test]
