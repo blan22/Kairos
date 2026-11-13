@@ -94,6 +94,10 @@ impl Wizard<'_> {
             return Ok(());
         }
         let dir = dir.to_string_lossy();
+        // 타입 파일(`.orca/types`)을 승인 전에 만든다. Orca의 무결성 검사는 이 폴더까지 해시에 넣는데,
+        // 처음 적재는 해시를 승인에 적은 뒤에 타입 파일을 쓴다. 그러면 워커가 해시가 다르다며 뜨지 않는다(측정).
+        // 실패해도 적재는 한다. 타입 파일을 못 쓰는 Orca는 적재에서도 쓰지 않는다.
+        self.run(&orca, &["plugin", "types", dir.as_ref()], SHORT_TIMEOUT);
         let load = ["plugin", "dev", "load", dir.as_ref()];
         let first = self.run(&orca, &load, SHORT_TIMEOUT);
         let text = text_of(&first);
@@ -118,7 +122,7 @@ impl Wizard<'_> {
         }
         let approved = self.run(&orca, &[&load[..], &["--approve", &fingerprint]].concat(), SHORT_TIMEOUT);
         if approved.success() {
-            self.console.print("Orca 패널을 승인했습니다. 사이드바의 종 아이콘이나 Mod+Alt+Shift+K로 엽니다");
+            self.console.print("Orca 패널을 승인했습니다. 사이드바의 kairos 아이콘이나 Mod+Alt+Shift+K로 엽니다");
         } else {
             self.console.print("승인하지 못했습니다");
             self.print_orca(&text_of(&approved));
