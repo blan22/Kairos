@@ -2,7 +2,36 @@ import { assert, test } from 'orca/testing'
 import { accepted, item, listJson, manual, offered, parked, startable } from './fixtures.ts'
 import { parseList } from './parse.ts'
 import type { ItemRow } from './protocol.ts'
-import { canStart, defaultOpen, groupRows, hasOffer, isCompact, isTabId, ROW_LIMIT, sectionOf, sortReady, sortRows, TAB_ORDER, TAB_SECTIONS, tabCount, tabOf, trimRows, visibleCount, type Section } from './rows.ts'
+import {
+  canStart,
+  commitMarks,
+  defaultOpen,
+  EMPTY_MARKS,
+  groupRows,
+  hasFresh,
+  hasOffer,
+  isCompact,
+  isFresh,
+  isProviderId,
+  isTabId,
+  marksOf,
+  providerOf,
+  providersOf,
+  ROW_LIMIT,
+  sameMarks,
+  sectionOf,
+  sortReady,
+  sortRows,
+  startMarks,
+  TAB_ORDER,
+  TAB_SECTIONS,
+  tabCount,
+  tabOf,
+  trimRows,
+  visibleCount,
+  type Marks,
+  type Section,
+} from './rows.ts'
 
 const rows = (...raw: Record<string, unknown>[]): ItemRow[] => parseList(listJson(raw))?.items ?? []
 const row = (raw: Record<string, unknown>): ItemRow => rows(raw)[0] as ItemRow
@@ -85,21 +114,21 @@ test('자르기 순서에서는 세션이 긴급보다 앞이다', () => {
 })
 
 test('탭은 묶음을 빠짐없이 한 번씩 나눠 갖고 긴급과 제안은 지금에 있다', () => {
-  assert.deepEqual(TAB_ORDER, ['now', 'waiting', 'sessions', 'status'])
+  assert.deepEqual(TAB_ORDER, ['now', 'waiting', 'sessions'])
   assert.deepEqual(TAB_SECTIONS.now, ['urgent', 'offer', 'today'])
   assert.deepEqual(TAB_SECTIONS.waiting, ['relaxed', 'parked', 'baseline'])
   assert.deepEqual(TAB_SECTIONS.sessions, ['running'])
-  assert.deepEqual(TAB_SECTIONS.status, [])
   const all: Section[] = ['running', 'urgent', 'offer', 'today', 'relaxed', 'parked', 'baseline']
   assert.deepEqual([...TAB_ORDER.flatMap(tab => TAB_SECTIONS[tab])].sort(), [...all].sort())
   assert.deepEqual(all.map(tabOf), ['sessions', 'now', 'now', 'now', 'waiting', 'waiting', 'waiting'])
-  for (const value of ['now', 'waiting', 'sessions', 'status']) assert.equal(isTabId(value), true, value)
-  for (const value of ['', 'theory', 'constructor', '__proto__', null, undefined, 1]) assert.equal(isTabId(value), false, String(value))
+  for (const value of ['now', 'waiting', 'sessions']) assert.equal(isTabId(value), true, value)
+  // 수집 상태는 탭이 아니라 머리말의 도구다.
+  for (const value of ['status', '', 'theory', 'constructor', '__proto__', null, undefined, 1]) assert.equal(isTabId(value), false, String(value))
 })
 
 test('탭 건수는 그 탭의 묶음을 더하고 넘기지 않은 줄도 센다', () => {
   const groups = groupRows(rows(item(1, { tier: 'P0' }), startable(2), item(3), item(4, { tier: 'P2' }), parked(5), item(6, { baseline: true }), accepted(7)))
-  assert.deepEqual([tabCount('now', groups, {}), tabCount('waiting', groups, {}), tabCount('sessions', groups, {}), tabCount('status', groups, {})], [3, 3, 1, 0])
+  assert.deepEqual([tabCount('now', groups, {}), tabCount('waiting', groups, {}), tabCount('sessions', groups, {})], [3, 3, 1])
   assert.equal(tabCount('waiting', groups, { relaxed: 4, today: 9, constructor: 7 }), 7)
 })
 
@@ -167,4 +196,108 @@ test('세션 소식은 실패, 질문, 확인, 준비됨, 끝남, 그 밖 순서
 
 test('기다려도 되는 묶음만 한 줄로 그린다', () => {
   assert.deepEqual(['urgent', 'running', 'offer', 'today', 'relaxed', 'parked', 'baseline'].filter(section => isCompact(section as never)), ['relaxed', 'parked', 'baseline'])
+})
+
+test('프로바이더는 수집 소스 이름이고 직접 추가와 모르는 소스는 따로 둔다', () => {
+  assert.equal(providerOf(row(item(1))), 'github')
+  assert.equal(providerOf(row(item(1, { source: 'slack', sourceLabel: 'Slack' }))), 'slack')
+  assert.equal(providerOf(row(item(1, { source: 'calendar' }))), 'calendar')
+  assert.equal(providerOf(row(manual(1))), 'manual')
+  // 모르는 소스나 출처 없는 일은 기타다. 표에 없는 이름이 칩이 되지 않는다.
+  assert.equal(providerOf(row(item(1, { source: 'figma' }))), 'other')
+  assert.equal(providerOf(row(item(1, { source: 'constructor' }))), 'other')
+  assert.equal(providerOf(row(item(1, { source: null }))), 'other')
+  for (const value of ['all', 'github', 'slack', 'calendar', 'gmail', 'notion', 'manual', 'other']) assert.equal(isProviderId(value), true, value)
+  for (const value of ['', 'GitHub', 'figma', '__proto__', null, 1]) assert.equal(isProviderId(value), false, String(value))
+})
+
+test('칩은 연결된 소스를 일이 없어도 늘 같은 순서로 두고 직접 추가와 기타는 일이 있을 때만 둔다', () => {
+  const sources = [
+    { source: 'notion', status: 'ok' },
+    { source: 'calendar', status: 'not_connected' },
+    { source: 'github', status: 'delayed' },
+    { source: 'figma', status: 'ok' },
+  ]
+  assert.deepEqual(providersOf([], sources), ['all', 'github', 'notion'])
+  const mixed = rows(item(1, { source: 'slack' }), manual(2), item(3, { source: 'gmail' }))
+  assert.deepEqual(providersOf(mixed, sources), ['all', 'github', 'slack', 'gmail', 'notion', 'manual'])
+  assert.deepEqual(providersOf(rows(item(1, { source: 'calendar' })), sources), ['all', 'github', 'calendar', 'notion'])
+})
+
+const fresh = (marks: Marks, list: ItemRow[]): number[] => list.filter(each => isFresh(each, marks)).map(each => each.id).sort((a, b) => a - b)
+
+test('처음 읽은 목록이 새 일의 기준이고 그 뒤에 열린 일만 새 일이다', () => {
+  const first = rows(item(3), item(5))
+  assert.deepEqual(fresh(EMPTY_MARKS, first), [])
+  const marks = startMarks(EMPTY_MARKS, first)
+  assert.deepEqual(marks, { floor: 5, seen: [], known: 5, unseen: 0 })
+  // 이미 기준이 있으면 그대로 둔다.
+  assert.equal(startMarks(marks, rows(item(9))), marks)
+  const later = rows(item(3), item(5), item(8), item(9, { baseline: true }), manual(10), parked(11), accepted(12), { ...item(13), state: 'accepted' })
+  // 기준선, 직접 추가, 미룬 일, 세션에 맡긴 일은 사용자가 이미 아는 일이다.
+  assert.deepEqual(fresh(marks, later), [8])
+})
+
+test('그린 새 일은 본 것으로 적고 모두 본 앞쪽은 기준을 당긴다', () => {
+  const marks = startMarks(EMPTY_MARKS, rows(item(5)))
+  const list = rows(item(5), item(6), item(7), item(8))
+  // 7만 보았다. 6은 아직 새 일이라 기준은 5에 남고 7과 8 사이가 갈린다.
+  const once = commitMarks(marks, new Set([7]), list)
+  assert.deepEqual(once, { floor: 5, seen: [7], known: 8, unseen: 2 })
+  assert.deepEqual(fresh(once, list), [6, 8])
+  // 6을 보면 7까지는 모두 본 것이라 기준이 7로 오고 본 목록에서 빠진다.
+  const twice = commitMarks(once, new Set([6]), list)
+  assert.deepEqual(twice, { floor: 7, seen: [], known: 8, unseen: 1 })
+  // 아무것도 보지 않아도 새 일 수와 가장 큰 ID는 다시 센다. 닫힌 일은 새 일에서 빠진다.
+  const closed = commitMarks(twice, new Set(), rows(item(5)))
+  assert.deepEqual(closed, { floor: 7, seen: [], known: 7, unseen: 0 })
+  assert.equal(sameMarks(twice, commitMarks(twice, new Set(), list)), true)
+  assert.equal(sameMarks(once, twice), false)
+})
+
+test('상태 표시줄 점은 센 뒤에 열린 일이나 아직 보지 않은 일이 있을 때만 켠다', () => {
+  assert.equal(hasFresh(EMPTY_MARKS, 99), false)
+  const quiet: Marks = { floor: 7, seen: [], known: 8, unseen: 0 }
+  assert.equal(hasFresh(quiet, 8), false)
+  assert.equal(hasFresh(quiet, null), false)
+  assert.equal(hasFresh(quiet, 9), true)
+  assert.equal(hasFresh({ ...quiet, unseen: 1 }, 8), true)
+})
+
+test('저장소의 기준은 모양이 틀리면 버리고 ID는 0 이상의 정수만 받는다', () => {
+  assert.deepEqual(marksOf(null), EMPTY_MARKS)
+  assert.deepEqual(marksOf('marks'), EMPTY_MARKS)
+  assert.deepEqual(marksOf({ floor: 3, seen: [4, -1, 2.5, '5', 6], known: 9, unseen: 2 }), { floor: 3, seen: [4, 6], known: 9, unseen: 2 })
+  assert.deepEqual(marksOf({ floor: -1, seen: 'x', known: 'y', unseen: Number.NaN }), EMPTY_MARKS)
+  // 아주 긴 본 목록은 뒤쪽만 남긴다.
+  assert.equal(marksOf({ floor: 0, seen: Array.from({ length: 500 }, (_, index) => index + 1), known: 0, unseen: 0 }).seen.length, 200)
+})
+
+test('기준은 kairos가 센 가장 큰 ID까지 덮고 목록이 길어 넘기지 않은 일도 그때 있던 일로 친다', () => {
+  assert.deepEqual(startMarks(EMPTY_MARKS, rows(item(3)), 120), { floor: 120, seen: [], known: 120, unseen: 0 })
+  const marks = startMarks(EMPTY_MARKS, rows(item(3)))
+  // 넘기지 않은 일까지 센 newest가 known이 되어 상태 표시줄 점이 남지 않는다.
+  const after = commitMarks(marks, new Set(), rows(item(3)), 130)
+  assert.equal(after.known, 130)
+  assert.equal(hasFresh(after, 130), false)
+})
+
+test('kairos 기록을 지워 ID가 기준보다 작아지면 기준을 다시 잡는다', () => {
+  const old: Marks = { floor: 500, seen: [501], known: 501, unseen: 0 }
+  assert.deepEqual(startMarks(old, rows(item(1), item(2)), 2), { floor: 2, seen: [], known: 2, unseen: 0 })
+  // 그 뒤로 열린 일은 다시 새 일이다.
+  assert.deepEqual(fresh(startMarks(old, rows(item(1), item(2)), 2), rows(item(1), item(2), item(3))), [3])
+  // 목록이 아직 없거나 kairos가 셀 일이 없으면 그대로 둔다.
+  assert.equal(startMarks(old, [], null), old)
+})
+
+test('본 ID가 넘치면 버리는 ID까지 기준을 당겨 본 일이 다시 새 일이 되지 않는다', () => {
+  const marks = startMarks(EMPTY_MARKS, rows(item(1)))
+  const list = rows(...Array.from({ length: 206 }, (_, index) => item(index + 1)))
+  // 2번은 끝내 보지 않고 3~206번을 본다.
+  const shown = new Set(Array.from({ length: 204 }, (_, index) => index + 3))
+  const after = commitMarks(marks, shown, list)
+  assert.ok(after.seen.length <= 200)
+  assert.deepEqual(fresh(after, list), [])
+  assert.equal(after.unseen, 0)
 })

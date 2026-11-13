@@ -10,6 +10,9 @@ export const OPEN_COMMAND = 'kairos.open'
 
 export const POLL_MS = 60_000
 
+/** 새 항목 표시의 기준을 두는 플러그인 저장소 키. 패널이 쓰고 워커가 읽는다(storage:own). */
+export const MARKS_KEY = 'marks'
+
 /**
  * 호출별 시간 제한. 큐로 한 번에 하나만 돈다.
  * accept는 안쪽 orca 호출 제한의 합(약 113초)보다 길게 둔다. 중간에 죽이면 응답을 잃은 worktree가 남기 때문이다.

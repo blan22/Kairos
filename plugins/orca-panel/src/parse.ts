@@ -16,12 +16,14 @@ import type {
   ListView,
   BudgetView,
   NextView,
+  OfferWhy,
   PanelAction,
   ReadyView,
   RevealView,
   RunView,
   SourceView,
   Tier,
+  WhyView,
 } from './protocol.ts'
 import { sectionOf, sortRows, trimRows } from './rows.ts'
 import { cleanText, displayTitle } from './text.ts'
@@ -106,6 +108,41 @@ function parseDeploy(value: unknown): DeployView | null {
   return date === '' ? null : { date }
 }
 
+/** 규칙 ID와 사실 코드는 고정 낱말 모양만 받는다. 패널은 표에 있는 코드만 그린다. */
+const RULE_ID = /^[a-z0-9_]{1,16}\.[a-z0-9_]{1,40}$/
+const FACT_CODE = /^[a-z][a-z_]{0,31}$/
+const FACT_LIMIT = 16
+/** GitHub 저장소 이름 모양(`owner/name`). kairos가 플레이북 정규식으로 검사했지만 여기서 다시 거른다. */
+const REPO_NAME = /^[A-Za-z0-9-]{1,39}\/[A-Za-z0-9_.-]{1,100}$/
+/** 기준 브랜치. kairos-config의 검사와 같은 모양(`origin/` + 안전한 글자)이다. */
+const BASE_BRANCH = /^origin\/[A-Za-z0-9._\/-]{1,200}$/
+
+const codes = (value: unknown, pattern: RegExp, limit: number): string[] =>
+  [...new Set(list(value).filter((code): code is string => typeof code === 'string' && pattern.test(code)))].slice(0, limit)
+
+/** 저장소와 브랜치 중 하나라도 모양이 틀리면 제안 근거를 통째로 버린다. 버튼과 범위는 그대로 남는다. */
+function parseOfferWhy(value: unknown): OfferWhy | null {
+  if (!isRecord(value)) return null
+  const { repo, workspace, base } = value
+  if (typeof repo !== 'string' || !REPO_NAME.test(repo)) return null
+  if (typeof workspace !== 'string' || !REPO_NAME.test(workspace)) return null
+  if (typeof base !== 'string' || !BASE_BRANCH.test(base)) return null
+  return { repo, workspace, base, checks: codes(value.checks, FACT_CODE, FACT_LIMIT) }
+}
+
+function parseWhy(value: unknown): WhyView | null {
+  if (!isRecord(value)) return null
+  const startsAt = optional(value.startsAt, 40)
+  return {
+    rule: typeof value.rule === 'string' && RULE_ID.test(value.rule) ? value.rule : null,
+    events: Math.min(count(value.events), 9_999),
+    facts: codes(value.facts, FACT_CODE, FACT_LIMIT),
+    attendees: count(value.attendees) || null,
+    startsAt: startsAt !== null && !Number.isNaN(Date.parse(startsAt)) ? startsAt : null,
+    offer: parseOfferWhy(value.offer),
+  }
+}
+
 function parseItem(value: unknown): ItemRow | null {
   if (!isRecord(value)) return null
   const id = itemId(value.id)
@@ -135,6 +172,7 @@ function parseItem(value: unknown): ItemRow | null {
     scope: optional(value.scope, LINE_LIMIT),
     run,
     actions: withMove(parseActions(value.actions), run !== null),
+    why: parseWhy(value.why),
   }
 }
 
@@ -261,6 +299,7 @@ export function parseNext(value: Json): NextView | null {
     reveal: parseReveal(value.reveal),
     sources: parseSources(value.sources),
     budget: parseBudget(value.budget),
+    newest: itemId(value.newest),
   }
 }
 

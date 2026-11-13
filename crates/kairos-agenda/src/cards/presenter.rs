@@ -40,6 +40,9 @@ pub struct NextResponse {
     /// 소스별 수집 상태. 소스 구성을 아는 CLI가 채운다. 없으면 키가 없다.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub sources: Option<Vec<SourceStatus>>,
+    /// 열린 항목 중 가장 큰 ID. 호스트가 사용자가 아직 보지 않은 새 항목이 있는지 가린다. CLI가 채운다. 없으면 키가 없다.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub newest: Option<i64>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize)]
@@ -120,6 +123,7 @@ fn next(connection: &Connection, context: &NextContext, options: NextOptions) ->
         health: context.health.clone(),
         reveal: None,
         sources: None,
+        newest: None,
     })
 }
 

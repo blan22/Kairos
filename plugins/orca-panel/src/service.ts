@@ -4,12 +4,14 @@
  * workspace.open과 notifications.show는 쓰지 않는다. 세션 창은 사용자가 시작이나 이동을 눌렀을 때만 kairos가 앞으로 가져온다.
  * 상태 표시줄의 값은 kairos next --json으로 읽는다. state.json을 읽지 않는다. 60초마다 프로세스 하나를 띄우는 셈이다.
  * 알림을 누르면 kairos reveal이 홈에 reveal.json을 쓴다. 워커는 그 파일만 보고 패널에 kairos.reveal을 보낸다. 내용은 읽지 않는다.
+ * 새 일 점의 기준은 패널이 플러그인 저장소(storage:own)에 쓴 marks다. 워커는 읽기만 하고, ID와 수뿐이라 제목은 오가지 않는다.
  */
 import type { OrcaWorkerApi } from 'orca/worker'
-import { OPEN_COMMAND, PANEL_ID, PLUGIN_KEY, REVEAL_DEBOUNCE_MS, REVEAL_FILE, STATUS_ITEM_ID, TIMEOUT_MS } from './config.ts'
+import { MARKS_KEY, OPEN_COMMAND, PANEL_ID, PLUGIN_KEY, REVEAL_DEBOUNCE_MS, REVEAL_FILE, STATUS_ITEM_ID, TIMEOUT_MS } from './config.ts'
 import { KAIROS_HOME, ORCA_BIN } from './paths.ts'
 import { isRecord, parseList, parseNext, resultLine, runOf, statusOf, warningOf } from './parse.ts'
 import type { ActionOutcome, Failure, ListView, NextView, Snapshot } from './protocol.ts'
+import { EMPTY_MARKS, hasFresh, marksOf, type Marks } from './rows.ts'
 import { argvFor, BAD_SCHEMA, createKairos, type Exec, type Kairos } from './runner.ts'
 import { statusOfFailure, statusOfNext, type StatusView } from './status.ts'
 
@@ -91,6 +93,11 @@ export function startWorker(orca: OrcaWorkerApi, deps: WorkerDeps): WorkerHandle
   let revealTimer: ReturnType<typeof setTimeout> | null = null
   /** 마지막으로 남긴 감시 실패 코드. 폴링마다 다시 걸 때 같은 줄을 반복하지 않는다. */
   let watchFault: string | null = null
+  /** 패널이 남긴 새 일 기준. 읽지 못하면 기준이 없는 것으로 치고 점을 그리지 않는다. */
+  let marks: Marks = EMPTY_MARKS
+  let marksFault: string | null = null
+  /** 마지막으로 그린 next. 기준이 바뀌면 kairos를 다시 부르지 않고 이 값으로 다시 그린다. */
+  let painted: NextView | null = null
 
   const paint = async (view: StatusView): Promise<void> => {
     try {
@@ -99,6 +106,27 @@ export function startWorker(orca: OrcaWorkerApi, deps: WorkerDeps): WorkerHandle
       orca.log(`상태 표시줄 갱신 실패: ${codeOf(error)}`)
     }
   }
+
+  const loadMarks = async (): Promise<void> => {
+    try {
+      marks = marksOf(await orca.storage.get(MARKS_KEY))
+      marksFault = null
+    } catch (error) {
+      marks = EMPTY_MARKS
+      const code = codeOf(error)
+      if (code !== marksFault) orca.log(`새 일 기준을 읽지 못함: ${code}`)
+      marksFault = code
+    }
+  }
+  const marksReady = loadMarks()
+
+  /** 패널이 기준을 바꾸면 점만 다시 맞춘다. 다른 키의 변화는 보지 않는다. */
+  const marksWatch = orca.storage.onDidChange(change => {
+    if (change.key !== MARKS_KEY) return
+    void loadMarks().then(async () => {
+      if (painted !== null && !stopped) await paint(statusOfNext(painted, hasFresh(marks, painted.newest)))
+    })
+  })
 
   /** next를 읽을 때마다 상태 표시줄을 같이 맞춘다. 실패도 그대로 그린다. */
   const fetchNext = async (seen: Seen): Promise<NextView | Failure> => {
@@ -111,12 +139,15 @@ export function startWorker(orca: OrcaWorkerApi, deps: WorkerDeps): WorkerHandle
     }
     if (isFailure(read)) {
       orca.log(`kairos next 실패: ${read.code}`)
+      painted = null
       await paint(statusOfFailure(read))
       return read
     }
     tracking = read.activeRuns > 0
     const next = { ...read, health: read.health ?? sessionWarning }
-    await paint(statusOfNext(next))
+    await marksReady
+    painted = next
+    await paint(statusOfNext(next, hasFresh(marks, next.newest)))
     return next
   }
 
@@ -237,6 +268,7 @@ export function startWorker(orca: OrcaWorkerApi, deps: WorkerDeps): WorkerHandle
       if (revealTimer !== null) clearTimeout(revealTimer)
       revealTimer = null
       unwatch()
+      marksWatch.dispose()
     },
   }
 }

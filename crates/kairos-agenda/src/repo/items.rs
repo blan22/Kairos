@@ -139,6 +139,17 @@ impl<'a> ItemRepo<'a> {
             .map_err(sql)
     }
 
+    /// 열린 항목 중 가장 큰 ID. 기준선 항목과 직접 추가한 일은 새로 온 일이 아니라서 뺀다. 열린 항목이 없으면 None이다.
+    pub fn newest_open_id(&self) -> KairosResult<Option<i64>> {
+        self.connection
+            .query_row(
+                "SELECT MAX(id) FROM items WHERE state = 'open' AND baseline = 0 AND reason != 'manual'",
+                [],
+                |row| row.get(0),
+            )
+            .map_err(sql)
+    }
+
     pub fn live(&self, key: &str, reason: ItemReason) -> KairosResult<Option<Item>> {
         self.connection
             .query_row(

@@ -86,6 +86,19 @@ export function offered(id: number, overrides: Json = {}): Json {
   return { ...item(id), playbook: 'qa_issue', scope: OFFER_SCOPE, ...overrides }
 }
 
+/** 제안 근거. 저장소 이름은 합성이다. */
+export const OFFER_WHY: Json = {
+  repo: 'contoso-synthetic/app',
+  workspace: 'contoso-synthetic/app',
+  base: 'origin/main',
+  checks: ['assigned_me', 'open', 'mapped', 'insiders', 'no_session'],
+}
+
+/** 추천 이유. 규칙 ID와 사실 코드는 kairos 계약의 낱말이다. */
+export function why(overrides: Json = {}): Json {
+  return { rule: 'p1.ci_failed', events: 3, facts: ['pull_request', 'authored_me', 'checks_failed'], ...overrides }
+}
+
 /** 시작 버튼이 있는 항목. */
 export function startable(id: number, overrides: Json = {}): Json {
   const key = String(id)
@@ -153,6 +166,23 @@ export function manyItems(total: number): Json[] {
 
 const LONG_ISSUE = '합성 결제 화면에서 쿠폰을 적용한 뒤 뒤로 가면 금액이 초기화되는 문제'
 const REPLY = (id: number): string => `합성 문서의 배포 일정에 대한 질문 ${String(id)}번에 답장이 필요합니다`
+
+/** 여러 프로바이더의 일과 추천 이유가 함께 있는 하루. 저장소 이름과 제목은 합성이다. */
+export function providerRows(): Json[] {
+  return [
+    startable(31, {
+      title: '합성 로그인 화면의 오류 문구가 잘리는 문제',
+      why: why({ rule: 'p2.assigned', events: 1, facts: ['issue', 'assigned_me', 'milestone'], offer: OFFER_WHY }),
+    }),
+    item(32, { tier: 'P0', reason: 'ci_failed', reasonLabel: 'CI 실패', title: '합성 결제 모듈 리팩터링 PR', why: why() }),
+    item(33, { source: 'slack', sourceLabel: 'Slack', reason: 'direct_mention', reasonLabel: '나를 언급', title: '합성 채널에서 배포 시각 확인 요청', why: why({ rule: 'p1.direct_mention', events: 2, facts: ['dm'] }) }),
+    item(34, { source: 'calendar', sourceLabel: 'Calendar', reason: 'meeting_imminent', reasonLabel: '곧 회의', tier: 'P0', title: '합성 주간 계획 회의', dueAt: '2026-11-04T02:30:00.000Z', why: why({ rule: 'p0.meeting_imminent', events: 1, facts: ['response_needed'], attendees: 6 }) }),
+    item(35, { source: 'notion', sourceLabel: 'Notion', reason: 'notion_mention', reasonLabel: 'Notion 언급', title: '합성 분기 회고 문서', why: why({ rule: 'p1.notion_mention', events: 1, facts: [] }) }),
+    item(36, { source: 'gmail', sourceLabel: 'Gmail', reason: 'app_review_mail', reasonLabel: '앱 심사', tier: 'P2', title: '합성 앱 심사 결과 메일', why: why({ rule: 'p1.app_review_mail', events: 1, facts: ['mail'] }) }),
+    parked(37, { source: 'slack', sourceLabel: 'Slack' }),
+    manual(38),
+  ]
+}
 
 /** 평소 하루의 모양. 건수, 사유 비율, 제목 길이를 실제 분포에 맞춘 합성 값이다. */
 export function workdayRows(): Json[] {

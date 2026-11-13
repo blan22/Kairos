@@ -1,3 +1,4 @@
+import type { JsonValue } from 'orca'
 import { assert, mockHost, mountWorker, test } from 'orca/testing'
 import { REVEAL_DEBOUNCE_MS, STATUS_ITEM_ID } from './config.ts'
 import { KAIROS_BIN, KAIROS_HOME, ORCA_BIN } from './paths.ts'
@@ -33,11 +34,15 @@ function rig(answer: Rig['answer'] = argv => (argv[0] === 'list' ? ok(listJson()
 
 let handle: WorkerHandle
 
-async function mountRig(state: Rig) {
-  const host = mockHost({ capabilities: [] })
+type WorkerOrca = Parameters<typeof startWorker>[0]
+let workerOrca: WorkerOrca
+
+async function mountRig(state: Rig, storage: Record<string, JsonValue> = {}) {
+  const host = mockHost({ capabilities: ['storage:own'], storage })
   const worker = await mountWorker(
     {
-      default: (orca: Parameters<typeof startWorker>[0]) => {
+      default: (orca: WorkerOrca) => {
+        workerOrca = orca
         handle = startWorker(orca, { exec: state.exec, pollMs: 0 })
         return handle.ready
       },
@@ -57,11 +62,64 @@ test('시작할 때 next --json을 불러 상태 표시줄을 그린다', async 
   assert.deepEqual(updates(worker).at(-1), {
     id: STATUS_ITEM_ID,
     text: 'kairos 2 · 긴급 1',
-    icon: 'bell',
+    icon: 'gauge',
     tone: 'danger',
     tooltip: '긴급 1, 오늘 1, 여유 있을 때 0 / 할 일 0, 미룬 일 0, 세션 0 / 지금 먼저 볼 일은 없습니다.',
   })
   assert.deepEqual(worker.refusals, [])
+})
+
+const knownMarks = (known: number, unseen: number = 0) => ({ floor: known, seen: [] as number[], known, unseen })
+
+test('패널이 센 뒤에 열린 일이 있으면 상태 표시줄에 점을 찍고 설명에 뜻을 쓴다', async () => {
+  const worker = await mountRig(rig(() => ok(nextJson({ counts: counts({ P1: 2 }), newest: 7 }))), { marks: knownMarks(5) })
+  const update = updates(worker).at(-1)
+  assert.equal(update?.text, 'kairos 2 ●')
+  assert.equal(update?.icon, 'gauge')
+  assert.equal(update?.tone, 'accent')
+  assert.match(String(update?.tooltip), /^패널에 아직 보지 않은 새 일이 있습니다 \/ /)
+})
+
+test('아직 보지 않은 새 일이 남아 있으면 새로 열린 일이 없어도 점을 남긴다', async () => {
+  const worker = await mountRig(rig(() => ok(nextJson({ counts: counts({ P1: 1 }), newest: 5 }))), { marks: knownMarks(5, 1) })
+  assert.equal(updates(worker).at(-1)?.text, 'kairos 1 ●')
+})
+
+test('패널을 한 번도 열지 않았거나 다 본 뒤에는 점이 없다', async () => {
+  const cases: Record<string, JsonValue>[] = [{}, { marks: knownMarks(7) }, { marks: { floor: 'x' } }]
+  for (const storage of cases) {
+    const worker = await mountRig(rig(() => ok(nextJson({ counts: counts({ P1: 1 }), newest: 7 }))), storage)
+    const update = updates(worker).at(-1)
+    assert.equal(update?.text, 'kairos 1', JSON.stringify(storage))
+    assert.equal(update?.tone, 'neutral', JSON.stringify(storage))
+  }
+})
+
+test('패널이 기준을 고치면 kairos를 다시 부르지 않고 점만 다시 그린다', async () => {
+  const state = rig(() => ok(nextJson({ counts: counts({ P1: 1 }), newest: 7 })))
+  const worker = await mountRig(state, { marks: knownMarks(5) })
+  assert.equal(updates(worker).at(-1)?.text, 'kairos 1 ●')
+  await workerOrca.storage.set('marks', knownMarks(7))
+  for (let turn = 0; turn < 5 && updates(worker).at(-1)?.text !== 'kairos 1'; turn += 1) await new Promise(resolve => setTimeout(resolve, 0))
+  assert.equal(updates(worker).at(-1)?.text, 'kairos 1')
+  assert.equal(state.calls.length, 1)
+})
+
+test('저장소를 못 읽으면 점 없이 그리고 로그는 한 번만 남긴다', async () => {
+  const state = rig(() => ok(nextJson({ counts: counts({ P1: 1 }), newest: 7 })))
+  const host = mockHost({ capabilities: ['storage:own'], results: { 'storage.get': () => { throw new Error('io') } } })
+  const worker = await mountWorker(
+    {
+      default: (orca: WorkerOrca) => {
+        handle = startWorker(orca, { exec: state.exec, pollMs: 0 })
+        return handle.ready
+      },
+    },
+    { host, commands: ['kairos.open'] },
+  )
+  await handle.poll()
+  assert.equal(updates(worker).at(-1)?.text, 'kairos 1')
+  assert.equal(worker.logs.filter(line => line.startsWith('새 일 기준을 읽지 못함')).length, 1)
 })
 
 test('다시 시작하면 다시 그린다', async () => {
@@ -378,7 +436,8 @@ test('알림과 작업 공간 이동을 부르지 않는다', async () => {
   const state = rig()
   const worker = await mountRig(state)
   await worker.request('kairos.action', { action: 'move', ids: [1], seen: true })
-  assert.deepEqual([...new Set(worker.host.calls.map(call => call.method))], ['statusBar.update'])
+  // 저장소는 새 일 점의 기준을 읽을 때만 쓴다.
+  assert.deepEqual([...new Set(worker.host.calls.map(call => call.method))], ['storage.get', 'statusBar.update'])
 })
 
 test('명령은 고정 인자로 패널을 연다', async () => {
@@ -486,7 +545,7 @@ async function mountWatched(watch: FakeWatch) {
         return handle.ready
       },
     },
-    { host: mockHost({ capabilities: [] }), commands: ['kairos.open'] },
+    { host: mockHost({ capabilities: ['storage:own'] }), commands: ['kairos.open'] },
   )
 }
 

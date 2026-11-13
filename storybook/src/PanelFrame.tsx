@@ -7,12 +7,12 @@ import Panel, { setup } from '../../plugins/orca-panel/src/panel.tsx'
 import { emit, installHandlers, type Handler } from './orca/host.ts'
 import { atom, resetStore, snapshot, subscribe } from './orca/store.ts'
 
-export type Scenario = { requests?: Record<string, Handler>; theme?: 'light' | 'dark' }
+export type Scenario = { requests?: Record<string, Handler>; storage?: Record<string, unknown>; theme?: 'light' | 'dark' }
 
 export function PanelFrame({ scenario, width = 360 }: { scenario: Scenario; width?: number }) {
   const [ready, setReady] = useState(false)
   useMemo(() => {
-    resetStore()
+    resetStore(scenario.storage)
     installHandlers(scenario.requests)
   }, [scenario])
   useEffect(() => {

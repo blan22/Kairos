@@ -16,7 +16,7 @@ const ICONS: Record<string, string> = {
   info: 'ℹ', warning: '⚠', error: '⛔', 'open-external': '↗', copy: '⧉', download: '↓', upload: '↑', play: '▶',
   pause: '⏸', stop: '■', more: '⋯', expand: '▾', collapse: '▸', next: '›', filter: '⏷', branch: '⑂', file: '🗎',
   agent: '🤖', link: '🔗', bell: '🔔', bot: '🤖', calendar: '📅', flag: '⚑', zap: 'ϟ', star: '★', terminal: '⌨',
-  rocket: '🚀', activity: '∿', clock: '◷', 'file-text': '🗎',
+  rocket: '🚀', activity: '∿', clock: '◷', 'file-text': '🗎', gauge: '◔', layers: '≣', book: '📖', blocks: '▦',
 }
 export const iconOf = (name?: string): string => (name ? (ICONS[name] ?? '•') : '')
 

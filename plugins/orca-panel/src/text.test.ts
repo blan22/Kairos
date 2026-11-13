@@ -1,6 +1,31 @@
 import { assert, test } from 'orca/testing'
 import { DANGEROUS_TITLE, SLACK_TITLE } from './fixtures.ts'
-import { actionFailure, carriedWord, clip, dayLabel, displayTitle, failureCopy, guideOf, holdLine, holdSentence, isSourceTrouble, joinLine, matchesSearch, openableUrl, SEARCH_LIMIT, searchWords, sourceWord, whenLabel } from './text.ts'
+import {
+  actionFailure,
+  attendeesWord,
+  carriedWord,
+  checksOf,
+  clip,
+  dayLabel,
+  displayTitle,
+  eventsWord,
+  factsOf,
+  failureCopy,
+  guideOf,
+  holdLine,
+  holdSentence,
+  isSourceTrouble,
+  joinLine,
+  matchesSearch,
+  openableUrl,
+  playbookCopy,
+  ruleSentence,
+  SEARCH_LIMIT,
+  searchWords,
+  SESSION_LIMITS,
+  sourceWord,
+  whenLabel,
+} from './text.ts'
 
 const NOW = '2026-11-05T02:00:00.000Z' // 한국 시간 11월 5일 11:00
 const shown = (value: unknown): string => displayTitle(value, 300)
@@ -221,7 +246,7 @@ test('이유와 권장은 사유마다 고정 문구이고 모르는 사유는 �
 })
 
 test('시작할 수 있는 제안이 붙으면 권장 끝에 맡길 수 있다고 덧붙인다', () => {
-  assert.equal(guide({ startable: true })?.suggest, '내용을 확인하고 어떻게 진행할지 정하세요. 에이전트에게 맡길 수도 있습니다.')
+  assert.equal(guide({ startable: true })?.suggest, '내용을 확인하고 어떻게 진행할지 정하세요. 아래 제안대로 에이전트에게 맡길 수도 있습니다.')
   assert.equal(guide({ reason: 'unknown', startable: true }), null)
 })
 
@@ -266,4 +291,35 @@ test('검색은 모든 낱말이 어느 칸에든 있으면 맞고 대소문자�
   assert.equal(matchesSearch(searchWords('리뷰 slack'), fields), false)
   assert.equal(matchesSearch(searchWords('.*'), fields), false)
   assert.equal(matchesSearch(searchWords('오늘'), fields), true)
+})
+
+test('규칙 ID는 고정 문장으로 옮기고 모르는 규칙은 문장이 없다', () => {
+  assert.equal(ruleSentence('p1.ci_failed'), '내 PR의 CI 검사가 실패했습니다.')
+  assert.equal(ruleSentence('p0.meeting_imminent'), '곧 시작하는 회의입니다.')
+  for (const rule of [null, 'p9.unknown', 'constructor', '__proto__']) assert.equal(ruleSentence(rule), null, String(rule))
+})
+
+test('사실 코드는 고정 낱말과 색으로 옮기고 모르는 코드는 그리지 않는다', () => {
+  assert.deepEqual(factsOf(['pull_request', 'checks_failed', 'changes_requested', 'approved', 'mystery', 'toString']), [
+    { code: 'pull_request', text: 'PR', tone: null },
+    { code: 'checks_failed', text: '검사 실패', tone: 'danger' },
+    { code: 'changes_requested', text: '변경 요청됨', tone: 'warning' },
+    { code: 'approved', text: '승인됨', tone: 'success' },
+  ])
+})
+
+test('제안 근거와 플레이북은 고정 문구이고 모르는 값은 빠진다', () => {
+  assert.deepEqual(checksOf(['assigned_me', 'mapped', 'nope', 'no_session']), ['내게 배정된 이슈', '작업할 저장소가 정해져 있음', '같은 일의 세션이 없음'])
+  const copy = playbookCopy('qa_issue')
+  assert.equal(copy?.title, '에이전트가 이슈를 고칩니다')
+  assert.equal(copy?.steps.length, 3)
+  assert.match(copy?.result ?? '', /직접 올립니다/)
+  assert.equal(playbookCopy('pr_review')?.title, '에이전트가 리뷰 초안을 씁니다')
+  for (const playbook of [null, 'deploy', 'hasOwnProperty']) assert.equal(playbookCopy(playbook), null, String(playbook))
+  assert.match(SESSION_LIMITS, /push, PR, 코멘트/)
+})
+
+test('소식과 참석자 수는 둘 이상일 때만 쓴다', () => {
+  assert.deepEqual([eventsWord(0), eventsWord(1), eventsWord(4)], [null, null, '소식 4건'])
+  assert.deepEqual([attendeesWord(null), attendeesWord(1), attendeesWord(6)], [null, null, '참석자 6명'])
 })

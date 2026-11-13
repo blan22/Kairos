@@ -78,18 +78,120 @@ export function defaultOpen(section: Section, groups: Record<Section, readonly I
   return undefined
 }
 
-/** 패널의 탭. 지금은 손댈 일, 대기는 기다려도 되는 일, 세션은 맡긴 일, 상태는 수집과 예산이다. */
-export type TabId = 'now' | 'waiting' | 'sessions' | 'status'
+/** 진행 상태 탭. 지금은 손댈 일, 대기는 기다려도 되는 일, 세션은 맡긴 일이다. 프로바이더를 고른 뒤 그 안에서 고른다. */
+export type TabId = 'now' | 'waiting' | 'sessions'
 
-export const TAB_ORDER: readonly TabId[] = ['now', 'waiting', 'sessions', 'status']
+export const TAB_ORDER: readonly TabId[] = ['now', 'waiting', 'sessions']
 
 /** 탭마다 그리는 묶음. 순서가 화면 순서다. 긴급과 제안은 놓치면 안 되므로 지금에 둔다. */
 export const TAB_SECTIONS: Record<TabId, readonly Section[]> = {
   now: ['urgent', 'offer', 'today'],
   waiting: ['relaxed', 'parked', 'baseline'],
   sessions: ['running'],
-  status: [],
 }
+
+/** 일이 온 곳. 수집 소스와 같은 이름이고, 직접 추가한 일과 모르는 소스는 따로 둔다. all은 모두다. */
+export type ProviderId = 'all' | 'github' | 'slack' | 'calendar' | 'gmail' | 'notion' | 'manual' | 'other'
+
+/** 화면 순서. 자리가 바뀌지 않아야 손이 기억한다. */
+export const PROVIDER_ORDER: readonly ProviderId[] = ['all', 'github', 'slack', 'calendar', 'gmail', 'notion', 'manual', 'other']
+const SOURCE_PROVIDERS: ReadonlySet<string> = new Set(['github', 'slack', 'calendar', 'gmail', 'notion'])
+
+export const isProviderId = (value: unknown): value is ProviderId => typeof value === 'string' && (PROVIDER_ORDER as readonly string[]).includes(value)
+
+export function providerOf(item: ItemRow): ProviderId {
+  if (item.source !== null && SOURCE_PROVIDERS.has(item.source)) return item.source as ProviderId
+  return item.reason === 'manual' && item.source === null ? 'manual' : 'other'
+}
+
+export const inProvider = (item: ItemRow, provider: ProviderId): boolean => provider === 'all' || providerOf(item) === provider
+
+/**
+ * 고를 수 있게 늘어놓을 프로바이더. 연결된 소스는 일이 없어도 둔다. 일이 오갈 때마다 자리가 바뀌면 손이 헛짚는다.
+ * 직접 추가와 기타는 일이 있을 때만 둔다. 연결 상태는 kairos가 준 소스 목록에서 읽는다.
+ */
+export function providersOf(rows: readonly ItemRow[], sources: readonly { source: string; status: string }[]): ProviderId[] {
+  const present = new Set<ProviderId>(rows.map(providerOf))
+  for (const row of sources) if (row.status !== 'not_connected' && SOURCE_PROVIDERS.has(row.source)) present.add(row.source as ProviderId)
+  return PROVIDER_ORDER.filter(id => id === 'all' || present.has(id))
+}
+
+/** 새 항목 표시의 기준. 패널이 쓰고 워커가 상태 표시줄에 읽는다. 항목 ID와 수뿐이다. */
+export interface Marks {
+  /** 이 ID까지는 모두 본 일이다. null이면 아직 기준이 없다. */
+  floor: number | null
+  /** floor보다 크고 이미 본 ID. */
+  seen: number[]
+  /** 패널이 마지막으로 셈한 목록의 가장 큰 ID. 이보다 큰 ID가 열리면 새 항목이다. */
+  known: number
+  /** 그때 아직 보지 않은 새 항목 수. */
+  unseen: number
+}
+
+export const EMPTY_MARKS: Marks = { floor: null, seen: [], known: 0, unseen: 0 }
+/** 남겨 두는 본 ID의 수. 넘치면 floor를 버린 ID까지 당긴다. 버린 일이 다시 새 일로 돌아오지 않는다. 그 아래의 보지 않은 일은 본 것으로 친다. */
+const SEEN_LIMIT = 200
+
+/** 저장소에서 읽은 값. 모양이 틀리면 기준이 없는 것으로 친다. 워커도 같은 함수로 읽는다. */
+export function marksOf(value: unknown): Marks {
+  if (typeof value !== 'object' || value === null) return EMPTY_MARKS
+  const { floor, seen, known, unseen } = value as Record<string, unknown>
+  const whole = (each: unknown): each is number => typeof each === 'number' && Number.isSafeInteger(each) && each >= 0
+  return {
+    floor: whole(floor) ? floor : null,
+    seen: Array.isArray(seen) ? seen.filter(whole).slice(-SEEN_LIMIT) : [],
+    known: whole(known) ? known : 0,
+    unseen: whole(unseen) ? unseen : 0,
+  }
+}
+
+/**
+ * 사용자가 아직 보지 않은 새 일인가. 기준선, 직접 추가, 미룬 일, 세션에 맡긴 일은 사용자가 이미 아는 일이라 새 일이 아니다.
+ * 기준이 없으면 아무것도 새 일이 아니다. 처음 읽은 목록이 기준이 된다.
+ */
+export function isFresh(item: ItemRow, marks: Marks): boolean {
+  if (marks.floor === null || item.id <= marks.floor) return false
+  if (item.baseline || item.reason === 'manual' || item.state !== 'open' || item.run !== null) return false
+  return !marks.seen.includes(item.id)
+}
+
+const topId = (rows: readonly ItemRow[], floor: number): number => rows.reduce((top, row) => Math.max(top, row.id), floor)
+
+/**
+ * 기준이 없으면 지금 목록을 기준으로 삼는다. 그때 있던 일은 새 일이 아니다.
+ * newest는 kairos가 센 가장 큰 열린 ID다. 목록이 길어 넘기지 않은 일도 그때 있던 일이다.
+ * newest가 floor보다 작으면 kairos의 기록을 지우고 다시 시작한 것이다. ID가 1부터 다시 붙으므로 기준을 새로 잡는다.
+ */
+export function startMarks(marks: Marks, rows: readonly ItemRow[], newest: number | null = null): Marks {
+  const reset = marks.floor !== null && newest !== null && newest < marks.floor
+  if (marks.floor !== null && !reset) return marks
+  const top = Math.max(topId(rows, 0), newest ?? 0)
+  return { floor: top, seen: [], known: top, unseen: 0 }
+}
+
+/**
+ * 화면에 그렸던 새 일을 본 것으로 적는다. 아직 보지 않은 새 일보다 앞은 모두 본 것이라 floor를 당긴다.
+ * rows는 지금 목록 전체다. 목록이 길어 넘기지 않은 일은 셀 수 없어 본 것으로 친다.
+ */
+export function commitMarks(marks: Marks, shown: ReadonlySet<number>, rows: readonly ItemRow[], newest: number | null = null): Marks {
+  const started = startMarks(marks, rows, newest)
+  const floor = started.floor ?? 0
+  const seen = [...new Set([...started.seen, ...[...shown].filter(id => id > floor)])]
+  const fresh = rows.filter(row => isFresh(row, { ...started, seen })).map(row => row.id)
+  const top = Math.max(topId(rows, floor), newest ?? 0)
+  const pulled = fresh.length === 0 ? top : Math.max(floor, Math.min(...fresh) - 1)
+  const kept = seen.filter(id => id > pulled).sort((a, b) => a - b)
+  // 본 ID가 넘치면 버릴 ID까지 floor를 당긴다.
+  const nextFloor = kept.length > SEEN_LIMIT ? (kept[kept.length - SEEN_LIMIT - 1] ?? pulled) : pulled
+  const after: Marks = { floor: nextFloor, seen: kept.filter(id => id > nextFloor), known: top, unseen: 0 }
+  return { ...after, unseen: rows.filter(row => isFresh(row, after)).length }
+}
+
+export const sameMarks = (a: Marks, b: Marks): boolean =>
+  a.floor === b.floor && a.known === b.known && a.unseen === b.unseen && a.seen.length === b.seen.length && a.seen.every((id, index) => b.seen[index] === id)
+
+/** 상태 표시줄의 새 일 점. 패널이 센 뒤에 열린 일이 있거나, 센 때 아직 보지 않은 일이 남았다. */
+export const hasFresh = (marks: Marks, newest: number | null): boolean => marks.floor !== null && (marks.unseen > 0 || (newest !== null && newest > marks.known))
 
 export const isTabId = (value: unknown): value is TabId => typeof value === 'string' && (TAB_ORDER as readonly string[]).includes(value)
 
@@ -97,6 +199,9 @@ export const isTabId = (value: unknown): value is TabId => typeof value === 'str
 export function tabOf(section: Section): TabId {
   return TAB_ORDER.find(tab => TAB_SECTIONS[tab].includes(section)) ?? 'now'
 }
+
+/** 줄이 속한 탭. */
+export const tabOfRow = (item: ItemRow): TabId => tabOf(sectionOf(item))
 
 /** 탭의 건수. 목록이 길어 넘기지 않은 줄도 센다. */
 export function tabCount(tab: TabId, groups: Record<Section, readonly ItemRow[]>, omittedBy: Readonly<Record<string, number>>): number {

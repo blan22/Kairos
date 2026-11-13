@@ -43,6 +43,32 @@
 - `lastOkAt`과 `delayMinutes`는 값이 없으면 `null`이다.
 - 호스트는 `source`를 `^[a-z][a-z0-9_]{0,31}$`로, `status`를 위 다섯 값으로 검사하고 틀린 줄은 버린다. `label`은 텍스트로만 그린다.
 
+## 항목의 `why`와 `next`의 `newest`
+
+`--json` 응답의 항목(`list`의 줄과 카드의 줄)에는 왜 올라왔고 왜 제안했는지의 근거 `why`가 붙는다. 값은 모두 코드와 수다. 외부에서 온 글은 들어 있지 않다. 근거를 만들 수 없으면 키 자체가 없다.
+
+```json
+{
+  "why": {
+    "rule": "p2.assigned",
+    "events": 2,
+    "facts": ["issue", "assigned_me", "milestone"],
+    "offer": { "repo": "contoso-synthetic/app", "workspace": "contoso-synthetic/app", "base": "origin/main", "checks": ["assigned_me", "open", "mapped", "insiders", "no_session"] }
+  }
+}
+```
+
+- `rule`은 항목을 연 정책 규칙 ID다(`p1.ci_failed` 같은 `등급.이름`). 긴급, 오늘, 나머지 순으로 고른 소식의 규칙이다. 없으면 키가 없다.
+- `events`는 이 항목을 열거나 다시 올린 소식 수다. 항목을 연 소식도 센다. 이미 열린 항목에 접혀 들어간 소식은 세지 않는다.
+- `facts`는 객체에서 읽은 사실 코드이고 순서가 화면 순서다. GitHub는 `issue`, `pull_request`, `assigned_me`, `review_requested`, `authored_me`, `draft`, `changes_requested`, `approved`, `checks_failed`, `checks_pending`, `checks_passed`, `milestone`, 일정은 `response_needed`, `attending`, `tentative`, `declined`, `all_day`, Slack은 `dm`, Gmail은 `mail`이다. 비어 있으면 키가 없다.
+- `attendees`와 `startsAt`은 일정의 참석자 수와 시작 시각이다. 일정이 아니면 키가 없다.
+- `offer`는 에이전트 제안이 붙은 줄에만 있다. `repo`는 대상 저장소, `workspace`와 `base`는 세션이 일할 저장소와 기준 브랜치다. `checks`는 제안이 나온 조건 코드(`assigned_me`, `review_requested`, `reply_owed`, `open`, `mapped`, `insiders`, `no_session`)다.
+- 호스트는 규칙 ID와 코드를 낱말 모양으로 검사하고 자기 표에 있는 것만 그린다. 모르는 코드는 버린다. 저장소와 브랜치는 모양이 틀리면 `offer`만 버린다.
+
+`next`의 `newest`는 열린 항목(기준선과 직접 추가한 일 제외) 가운데 가장 큰 ID다. 표시 게이트가 닫혀 있어도 온다. 호스트가 마지막으로 본 뒤 새 항목이 생겼는지 가릴 때 쓴다. 열린 항목이 없으면 키가 없다.
+
+두 필드는 추가 필드라서 계약 버전은 그대로다. 없는 엔진의 응답도 같은 계약이므로 호스트는 없는 경우를 그려야 한다.
+
 ## 수락 응답의 `launch`
 
 세션 호스트가 `git`이면 수락 응답에 세션을 띄울 명령이 함께 온다.

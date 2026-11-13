@@ -45,6 +45,29 @@ export interface ItemRow {
   scope: string | null
   run: RunView | null
   actions: PanelAction[]
+  /** 왜 올라왔고 왜 제안했는지. 오래된 kairos는 주지 않아 null이다. */
+  why: WhyView | null
+}
+
+/** 근거. 코드는 패널의 고정 문구 표로 바꿔 그리고, 표에 없는 코드는 그리지 않는다. */
+export interface WhyView {
+  /** 항목을 연 정책 규칙 ID. */
+  rule: string | null
+  /** 이 일에 이어진 소식 수. */
+  events: number
+  /** 객체에서 읽은 사실 코드. */
+  facts: string[]
+  attendees: number | null
+  startsAt: string | null
+  offer: OfferWhy | null
+}
+
+/** 에이전트 제안의 근거. 저장소와 브랜치는 kairos가 검증한 모양만 받는다. */
+export interface OfferWhy {
+  repo: string
+  workspace: string
+  base: string
+  checks: string[]
 }
 
 export interface CardView {
@@ -148,6 +171,8 @@ export interface NextView {
   /** 소스별 수집 상태. 오래된 kairos는 주지 않아 빈 배열이다. */
   sources: SourceView[]
   budget: BudgetView | null
+  /** 열린 항목 중 가장 큰 ID. 상태 표시줄이 새 항목을 가린다. 오래된 kairos는 주지 않아 null이다. */
+  newest: number | null
 }
 
 export interface ListView {

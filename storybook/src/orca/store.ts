@@ -1,7 +1,7 @@
 /**
  * Orca atom 대역. 패널은 렌더 중에 read()로 값을 읽고, set()/update()가 바뀌면 Orca가 다시 그린다.
  * 여기서는 바뀔 때마다 판 번호를 올리고 구독자(스토리 틀)가 전체를 다시 그린다.
- * 키가 있는 atom(persist)은 스토리마다 비운다. 실제 Orca의 저장은 흉내 내지 않는다.
+ * 키가 있는 atom(persist)은 스토리마다 비우고, 시나리오의 storage가 있으면 그 값으로 채운다. 실제 Orca의 저장은 흉내 내지 않는다.
  */
 export type Atom<T> = { readonly __orcaAtom: T; readonly __orcaWritable: true; key: string | null; initial: T }
 export type ReadonlyAtom<T> = { readonly __orcaAtom: T; compute?: () => T }
@@ -23,9 +23,10 @@ function changed(): void {
   for (const listener of [...listeners]) listener()
 }
 
-export function resetStore(): void {
+export function resetStore(seed: Record<string, unknown> = {}): void {
   values.clear()
   keyed.clear()
+  for (const [key, value] of Object.entries(seed)) keyed.set(key, value)
   version += 1
 }
 

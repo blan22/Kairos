@@ -1,6 +1,6 @@
 import { assert, test } from 'orca/testing'
 import { LIST_LIMIT } from './config.ts'
-import { DANGEROUS_TITLE, LONG_TITLE, SLACK_TITLE, accepted, bundle, card, counts, failedCard, item, listJson, manyItems, nextJson, parked, readyCard, revivable, sourceRows, startable } from './fixtures.ts'
+import { DANGEROUS_TITLE, LONG_TITLE, OFFER_WHY, SLACK_TITLE, accepted, bundle, card, counts, failedCard, item, listJson, manyItems, nextJson, parked, readyCard, revivable, sourceRows, startable, why } from './fixtures.ts'
 import { failureOf, parseList, parseNext, resultLine } from './parse.ts'
 import { cleanText } from './text.ts'
 
@@ -325,4 +325,43 @@ test('예산은 쓴 횟수와 한도를 읽고 없거나 틀리면 null 또는 0
   assert.deepEqual(parseNext(nextJson({ budget: used }))?.budget, { hourUsed: 1, hourLimit: 2, dayUsed: 4, dayLimit: 6, bundlesToday: 2, shownToday: 5 })
   assert.deepEqual(parseNext(nextJson({ budget: { p1HourUsed: -3, p1HourLimit: '2', p1DayUsed: 1.8 } }))?.budget, { hourUsed: 0, hourLimit: 0, dayUsed: 1, dayLimit: 0, bundlesToday: 0, shownToday: 0 })
   for (const value of [null, 'x', 3, []]) assert.equal(parseNext(nextJson({ budget: value }))?.budget, null, String(value))
+})
+
+test('추천 이유는 규칙 ID와 사실 코드를 낱말 모양으로만 옮기고 없으면 null이다', () => {
+  const [plain] = parseList(listJson([item(1)]))?.items ?? []
+  assert.equal(plain?.why, null)
+  const [row] = parseList(listJson([item(1, { why: why({ attendees: 4, startsAt: '2026-11-04T05:00:00.000Z' }) })]))?.items ?? []
+  assert.deepEqual(row?.why, {
+    rule: 'p1.ci_failed',
+    events: 3,
+    facts: ['pull_request', 'authored_me', 'checks_failed'],
+    attendees: 4,
+    startsAt: '2026-11-04T05:00:00.000Z',
+    offer: null,
+  })
+  const bad = why({ rule: 'P1.CI failed; rm', events: -2, facts: ['checks_failed', 'checks_failed', 'Bad-Code', 7, '$(id)'], attendees: -3, startsAt: '내일' })
+  const [odd] = parseList(listJson([item(1, { why: bad })]))?.items ?? []
+  assert.deepEqual(odd?.why, { rule: null, events: 0, facts: ['checks_failed'], attendees: null, startsAt: null, offer: null })
+})
+
+test('제안 근거는 저장소와 브랜치 모양이 맞을 때만 옮기고 하나라도 틀리면 근거만 버린다', () => {
+  const [row] = parseList(listJson([startable(1, { why: why({ offer: OFFER_WHY }) })]))?.items ?? []
+  assert.deepEqual(row?.why?.offer, OFFER_WHY)
+  for (const offer of [
+    { ...OFFER_WHY, repo: '../etc/passwd' },
+    { ...OFFER_WHY, workspace: 'contoso synthetic/app' },
+    { ...OFFER_WHY, base: 'main' },
+    { ...OFFER_WHY, base: 'origin/$(id)' },
+    'contoso-synthetic/app',
+  ]) {
+    const [odd] = parseList(listJson([startable(1, { why: why({ offer }) })]))?.items ?? []
+    assert.equal(odd?.why?.offer, null, JSON.stringify(offer))
+    assert.equal(odd?.why?.rule, 'p1.ci_failed')
+    assert.ok(odd?.actions.some(action => action.id === 'start'))
+  }
+})
+
+test('가장 큰 열린 일 ID를 읽고 없거나 틀리면 null이다', () => {
+  assert.equal(parseNext(nextJson({ newest: 42 }))?.newest, 42)
+  for (const newest of [undefined, null, -1, 1.5, '42']) assert.equal(parseNext(nextJson({ newest }))?.newest, null, String(newest))
 })

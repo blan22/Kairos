@@ -4,15 +4,17 @@
   "name": "kairos",
   "version": "0.1.0",
   "description": "회사 일 제안을 상태 표시줄과 패널에 보여 주고, 사용자가 누른 버튼만 kairos 명령으로 넘긴다.",
+  "icon": "assets/icon.png",
   "engines": { "orca": ">=1.4.248" },
   "execution": "trusted-worker",
   "pluginApi": 1,
   "main": "src/worker.ts",
+  "capabilities": [{ "kind": "storage:own" }],
   "contributes": {
-    "panels": [{ "id": "kairos", "title": "kairos", "icon": "bell", "entry": "src/panel.tsx", "ui": "components" }],
+    "panels": [{ "id": "kairos", "title": "kairos", "icon": "gauge", "entry": "src/panel.tsx", "ui": "components" }],
     "commands": [{ "id": "kairos.open", "title": "kairos: 패널 열기" }],
     "statusBarItems": [
-      { "id": "kairos", "text": "kairos", "icon": "bell", "tone": "neutral", "tooltip": "kairos 상태를 읽는 중입니다", "command": "kairos.open" }
+      { "id": "kairos", "text": "kairos", "icon": "gauge", "tone": "neutral", "tooltip": "kairos 상태를 읽는 중입니다", "command": "kairos.open" }
     ],
     "keybindings": [{ "command": "kairos.open", "key": "Mod+Alt+Shift+K" }]
   },
