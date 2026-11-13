@@ -4,7 +4,9 @@ kairos는 회사 일정과 할 일을 모아 Orca, Claude Code, VS Code에 보�
 
 ## 언어와 기록
 
-- 답변, 계획, 주석, 문서는 한국어로 쓴다. 문서는 README처럼 짧은 평서문으로 쓴다.
+- 답변, 계획, 주석, 문서는 한국어로 쓴다.
+- 사용자 문서(README, `docs/`, `SECURITY.md`, `CHANGELOG.md`, `CONTRIBUTING.md`, 플러그인과 `ops/notifier`의 README)는 합니다체로 쓰고 `CONTRIBUTING.md`의 "문서 쓰기"를 따른다. 용어는 `docs/concepts.md`에 맞추고, 새 문서는 `docs/README.md` 목차에 한 줄 추가한다.
+- 에이전트 안내(`AGENTS.md`, 스킬, `.claude/agents`)와 코드 주석은 짧은 평서문으로 쓴다.
 - 커밋 메시지는 영어로 쓴다. 제목은 명령형 한 줄이고, 본문에는 변경 사항을 한 줄씩 적는다.
 - 커밋과 PR에 AI 작성 표기(`Co-Authored-By`, "Generated with" 등)를 넣지 않는다. 기술 내용만 쓴다.
 - main에 직접 커밋하지 않는다. 브랜치를 만들어 작업하고, 머지는 사용자가 요청할 때만 한다.

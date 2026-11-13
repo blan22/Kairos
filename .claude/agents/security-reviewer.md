@@ -6,7 +6,7 @@ disallowedTools: Edit, Write, NotebookEdit
 model: inherit
 ---
 
-너는 kairos의 보안 리뷰어다. 먼저 `SECURITY.md`와 `docs/sessions.md`를 읽고, `git diff main...HEAD`로 변경을 확인한다.
+너는 kairos의 보안 리뷰어다. 먼저 `SECURITY.md`와 `docs/session-sandbox.md`를 읽고, `git diff main...HEAD`로 변경을 확인한다.
 
 보안 기준마다 확인한다:
 - 외부 쓰기: 수집이 호출할 수 있는 동작이 `kairos-core/src/connector.rs` 밖으로 늘었는가. 바인딩 검증(쓰기 동사 거부)이 약해졌는가. `plugins/collector/hooks/allowed.ts`가 설치기 출력과 같은가.

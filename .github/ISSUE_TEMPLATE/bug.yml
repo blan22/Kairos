@@ -1,24 +1,25 @@
-name: 버그
-description: 기대와 다르게 동작한다
+name: 버그 제보
+description: 기대와 다르게 동작하는 것을 알려 주세요
 labels: [bug]
 body:
   - type: markdown
     attributes:
       value: |
-        공개 저장소다. 메일 주소, 조직과 저장소 이름, Slack ID, 토큰, 경로의 사용자 이름은 가리고 붙인다.
-        보안 문제는 여기에 쓰지 않는다. Security 탭의 Report a vulnerability로 알린다.
-        먼저 [문제 해결](https://github.com/blan22/Kairos/blob/main/docs/troubleshooting.md)을 본다.
+        제보해 주셔서 고맙습니다. 먼저 [문제 해결](https://github.com/blan22/Kairos/blob/main/docs/troubleshooting.md)에 같은 증상이 있는지 확인해 주세요.
+
+        공개 저장소입니다. 메일 주소, 조직과 저장소 이름, Slack ID, 토큰, 경로의 사용자 이름은 가리고 붙여 주세요.
+        보안 문제는 여기에 쓰지 말고 Security 탭의 Report a vulnerability로 알려 주세요.
   - type: textarea
     id: what
     attributes:
-      label: 무슨 일이 있었나
-      description: 한 일, 기대한 것, 실제로 본 것
+      label: 무슨 일이 있었나요?
+      description: 무엇을 했고, 무엇을 기대했고, 실제로 무엇을 봤는지 적어 주세요.
     validations:
       required: true
   - type: textarea
     id: steps
     attributes:
-      label: 다시 일으키는 순서
+      label: 재현 순서
       placeholder: |
         1. kairos …
         2. …
@@ -27,7 +28,7 @@ body:
   - type: input
     id: version
     attributes:
-      label: kairos 판
+      label: kairos 버전
       description: kairos --version 의 출력
     validations:
       required: true
@@ -35,28 +36,28 @@ body:
     id: install
     attributes:
       label: 설치 방식
-      description: kairos update 가 알려 준다
+      description: kairos update 가 알려 줍니다.
       options:
         - 저장소에서 빌드
-        - 릴리스 묶음
+        - 릴리스 패키지
         - 모름
     validations:
       required: true
   - type: input
     id: macos
     attributes:
-      label: macOS 판
+      label: macOS 버전
       description: sw_vers -productVersion 의 출력
   - type: textarea
     id: doctor
     attributes:
       label: kairos doctor 출력
-      description: 개인 값을 가리고 붙인다
+      description: 개인 값을 가리고 붙여 주세요.
       render: text
   - type: checkboxes
     id: checked
     attributes:
       label: 확인
       options:
-        - label: 붙인 내용에 실제 사람, 조직, 저장소의 값과 토큰이 없다
+        - label: 붙인 내용에 실제 사람, 조직, 저장소의 값과 토큰이 없습니다.
           required: true
