@@ -150,9 +150,14 @@ pub(super) fn copy_runtime(plan: &InstallPlan, root: &Path, binary_dir: &Path) -
     if BINARIES.iter().any(|name| !binary_dir.join(name).is_file()) {
         return Err(KairosError::new("install_binary_missing"));
     }
-    // 설치본의 kairos로 다시 설치하면 원본과 대상이 같다. 원본의 cpSync처럼 아무것도 건드리지 않고 실패한다.
+    // 설치본의 kairos로 다시 설치하면(같은 판의 kairos setup) 원본과 대상이 같다. 놓을 것이 이미 제자리에 있으므로 복사하지 않는다.
+    // 같은 파일 위로 복사하면 내용이 비워지므로 복사 함수들은 여전히 거절한다. 뒤의 허용 목록, current, plist, 등록은 그대로 한다.
     if same_place(root, &plan.runtime_dir) {
-        return Err(KairosError::new(SAME_ROOT));
+        if !same_place(binary_dir, &plan.runtime_dir.join("bin")) {
+            return Err(KairosError::new(SAME_ROOT));
+        }
+        fs::set_permissions(&plan.watchdog, Permissions::from_mode(EXECUTABLE_MODE))?;
+        return Ok(());
     }
     DirBuilder::new().recursive(true).mode(DIR_MODE).create(&plan.runtime_dir)?;
     let bin_dir = plan.runtime_dir.join("bin");
