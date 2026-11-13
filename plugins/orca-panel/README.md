@@ -174,7 +174,7 @@ orca plugin check . --json
 - `orca plugin check`는 버튼을 누를 수 없으므로 처리 중, 처리 실패, 펼친 행, `지금`이 아닌 탭, 검색은 `src/panel.test.tsx`로 확인한다. 스토리북에서는 탭을 눌러 볼 수 있다.
 - `orca plugin check`는 워커를 실제로 띄운다. 그래서 `ORCA_PLUGIN_CHECK_PANELS`가 있으면 kairos를 호출하지 않는다.
 - 테스트는 `startWorker`에 가짜 실행기를 넘겨서 돌린다.
-- `orca plugin types`는 Orca 1.4.248에서 `orca-components.d.ts` ENOENT로 실패해 `.orca/types`가 만들어지지 않는다. 그래서 `tsconfig.json`의 extends는 아직 해석되지 않는다.
+- `orca plugin types`가 `.orca/types`를 만든다. `tsconfig.json`이 이 폴더를 extends한다. git은 이 폴더를 무시한다.
 
 ## 설치
 
@@ -187,6 +187,7 @@ orca plugin dev load "$HOME/Library/Application Support/kairos/0.4.0/plugins/orc
 ```
 
 - `kairos install --apply`가 `plugins` 폴더를 통째로 복사하므로 이 폴더도 설치본에 들어간다.
+- setup은 적재 전에 `orca plugin types <폴더>`로 `.orca/types`를 먼저 만든다. Orca의 무결성 검사는 `.orca`까지 해시에 넣는데, 새 폴더를 처음 적재하면 승인에 해시를 적은 뒤에 이 폴더를 쓴다. 그러면 워커가 `content hash mismatch`로 뜨지 않는다. 손으로 적재할 때도 `types`를 먼저 실행한다.
 - 워커는 `current` 링크를 통해 설치된 kairos를 호출한다. 버전이 바뀌어도 경로 상수를 고칠 필요가 없다. 설치본의 kairos가 오래되어 패널이 호출하는 명령을 지원하지 않으면 상태 표시줄에 `kairos 오류`가 나온다.
 - kairos는 네이티브 실행 파일이므로 워커의 Node 버전과 무관하다.
 - 언로드는 `orca plugin dev unload <같은 경로>`로 한다. `kairos uninstall`은 플러그인을 언로드하지 않고 이 명령만 알려 준다.

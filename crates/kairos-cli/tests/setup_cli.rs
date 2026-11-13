@@ -100,6 +100,8 @@ fn setup은_알림_권한을_받고_패널을_승인한다() {
             "notifier status".to_owned(),
             format!("lsregister -f {}", notifier_app.to_str().unwrap()),
             "notifier setup".to_owned(),
+            // 타입 파일을 먼저 쓴다. 승인한 뒤에 쓰면 패널 해시가 달라져 워커가 뜨지 않는다.
+            format!("orca plugin types {panel}"),
             format!("orca plugin dev load {panel}"),
             format!("orca plugin dev load {panel} --approve {FINGERPRINT}"),
         ],
@@ -126,8 +128,9 @@ fn setup은_이미_받은_권한과_승인을_다시_묻지_않는다() {
     assert!(done.out.contains("권한이 이미 있습니다"), "{}", done.out);
     assert!(done.out.contains("Orca 패널을 올렸습니다"), "{}", done.out);
     let calls = fakes.calls();
-    assert_eq!(calls.len(), 2, "{calls:?}");
+    assert_eq!(calls.len(), 3, "{calls:?}");
     assert_eq!(calls[0], "notifier status");
+    assert!(calls[1].starts_with("orca plugin types "), "{calls:?}");
 }
 
 #[test]
