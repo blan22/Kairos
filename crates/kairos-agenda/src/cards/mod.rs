@@ -15,6 +15,7 @@
 mod budget_meter;
 mod card_builder;
 mod card_chooser;
+mod explain;
 mod focus_tracker;
 mod playbook;
 mod presenter;
@@ -23,6 +24,7 @@ mod views;
 pub use budget_meter::{BudgetMeter, BudgetUsage};
 pub use card_builder::{CardBuilder, session_of};
 pub use card_chooser::{CardChooser, P1AlertMode};
+pub use explain::{Explainer, OfferWhy, WhyView};
 pub use focus_tracker::{FocusTracker, FocusView};
 pub use playbook::{Playbook, issue_url_matches, label_of, playbook_for, playbook_of, reason_label, safe_url};
 pub use presenter::{ListResponse, NextOptions, NextResponse, Presenter, RunsView};

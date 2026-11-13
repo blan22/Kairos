@@ -296,3 +296,30 @@ fn state_json은_건수와_게이트만_담고_제목은_담지_않는다() {
     assert_eq!(state["items"]["badge"], 0, "게이트가 닫히면 표시 건수는 0이다");
     assert_eq!(state["items"]["open"]["P1"], 1);
 }
+
+#[test]
+fn next_json의_newest는_열린_항목의_가장_큰_id이고_직접_추가한_일은_세지_않는다() {
+    let cli = Cli::new();
+    assert!(cli.json(&["next"]).body().get("newest").is_none(), "열린 항목이 없으면 키가 없다");
+    let cli = cli_with_item();
+    assert_eq!(cli.json(&["next"]).body()["newest"], 1);
+    assert_eq!(cli.json(&["add", "--", "합성 할 일"]).status, 0);
+    assert_eq!(cli.json(&["next"]).body()["newest"], 1, "직접 추가한 일은 새 일 표시에 들지 않는다");
+    assert_eq!(cli.json(&["done", "1"]).status, 0);
+    assert!(cli.json(&["next"]).body().get("newest").is_none());
+}
+
+#[test]
+fn list_json의_항목은_why에_규칙과_소식_수를_싣고_외부_글은_싣지_않는다() {
+    let cli = cli_with_item();
+    cli.json(&["display", "on"]);
+    let body = cli.json(&["list"]).body();
+    let why = &body["items"][0]["why"];
+    assert!(why["rule"].as_str().unwrap().contains('.'), "{why}");
+    assert_eq!(why["events"], 1);
+    assert!(!why.to_string().contains("합성 멘션"), "{why}");
+    let keys: Vec<&String> = why.as_object().unwrap().keys().collect();
+    for key in &keys {
+        assert!(["rule", "events", "facts", "attendees", "startsAt", "offer"].contains(&key.as_str()), "{key}");
+    }
+}

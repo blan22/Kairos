@@ -153,6 +153,44 @@ fn 플레이북이_없는_항목이_먼저_열려_있어도_제안은_한_항목
 }
 
 #[test]
+fn 근거는_규칙과_사실_코드와_제안_조건뿐이고_외부_글을_싣지_않는다() {
+    let db = seeded();
+    let when = kst(MON, "10:00");
+    let url = format!("https://github.com/{PLAYBOOK_ORG}/{}/issues/7", PLAYBOOK_REPOS[0]);
+    let hostile = "$(touch /tmp/x) <img src=x onerror=alert(1)>";
+    let object = NormalizedObject {
+        permalink: Some(url),
+        trust_tier: Some(TrustTier::T1),
+        text_head: Some(hostile.into()),
+        milestone_title: Some(hostile.into()),
+        ..issue(7)
+    };
+    let key = object.object_key.clone();
+    github(&when).objects(vec![object]).run(&db);
+    let event = NormalizedEvent {
+        object_key: Some(key),
+        trust_tier: Some(TrustTier::T1),
+        text_head: Some(hostile.into()),
+        ..comment("c7", &when)
+    };
+    github(&when).events(vec![event]).run(&db);
+    refresh(&db, &when);
+    let mut rows = list(&db, &when).items;
+    assert!(rows.iter().all(|row| row.why.is_none()), "Presenter는 근거를 채우지 않는다. golden의 바이트가 그대로다");
+    kairos_agenda::Explainer::new(db.connection()).fill(&mut rows).unwrap();
+    let why = rows[0].why.as_ref().unwrap();
+    assert!(why.rule.is_some());
+    assert_eq!(why.events, 1);
+    assert!(why.facts.contains(&"issue"));
+    assert!(why.facts.contains(&"milestone"), "마일스톤은 있다는 사실만 낸다");
+    let offer = why.offer.as_ref().unwrap();
+    assert_eq!(offer.repo, format!("{PLAYBOOK_ORG}/{}", PLAYBOOK_REPOS[0]));
+    assert_eq!(offer.checks, ["assigned_me", "open", "mapped", "insiders", "no_session"]);
+    let text = serde_json::to_string(why).unwrap();
+    assert!(!text.contains("touch") && !text.contains("img"), "{text}");
+}
+
+#[test]
 fn 플레이북마다_수락_범위가_있고_코멘트를_하지_않는다고_적는다() {
     for playbook in [Playbook::QaIssue, Playbook::PrReview, Playbook::ReplyDraft] {
         assert!(playbook.scope().contains("코멘트"), "{playbook}");

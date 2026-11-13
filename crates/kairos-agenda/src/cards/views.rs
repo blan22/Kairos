@@ -4,6 +4,7 @@ use kairos_core::{Instant, OffDates, string_enum};
 use kairos_policy::ItemReason;
 use serde::Serialize;
 
+use super::explain::WhyView;
 use super::playbook::Playbook;
 use crate::item::{ItemState, ItemTier, ParkTrigger};
 use crate::repo::{CardKind, ReadyKind, RunView};
@@ -56,6 +57,9 @@ pub struct ItemView {
     pub scope: Option<String>,
     pub run: Option<RunView>,
     pub actions: Vec<CardAction>,
+    /// 왜 올라왔고 왜 제안했는지의 근거. CLI가 `--json` 응답에만 채운다. 없으면 키가 없다.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub why: Option<WhyView>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize)]

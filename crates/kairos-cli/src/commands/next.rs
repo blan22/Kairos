@@ -1,4 +1,4 @@
-use kairos_agenda::{NextOptions, Presenter, RevealFile, SourceHealthBook};
+use kairos_agenda::{Explainer, ItemRepo, NextOptions, Presenter, RevealFile, SourceHealthBook};
 use kairos_core::KairosResult;
 
 use super::shared::line;
@@ -43,6 +43,11 @@ impl Command for Next {
         let sources =
             SourceHealthBook::summary(&context.source_health(&database, next_context.now, &next_context.control)?);
         response.sources = (!sources.is_empty()).then_some(sources);
+        // 펼친 카드가 보여 줄 근거와 상태 표시줄의 새 항목 점. golden이 지키는 Presenter 출력과 따로 채운다.
+        if let Some(card) = response.card.as_mut() {
+            Explainer::new(database.connection()).fill(&mut card.items)?;
+        }
+        response.newest = ItemRepo::new(database.connection()).newest_open_id()?;
         drop(database);
         // 알림을 눌러 연 항목. 10분이 지난 요청은 싣지 않는다.
         response.reveal = RevealFile::new(context.home()).recent(response.at);

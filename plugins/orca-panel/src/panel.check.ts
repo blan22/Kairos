@@ -18,7 +18,9 @@ import {
   merged,
   nextJson,
   offered,
+  OFFER_WHY,
   parked,
+  providerRows,
   readyCard,
   recordingGate,
   revivable,
@@ -27,6 +29,7 @@ import {
   snapshotOf,
   sourceRows,
   startable,
+  why,
   workdayRows,
 } from './fixtures.ts'
 import type { Snapshot } from './protocol.ts'
@@ -121,6 +124,20 @@ export default defineCheck({
     snapshotOf(
       nextJson({ card: card([startable(2, { title: workdayRows()[1]?.title, carried: true })]), sources: sourceRows(true), counts: counts({ P0: 1, P1: 5, P2: 15 }, { carriedP1: 3, parked: 1, manual: 1 }) }),
       listJson(workdayRows()),
+    ),
+  ),
+  // 프로바이더 칩과 출처 아이콘. 저장소의 기준이 없어 처음 연 패널처럼 새 일 점이 없다.
+  providers: answers(snapshotOf(nextJson({ sources: sourceRows(true), counts: counts({ P0: 2, P1: 4, P2: 1 }, { parked: 1, manual: 1 }), newest: 38 }), listJson(providerRows()))),
+  // 패널이 마지막으로 본 뒤 Slack, Calendar, Gmail에 새 일이 왔다. 칩, 탭, 줄에 빨간 점이 있다.
+  providersFresh: {
+    ...answers(snapshotOf(nextJson({ sources: sourceRows(true), counts: counts({ P0: 2, P1: 4, P2: 1 }, { parked: 1, manual: 1 }), newest: 38 }), listJson(providerRows()))),
+    storage: { marks: { floor: 32, seen: [35], known: 32, unseen: 3 } },
+  },
+  // 먼저 볼 일 카드의 제안. 맡겨도 된다고 본 근거와 일할 곳을 쓴다.
+  offerWhyCard: answers(
+    snapshotOf(
+      nextJson({ card: card([startable(1, { why: why({ rule: 'p2.assigned', events: 2, facts: ['issue', 'assigned_me'], offer: { ...OFFER_WHY, repo: 'contoso-synthetic/issues' } }) })]), counts: counts({ P1: 1 }) }),
+      listJson([startable(1, { why: why({ rule: 'p2.assigned', events: 2, facts: ['issue', 'assigned_me'], offer: { ...OFFER_WHY, repo: 'contoso-synthetic/issues' } }) })]),
     ),
   ),
   items40: answers(snapshotOf(nextJson({ card: card([startable(900)]), counts: counts({ P0: 8, P1: 16, P2: 16 }) }), listJson(manyItems(40)))),

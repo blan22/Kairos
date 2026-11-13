@@ -74,7 +74,9 @@ fn 실행_끝의_모양이_판정_입력으로_바뀐다() {
 #[test]
 fn claude_인자는_스파이크_권장_조합이고_모델_포트를_막는다() {
     let args = ClaudeMode::args("/x/plugin");
-    for flag in ["--tools", "--no-session-persistence", "--setting-sources", "--plugin-dir"] {
+    // --disable-slash-commands가 빠지면 사용자 스킬의 링크를 따라 보호 폴더를 읽어 macOS가 kairos에 접근 허용을 묻는다.
+    for flag in ["--tools", "--no-session-persistence", "--setting-sources", "--plugin-dir", "--disable-slash-commands"]
+    {
         assert!(args.iter().any(|arg| arg == flag), "{flag}");
     }
     let after = |flag: &str| args[args.iter().position(|arg| arg == flag).unwrap() + 1].clone();

@@ -50,12 +50,18 @@ pub struct ClaudeMode;
 
 impl ClaudeMode {
     /// 스파이크 권장 조합이다. 플러그인 경로만 바뀐다.
+    ///
+    /// `--disable-slash-commands`는 사용자 스킬과 명령을 읽지 않게 한다. 수집은 둘 다 쓰지 않는다.
+    /// 이 플래그가 없으면 claude가 `~/.claude/skills`의 링크를 따라가 데스크탑 같은 보호 폴더를 읽는다.
+    /// 틱은 launchd가 띄우므로 macOS는 그 접근을 kairos의 것으로 보고 3분마다 폴더 접근 허용을 묻는다(측정).
+    /// 플래그를 넣어도 MCP 서버, 플러그인, 훅은 그대로 뜬다(측정).
     pub fn args(plugin_dir: &str) -> Vec<String> {
         [
             "-p",
             "도구를 쓰지 말고 바로 종료하라. 답은 ok 한 단어.",
             "--tools",
             "",
+            "--disable-slash-commands",
             "--permission-mode",
             "dontAsk",
             "--permission-prompts",

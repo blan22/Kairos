@@ -240,6 +240,7 @@ impl<'a> CardBuilder<'a> {
             scope: playbook.map(|playbook| playbook.scope().to_owned()),
             actions: item_actions(row, playbook.is_some() && self.sessions, linked, run.as_ref(), fix_run),
             run,
+            why: None,
         })
     }
 

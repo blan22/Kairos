@@ -34,7 +34,8 @@ import { startWorker } from './service.ts'
 let view: TestPanel | undefined
 afterEach(() => view?.unmount())
 
-const CAPS: string[] = []
+/** 매니페스트가 청하는 권한. 새 일 기준을 플러그인 저장소에 둔다. */
+const CAPS: string[] = ['storage:own']
 const SCOPE = OFFER_SCOPE
 const START = '세션 열고 시작'
 const scene = (next: Record<string, unknown> = {}, rows: Record<string, unknown>[] = [], list: Record<string, unknown> = {}): Snapshot =>
@@ -99,9 +100,15 @@ const expand = async (panel: TestPanel, title: string): Promise<void> => panel.p
 const rowTitles = (panel: TestPanel): (string | undefined)[] => rowsOf(panel).map(row => rowTitle(panel, row))
 const tick = async (panel: TestPanel): Promise<void> => panel.post('kairos.tick', { at: 1 })
 /** 탭을 고른다. 고르지 않은 탭의 줄은 그려지지 않는다. */
-const tabTo = async (panel: TestPanel, id: 'now' | 'waiting' | 'sessions' | 'status'): Promise<void> => panel.select({ type: 'Tabs' }, id)
+const tabTo = async (panel: TestPanel, id: 'now' | 'waiting' | 'sessions'): Promise<void> => panel.select({ type: 'Tabs' }, id)
 /** 탭 머리의 글자. 건수가 있으면 뒤에 붙는다. */
 const tabLabels = (panel: TestPanel): unknown[] => panel.findAll({ type: 'Tab' }).map(found => found.props.label)
+/** 머리말의 수집 상태 버튼. 누르면 목록 대신 상태 화면을 그리고, 다시 누르면 닫는다. */
+const statusButton = (panel: TestPanel) => panel.find({ type: 'IconButton', label: /수집 상태/ })
+const toggleStatus = async (panel: TestPanel): Promise<void> => panel.press(statusButton(panel) as never)
+/** 프로바이더 칩. 이름 뒤에 지금 탭의 건수가 붙는다. */
+const chip = (panel: TestPanel, name: string) => panel.findAll({ type: 'Button' }).find(found => found.key === `provider-${name}-button`) ?? null
+const chipLabels = (panel: TestPanel): string[] => panel.findAll({ type: 'Button' }).filter(found => found.key?.startsWith('provider-') === true).map(found => found.text)
 /** 자식이 없는 틀의 수. 빈 층을 그리지 않는지 볼 때 쓴다. */
 function hollow(node: unknown, type: string): number {
   if (Array.isArray(node)) return node.reduce((sum: number, each) => sum + hollow(each, type), 0)
@@ -308,7 +315,7 @@ test('접힌 줄에는 시작이 없고 펼쳐야 범위와 컨펌 버튼이 보
   assert.equal(panel.find({ type: 'Callout' }), null)
   await expand(panel, '합성 이슈 7')
   const offer = panel.find({ type: 'Callout' })
-  assert.equal(offer?.props.title, '에이전트에게 맡길 범위')
+  assert.equal(offer?.props.title, '에이전트가 이슈를 고칩니다')
   assert.equal(offer?.props.tone, 'accent')
   assert.ok(panel.find({ type: 'Text', text: SCOPE }))
   assert.deepEqual(rig.actions, [])
@@ -320,7 +327,7 @@ test('긴급 줄의 제안은 자리를 지키고 접힌 줄에 낱말로 알린
   const { panel } = await open(scene({}, [startable(7, { tier: 'P0' })]))
   assert.ok(panel.find({ type: 'Text', text: '긴급 1' }))
   assert.equal(panel.find({ type: 'Text', text: '에이전트 제안 1' }), null)
-  assert.match(titled(panel, '합성 이슈 7')?.text ?? '', /담당 이슈 · GitHub · 에이전트 제안/)
+  assert.match(titled(panel, '합성 이슈 7')?.text ?? '', /GitHub · 담당 이슈 · 에이전트 제안/)
   await expand(panel, '합성 이슈 7')
   assert.equal(panel.find({ type: 'Text', text: /· 에이전트 제안/ }), null)
   assert.ok(button(panel, START))
@@ -328,13 +335,13 @@ test('긴급 줄의 제안은 자리를 지키고 접힌 줄에 낱말로 알린
 
 test('묶음 카드의 접힌 줄은 제안 묶음 밖이므로 낱말로 알린다', async () => {
   const { panel } = await open(scene({ card: bundle([startable(7, { tier: 'P2' }), item(8, { tier: 'P2' })], 0) }))
-  assert.match(titled(panel, '합성 이슈 7')?.text ?? '', /담당 이슈 · GitHub · 에이전트 제안/)
+  assert.match(titled(panel, '합성 이슈 7')?.text ?? '', /GitHub · 담당 이슈 · 에이전트 제안/)
   assert.doesNotMatch(titled(panel, '합성 이슈 8')?.text ?? '', /에이전트 제안/)
 })
 
 test('세션이 잠겨 있으면 제안과 푸는 길만 있고 시작 버튼은 없다', async () => {
   const { rig, panel } = await open(scene({ card: card([offered(7)]) }))
-  assert.equal(panel.find({ type: 'Callout' })?.props.title, '에이전트에게 맡길 범위')
+  assert.equal(panel.find({ type: 'Callout' })?.props.title, '에이전트가 이슈를 고칩니다')
   assert.ok(panel.find({ type: 'Text', text: SCOPE }))
   assert.equal(button(panel, START), null)
   assert.ok(panel.find({ type: 'Code', text: 'kairos sessions on' }))
@@ -1035,10 +1042,10 @@ test('묶음을 접으면 그 안의 펼친 행도 접고 맡아 둔 값을 반�
   await expand(panel, '합성 이슈 10')
   state.snapshot = scene({ counts: counts({ P1: 9 }) }, [item(1)])
   await tick(panel)
-  assert.deepEqual(tabLabels(panel), ['지금', '대기 2', '세션', '상태'])
+  assert.deepEqual(tabLabels(panel), ['지금', '대기 2', '세션'])
   await panel.press(panel.find({ type: 'ListItem', text: /미룬 일 2/ }) as never)
   assert.ok(panel.find({ text: '9건' }))
-  assert.deepEqual(tabLabels(panel), ['지금 1', '대기', '세션', '상태'])
+  assert.deepEqual(tabLabels(panel), ['지금 1', '대기', '세션'])
 })
 
 test('여유 있을 때는 길어도 접는 머리글이 없다', async () => {
@@ -1100,7 +1107,8 @@ test('펼치고 접어도 kairos를 부르지 않는다', async () => {
     await panel.press(panel.find({ type: 'ListItem', text: /합성 이슈 1/ }) as never)
     await tabTo(panel, 'waiting')
     await panel.press(panel.find({ type: 'ListItem', text: /미룬 일/ }) as never)
-    await tabTo(panel, 'status')
+    await toggleStatus(panel)
+    await toggleStatus(panel)
     // 카드가 없으면 지금 탭으로 돌아와도 읽지 않는다.
     await tabTo(panel, 'now')
   }
@@ -1630,7 +1638,7 @@ test('추가한 일은 대기 탭의 머리글이 알려 주고 다른 탭에서
   const now = await open(before, outcome)
   await add(now.panel)
   assert.ok(now.panel.find({ text: '대기 탭에 추가했습니다' }))
-  assert.deepEqual(tabLabels(now.panel), ['지금 1', '대기 7', '세션', '상태'])
+  assert.deepEqual(tabLabels(now.panel), ['지금 1', '대기 7', '세션'])
 })
 
 const REVEAL_AT = 1_762_740_000_000
@@ -1867,20 +1875,25 @@ const pairs = (panel: TestPanel, label: string): [string, unknown][] => {
 }
 const spread = [item(1, { tier: 'P0' }), startable(2), item(3), item(4, { tier: 'P2' }), parked(5), item(6, { baseline: true }), accepted(7)]
 
-test('탭은 지금, 대기, 세션, 상태이고 탭마다 건수를 쓴다', async () => {
+test('진행 상태 탭은 지금, 대기, 세션이고 탭마다 건수를 쓴다', async () => {
   const { rig, panel } = await open(scene({}, spread))
   const reads = rig.snapshots.length
-  assert.equal(panel.find({ type: 'Tabs' })?.props.label, 'kairos 보기')
+  assert.equal(panel.find({ type: 'Tabs' })?.props.label, '진행 상태')
   assert.equal(tabValue(panel), 'now')
-  assert.deepEqual(tabLabels(panel), ['지금 3', '대기 3', '세션 1', '상태'])
+  assert.deepEqual(tabLabels(panel), ['지금 3', '대기 3', '세션 1'])
   assert.deepEqual(rowTitles(panel), ['합성 이슈 1', '합성 이슈 2', '합성 이슈 3'])
   await tabTo(panel, 'waiting')
   assert.equal(tabValue(panel), 'waiting')
   assert.deepEqual(rowTitles(panel), ['합성 이슈 4', '합성 이슈 5'])
   await tabTo(panel, 'sessions')
   assert.deepEqual(rowTitles(panel), ['합성 이슈 7'])
-  await tabTo(panel, 'status')
+  // 수집 상태는 탭이 아니라 머리말 버튼이다. 누르면 목록 대신 상태를 그리고 다시 누르면 보던 탭으로 돌아온다.
+  await toggleStatus(panel)
   assert.deepEqual(rowTitles(panel), [])
+  assert.equal(panel.find({ type: 'Tabs' }), null)
+  assert.equal(statusButton(panel)?.props.label, '수집 상태 닫기')
+  await toggleStatus(panel)
+  assert.deepEqual(rowTitles(panel), ['합성 이슈 7'])
   // 탭을 바꾸는 것은 보기만 바꾼다. kairos를 부르지 않는다.
   assert.equal(rig.snapshots.length, reads)
   assert.deepEqual(rig.actions, [])
@@ -1889,7 +1902,7 @@ test('탭은 지금, 대기, 세션, 상태이고 탭마다 건수를 쓴다', a
 
 test('먼저 볼 일 카드는 지금 탭에만 있고 건수에 든다', async () => {
   const { panel } = await open(scene({ card: card([startable(7)]) }, [item(1), parked(2)]))
-  assert.deepEqual(tabLabels(panel), ['지금 2', '대기 1', '세션', '상태'])
+  assert.deepEqual(tabLabels(panel), ['지금 2', '대기 1', '세션'])
   assert.ok(button(panel, START))
   await tabTo(panel, 'waiting')
   assert.equal(button(panel, START), null)
@@ -1897,17 +1910,19 @@ test('먼저 볼 일 카드는 지금 탭에만 있고 건수에 든다', async 
   assert.ok(button(panel, START))
 })
 
-test('늦는 소스가 있으면 상태 탭 이름에 느낌표를 붙인다', async () => {
+test('늦는 소스가 있으면 수집 상태 버튼이 경고색과 이름으로 알린다', async () => {
   const { panel } = await open(scene({ health: 'Slack 37분 지연', sources: sourceRows() }, [item(1)]))
-  assert.deepEqual(tabLabels(panel), ['지금 1', '대기', '세션', '상태 !'])
+  assert.equal(statusButton(panel)?.props.tone, 'warning')
+  assert.equal(statusButton(panel)?.props.label, '수집 상태 · 지연된 소스가 있습니다')
   view?.unmount()
-  // 세션 상태를 못 읽은 경고처럼 상태 탭에 볼 것이 없는 경고에는 붙이지 않는다. 미연결과 수집 기록 없음도 지연이 아니다.
+  // 세션 상태를 못 읽은 경고처럼 상태 화면에 볼 것이 없는 경고에는 붙이지 않는다. 미연결과 수집 기록 없음도 지연이 아니다.
   const quiet = sourceRows().map(row => (row.status === 'delayed' ? { ...row, status: 'ok', delayMinutes: null } : row))
   const other = await open(scene({ health: '세션 상태를 읽지 못했습니다', sources: quiet }, [item(1)]))
-  assert.deepEqual(tabLabels(other.panel), ['지금 1', '대기', '세션', '상태'])
+  assert.equal(statusButton(other.panel)?.props.tone, undefined)
+  assert.equal(statusButton(other.panel)?.props.label, '수집 상태')
   view?.unmount()
   const old = await open(scene({ health: '합성 경고' }, [item(1)]))
-  assert.deepEqual(tabLabels(old.panel), ['지금 1', '대기', '세션', '상태'])
+  assert.equal(statusButton(old.panel)?.props.tone, undefined)
 })
 
 test('탭을 바꾸면 펼친 행을 접어 보이지 않는 줄이 틱을 붙잡지 않는다', async () => {
@@ -1953,11 +1968,11 @@ test('빈 대기 탭과 세션 탭은 무엇이 모이는 곳인지 말한다', 
   assert.equal(filled.panel.find({ type: 'EmptyState' }), null)
 })
 
-test('상태 탭은 소스별 수집 상태와 건수와 예산을 조작 없이 보여 준다', async () => {
+test('수집 상태 화면은 소스별 수집 상태와 건수와 예산을 조작 없이 보여 준다', async () => {
   const budget = { p1HourUsed: 1, p1HourLimit: 2, p1DayUsed: 4, p1DayLimit: 6, bundlesToday: 2, shownToday: 5, dayTarget: 6, nextBundleAt: '2026-11-04T05:00:00.000Z' }
   const next = { sources: sourceRows(), budget, counts: counts({ P0: 1, P1: 2, P2: 3 }, { parked: 4, accepted: 1, carriedP1: 2 }) }
   const { rig, panel } = await open(scene(next, [item(1)]))
-  await tabTo(panel, 'status')
+  await toggleStatus(panel)
   for (const word of ['수집 상태', 'Calendar', '미연결', 'GitHub', '정상', 'Slack', '37분 지연', 'Gmail', '수집 시간 아님', 'Notion', '수집 기록 없음']) assert.ok(texts(panel).includes(word), word)
   assert.equal(panel.find({ type: 'Text', text: '37분 지연' })?.props.tone, 'warning')
   assert.equal(panel.find({ type: 'Text', text: '정상' })?.props.tone, undefined)
@@ -1965,15 +1980,15 @@ test('상태 탭은 소스별 수집 상태와 건수와 예산을 조작 없이
   assert.deepEqual(pairs(panel, '열린 일'), [['긴급', 1], ['오늘', 2], ['여유 있을 때', 3], ['밀린 일', 2], ['미룬 일', 4], ['세션', 1]])
   assert.deepEqual(pairs(panel, '먼저 볼 일 카드'), [['이번 시간', '1 / 2'], ['오늘', '4 / 6'], ['오늘 낸 묶음', 2], ['다음 묶음', '14:00']])
   assert.ok(panel.find({ type: 'Code', text: 'kairos doctor' }))
-  // 상태 탭에는 kairos를 바꾸는 버튼이 없다.
-  assert.deepEqual(panel.findAll({ role: 'button' }).map(found => found.label ?? found.text).filter(label => !['포커스', '검색', '할 일 추가', '새로고침'].includes(String(label))), [])
+  // 상태 화면에는 kairos를 바꾸는 버튼이 없다.
+  assert.deepEqual(panel.findAll({ role: 'button' }).map(found => found.label ?? found.text).filter(label => !['포커스', '검색', '할 일 추가', '새로고침', '수집 상태 닫기'].includes(String(label))), [])
   assert.deepEqual(rig.actions, [])
   assert.deepEqual(panel.errors, [])
 })
 
-test('소스별 상태를 못 받은 옛 kairos에서도 상태 탭은 건수를 보여 준다', async () => {
+test('소스별 상태를 못 받은 옛 kairos에서도 수집 상태 화면은 건수를 보여 준다', async () => {
   const { panel } = await open(scene({ counts: counts({ P1: 2 }) }, [item(1)]))
-  await tabTo(panel, 'status')
+  await toggleStatus(panel)
   assert.ok(texts(panel).includes('소스별 상태를 받지 못했습니다'))
   assert.deepEqual(pairs(panel, '열린 일')[1], ['오늘', 2])
   assert.deepEqual(panel.errors, [])
@@ -1983,12 +1998,12 @@ test('게이트가 닫히면 탭과 검색이 없고 수집 상태만 덧붙인�
   const { panel } = await open(scene({ display: recordingGate, sources: sourceRows() }, [item(1)], { hidden: 1 }))
   assert.equal(panel.find({ type: 'Tabs' }), null)
   assert.equal(panel.find({ label: '검색' }), null)
-  assert.ok(texts(panel).includes('수집 상태'))
+  assert.ok(panel.find({ type: 'Text', text: '수집 상태' }))
   assert.ok(texts(panel).includes('37분 지연'))
   assert.deepEqual(rowTitles(panel), [])
   view?.unmount()
   const bare = await open(scene({ display: recordingGate }))
-  assert.ok(!texts(bare.panel).includes('수집 상태'))
+  assert.equal(bare.panel.find({ type: 'Text', text: '수집 상태' }), null)
 })
 
 test('펼친 행은 왜 올라왔는지와 권장 행동을 먼저 말한다', async () => {
@@ -2011,13 +2026,13 @@ test('제안이 붙은 일은 이유, 권장, 맡길 범위, 시작 순서로 �
   const { panel } = await open(scene({}, [startable(1)]))
   await expand(panel, '합성 이슈 1')
   const all = texts(panel)
-  const order = ['담당자로 지정된 이슈입니다.', '에이전트에게 맡길 수도 있습니다.', SCOPE, '시작하면 작업 공간을 만들고 세션 창을 엽니다.', START].map(word => all.indexOf(word))
+  const order = ['담당자로 지정된 이슈입니다.', '에이전트에게 맡길 수도 있습니다.', '에이전트가 이슈를 고칩니다', SCOPE, '시작을 누르면 작업 공간을 만들고 세션 창을 엽니다.', START].map(word => all.indexOf(word))
   assert.ok(order.every(at => at >= 0), JSON.stringify(order))
   assert.deepEqual([...order].sort((a, b) => a - b), order)
   view?.unmount()
   const locked = await open(scene({}, [offered(1)]))
   await expand(locked.panel, '합성 이슈 1')
-  assert.ok(!texts(locked.panel).includes('시작하면 작업 공간을 만들고'))
+  assert.ok(!texts(locked.panel).includes('시작을 누르면 작업 공간을 만들고'))
   assert.ok(!texts(locked.panel).includes('에이전트에게 맡길 수도 있습니다.'))
 })
 
@@ -2181,12 +2196,14 @@ test('카드를 그리지 않는 탭에서는 세션 소식만 확인으로 적�
   await expand(panel, '합성 이슈 2')
   await panel.press(button(panel, '완료') as never)
   assert.deepEqual(rig.actions, [{ action: 'done', ids: [2], seen: false, ready: true }])
-  await tabTo(panel, 'status')
+  await toggleStatus(panel)
   await panel.press(panel.find({ label: '새로고침' }) as never)
   assert.deepEqual(rig.snapshots.at(-1), { seen: false, ready: true })
-  // 틱은 어느 탭에서든 아무것도 적지 않는다.
+  // 틱은 어느 화면에서든 아무것도 적지 않는다.
   await tick(panel)
   assert.deepEqual(rig.snapshots.at(-1), { seen: false })
+  // 상태 화면을 닫으면 보던 대기 탭으로 돌아온다. 카드는 아직 화면에 없다.
+  await toggleStatus(panel)
   const before = rig.snapshots.length
   // 지금 탭으로 돌아오는 것은 패널을 여는 것과 같다. 카드가 화면에 들어오므로 한 번 읽어 노출을 적는다.
   await tabTo(panel, 'now')
@@ -2329,7 +2346,7 @@ test('묶음 카드가 접어 둔 일은 지금 탭이 아니라 제 탭에서 �
   const rest = Array.from({ length: 3 }, (_, index) => item(index + 10, { tier: 'P2' }))
   const pile = { ...bundle(bundleRows, 3), itemIds: [4, 5, 10, 11, 12] }
   const { panel } = await open(scene({ card: pile }, rest))
-  assert.deepEqual(tabLabels(panel), ['지금 2', '대기 3', '세션', '상태'])
+  assert.deepEqual(tabLabels(panel), ['지금 2', '대기 3', '세션'])
 })
 
 test('카드 안에서 펼친 줄은 카드가 화면에서 사라지면 접어 틱을 붙잡지 않는다', async () => {
@@ -2379,13 +2396,13 @@ test('띠로 올라간 줄이 탭의 유일한 일이어도 탭이 비었다고 
   assert.equal(hasStrip(panel), true)
   assert.equal(panel.find({ type: 'EmptyState' }), null)
   assert.equal(panel.find({ role: 'button', text: /건 보기$/ }), null)
-  assert.deepEqual(tabLabels(panel), ['지금 1', '대기 1', '세션', '상태'])
+  assert.deepEqual(tabLabels(panel), ['지금 1', '대기 1', '세션'])
   view?.unmount()
   const waiting = await open(scene(revealed([2], REVEAL_AT + 5), [item(1), parked(2)]))
   await tabTo(waiting.panel, 'waiting')
   assert.equal(hasStrip(waiting.panel), true)
   assert.equal(waiting.panel.find({ type: 'EmptyState' }), null)
-  assert.deepEqual(tabLabels(waiting.panel), ['지금 1', '대기 1', '세션', '상태'])
+  assert.deepEqual(tabLabels(waiting.panel), ['지금 1', '대기 1', '세션'])
 })
 
 test('게이트가 닫혀 탭이 없으면 추가한 자리를 탭으로 말하지 않는다', async () => {
@@ -2409,4 +2426,256 @@ test('세션 탭에서 처리 중이면 다른 줄의 이동이 잠긴다', asyn
   release({ ok: true, code: null, message: '이동함', run: null, snapshot: shown })
   await pressed
   assert.equal(button(panel, '이동')?.props.disabled ?? false, false)
+})
+
+/** 프로바이더가 여럿인 하루. 소스는 모두 연결돼 있다. */
+const mixedRows = (): Record<string, unknown>[] => [
+  item(1, { title: '합성 깃허브 이슈' }),
+  item(2, { source: 'slack', sourceLabel: 'Slack', reason: 'direct_mention', reasonLabel: '나를 언급', title: '합성 슬랙 질문' }),
+  item(3, { source: 'notion', sourceLabel: 'Notion', reason: 'notion_mention', reasonLabel: 'Notion 언급', title: '합성 노션 문서' }),
+]
+
+/** 새 일 기준을 저장소에 미리 둔 패널. 틱마다 스냅숏을 바꿀 수 있다. */
+const openMarked = async (first: Snapshot, stored: Record<string, unknown> | null) => {
+  const state = { snapshot: first }
+  const host = mockHost({
+    capabilities: CAPS,
+    storage: stored === null ? {} : { marks: stored as never },
+    requests: {
+      'kairos.snapshot': () => state.snapshot,
+      'kairos.action': () => ({ ok: true, code: null, message: '처리했습니다', run: null, snapshot: state.snapshot }),
+    },
+  })
+  view = await mount(panelModule, { host })
+  return { state, panel: view }
+}
+
+/** 머문 시간을 흉내 낸다. 화면을 떠날 때 2초 넘게 본 줄만 본 것으로 적는다. */
+const realNow = Date.now
+afterEach(() => {
+  Date.now = realNow
+})
+const later = (ms: number): void => {
+  const base = Date.now()
+  Date.now = () => base + ms
+}
+const freshWords = (panel: TestPanel): number => panel.findAll({ type: 'Text', text: '● 새 일' }).length
+
+test('프로바이더 칩은 전체와 연결된 소스를 늘 같은 순서로 두고 지금 탭의 건수를 붙인다', async () => {
+  const { panel } = await open(scene({ sources: sourceRows(true) }, mixedRows()))
+  assert.deepEqual(chipLabels(panel), ['전체 3', 'GitHub 1', 'Slack 1', 'Calendar', 'Gmail', 'Notion 1'])
+  assert.equal(chip(panel, 'all')?.props.variant, 'solid')
+  assert.equal(chip(panel, 'slack')?.props.variant, 'ghost')
+  // 여러 곳의 일이 섞이면 줄의 아이콘과 첫 낱말이 출처다. 같은 묶음 안에서는 최신이 위다.
+  assert.deepEqual(rowsOf(panel).map(row => row.props.icon), ['book', 'zap', 'branch'])
+  assert.ok(panel.find({ type: 'Text', text: 'Slack · 나를 언급' }))
+  assert.equal(chip(panel, 'all')?.props.tooltip, '모든 곳의 일을 함께 봅니다')
+  assert.deepEqual(panel.errors, [])
+})
+
+test('칩을 고르면 그 곳의 일만 그리고 줄에서 출처 낱말을 뺀다', async () => {
+  const { panel } = await open(scene({ sources: sourceRows(true) }, mixedRows()))
+  await panel.press(chip(panel, 'slack') as never)
+  assert.equal(chip(panel, 'slack')?.props.variant, 'solid')
+  assert.deepEqual(rowTitles(panel), ['합성 슬랙 질문'])
+  assert.equal(panel.find({ type: 'Text', text: 'Slack · 나를 언급' }), null)
+  assert.ok(panel.find({ type: 'Text', text: '나를 언급' }))
+  assert.deepEqual(tabLabels(panel), ['지금 1', '대기', '세션'])
+  // 일이 없는 소스를 고르면 빈 상태다. 다른 곳의 일은 보이지 않는다.
+  await panel.press(chip(panel, 'calendar') as never)
+  assert.deepEqual(rowTitles(panel), [])
+  await panel.press(chip(panel, 'all') as never)
+  assert.equal(rowTitles(panel).length, 3)
+})
+
+test('칩은 고를 곳이 둘 이상일 때만 그리고 한 곳뿐이면 줄에 출처를 쓰지 않는다', async () => {
+  const { panel } = await open(scene({}, [item(1), item(2)]))
+  assert.deepEqual(chipLabels(panel), [])
+  assert.equal(rowsOf(panel).length, 2)
+  assert.ok(!rowsOf(panel).some(row => row.props.icon === 'branch'))
+  assert.ok(!texts(panel).includes('GitHub · 담당 이슈'))
+})
+
+test('먼저 볼 일 카드는 그 카드의 일이 고른 곳에서 왔을 때만 보인다', async () => {
+  const first = item(1, { tier: 'P0', title: '합성 깃허브 긴급' })
+  const { panel } = await open(scene({ sources: sourceRows(true), card: card([first]), counts: counts({ P0: 1 }) }, [first, ...mixedRows().slice(1)]))
+  assert.ok(texts(panel).includes('합성 깃허브 긴급'))
+  await panel.press(chip(panel, 'slack') as never)
+  assert.ok(!texts(panel).includes('합성 깃허브 긴급'))
+  await panel.press(chip(panel, 'github') as never)
+  assert.ok(texts(panel).includes('합성 깃허브 긴급'))
+})
+
+test('처음 연 패널은 그때 있던 일을 새 일로 치지 않고 기준을 저장소에 적는다', async () => {
+  const { panel } = await openMarked(scene({ sources: sourceRows(true) }, mixedRows()), null)
+  assert.equal(freshWords(panel), 0)
+  assert.deepEqual(tabLabels(panel), ['지금 3', '대기', '세션'])
+  assert.deepEqual(panel.persisted.storage.marks, { floor: 3, seen: [], known: 3, unseen: 0 })
+})
+
+test('기준 뒤에 열린 일은 줄과 탭과 칩에 빨간 점을 찍는다', async () => {
+  const { panel } = await openMarked(scene({ sources: sourceRows(true) }, mixedRows()), { floor: 1, seen: [], known: 1, unseen: 0 })
+  assert.equal(freshWords(panel), 2)
+  assert.deepEqual(tabLabels(panel), ['지금 3 ●', '대기', '세션'])
+  const dots = panel.findAll({ type: 'Text', text: '●' })
+  // 전체, Slack, Notion 칩 옆에 점이 있다. GitHub는 기준 안의 일뿐이다.
+  assert.equal(dots.length, 3)
+  assert.equal(chip(panel, 'slack')?.props.tooltip, 'Slack · 새 일 1건')
+  assert.equal(chip(panel, 'github')?.props.tooltip, 'GitHub에서 온 일')
+  assert.deepEqual(panel.errors, [])
+})
+
+test('2초 넘게 본 화면을 떠나면 그린 새 일을 본 것으로 적고 점을 지운다', async () => {
+  const { panel } = await openMarked(scene({ sources: sourceRows(true) }, mixedRows()), { floor: 1, seen: [], known: 1, unseen: 0 })
+  later(3_000)
+  await panel.press(chip(panel, 'slack') as never)
+  await panel.settled()
+  assert.deepEqual(panel.persisted.storage.marks, { floor: 3, seen: [], known: 3, unseen: 0 })
+  assert.equal(freshWords(panel), 0)
+  assert.equal(chip(panel, 'notion')?.props.tooltip, 'Notion에서 온 일')
+})
+
+test('잠깐 지나친 화면은 본 것으로 적지 않는다', async () => {
+  const { panel } = await openMarked(scene({ sources: sourceRows(true) }, mixedRows()), { floor: 1, seen: [], known: 1, unseen: 0 })
+  later(500)
+  await panel.press(chip(panel, 'github') as never)
+  await panel.settled()
+  assert.equal((panel.persisted.storage.marks as { unseen: number }).unseen, 2)
+  assert.equal(chip(panel, 'slack')?.props.tooltip, 'Slack · 새 일 1건')
+})
+
+test('고른 곳만 본 것으로 적는다. 다른 곳의 새 일은 점이 남는다', async () => {
+  const { panel } = await openMarked(scene({ sources: sourceRows(true) }, mixedRows()), { floor: 1, seen: [], known: 1, unseen: 0 })
+  await panel.press(chip(panel, 'slack') as never)
+  later(3_000)
+  await panel.press(chip(panel, 'github') as never)
+  await panel.settled()
+  assert.deepEqual(panel.persisted.storage.marks, { floor: 2, seen: [], known: 3, unseen: 1 })
+  assert.equal(chip(panel, 'notion')?.props.tooltip, 'Notion · 새 일 1건')
+  assert.equal(chip(panel, 'slack')?.props.tooltip, 'Slack에서 온 일')
+})
+
+test('틱으로 새 일이 오면 그 곳의 칩에 점이 생긴다', async () => {
+  const { state, panel } = await openMarked(scene({ sources: sourceRows(true) }, mixedRows()), null)
+  state.snapshot = scene({ sources: sourceRows(true), newest: 4 }, [...mixedRows(), item(4, { source: 'gmail', sourceLabel: 'Gmail', reason: 'mail', reasonLabel: '메일', title: '합성 메일' })])
+  await tick(panel)
+  assert.equal(chip(panel, 'gmail')?.props.tooltip, 'Gmail · 새 일 1건')
+  assert.equal(freshWords(panel), 1)
+})
+
+test('펼친 줄은 왜 올라왔는지와 판단 근거를 고정 문구로 쓴다', async () => {
+  const row = item(1, { title: '합성 PR', why: { rule: 'p1.ci_failed', events: 3, facts: ['pull_request', 'authored_me', 'checks_failed'] } })
+  const { panel } = await open(scene({}, [row]))
+  await expand(panel, '합성 PR')
+  assert.match(texts(panel), /내 PR의 CI 검사가 실패했습니다\./)
+  const badges = panel.findAll({ type: 'Badge' }).map(found => [found.text, found.props.tone])
+  for (const expected of [['PR', 'neutral'], ['내가 만든 일', 'neutral'], ['검사 실패', 'danger'], ['소식 3건', 'neutral']]) {
+    assert.ok(badges.some(([text, tone]) => text === expected[0] && tone === expected[1]), JSON.stringify(expected))
+  }
+})
+
+test('제안 상자는 맡기는 일, 근거, 일할 곳, 하는 일을 차례로 쓴다', async () => {
+  const offer = { repo: 'contoso-synthetic/issues', workspace: 'contoso-synthetic/app', base: 'origin/main', checks: ['assigned_me', 'open', 'mapped', 'no_session'] }
+  const row = startable(1, { title: '합성 제안', why: { rule: 'p2.assigned', events: 1, facts: ['issue', 'assigned_me'], offer } })
+  const { panel } = await open(scene({}, [row]))
+  await expand(panel, '합성 제안')
+  const callout = panel.find({ type: 'Callout' })
+  assert.equal(callout?.props.title, '에이전트가 이슈를 고칩니다')
+  const body = callout?.text ?? ''
+  const order = [SCOPE, '맡겨도 된다고 본 근거', '내게 배정된 이슈', '에이전트가 하는 일', '시작을 누르면']
+  const at = order.map(word => body.indexOf(word))
+  assert.ok(at.every(index => index >= 0), JSON.stringify(at))
+  assert.deepEqual([...at].sort((a, b) => a - b), at)
+  const place = panel.find({ type: 'KeyValue' })
+  assert.equal(place?.props.label, '세션이 일할 곳')
+  assert.deepEqual(place?.props.items, [
+    { label: '작업 저장소', value: 'contoso-synthetic/app', code: true },
+    { label: '기준 브랜치', value: 'origin/main', code: true },
+    { label: '이슈 저장소', value: 'contoso-synthetic/issues', code: true },
+  ])
+  // 하는 일은 접혀 있다. 펼치면 순서와 하지 않는 일을 쓴다.
+  const step = { type: 'Text', text: '1. 이슈와 댓글을 읽고 원인을 조사합니다' }
+  assert.equal(panel.find(step), null)
+  await panel.toggle({ type: 'Collapsible' })
+  assert.ok(panel.find(step))
+  assert.ok(panel.find({ type: 'Text', text: /push, PR, 코멘트, Notion 쓰기는 하지 않습니다/ }))
+})
+
+test('저장소의 기준은 칸마다 검사해 맞는 값만 쓰고 틀린 모양에도 그리기가 멈추지 않는다', async () => {
+  const partial = await openMarked(scene({ sources: sourceRows(true) }, mixedRows()), { floor: 1 })
+  assert.deepEqual(partial.panel.errors, [])
+  assert.equal(freshWords(partial.panel), 2)
+  await partial.panel.unmount()
+  const broken = await openMarked(scene({ sources: sourceRows(true) }, mixedRows()), { floor: 'x', seen: 'y' })
+  assert.deepEqual(broken.panel.errors, [])
+  assert.equal(freshWords(broken.panel), 0)
+  assert.deepEqual(broken.panel.persisted.storage.marks, { floor: 3, seen: [], known: 3, unseen: 0 })
+})
+
+test('칩을 고른 화면의 읽기는 카드가 보여도 노출을 적지 않는다', async () => {
+  const first = item(1, { tier: 'P0', title: '합성 깃허브 긴급' })
+  const { rig, panel } = await open(scene({ sources: sourceRows(true), card: card([first]), counts: counts({ P0: 1 }) }, [first, ...mixedRows().slice(1)]))
+  await panel.press(chip(panel, 'github') as never)
+  assert.ok(texts(panel).includes('합성 깃허브 긴급'))
+  const before = rig.snapshots.length
+  await panel.press({ type: 'IconButton', label: '새로고침' })
+  assert.deepEqual(rig.snapshots.slice(before), [{ seen: false, ready: true }])
+  // 전체로 돌아오면 카드가 다시 화면에 든 것이라 한 번 seen으로 읽는다.
+  await panel.press(chip(panel, 'all') as never)
+  assert.deepEqual(rig.snapshots.at(-1), { seen: true })
+})
+
+test('칩을 고른 화면에서도 카드의 줄을 펼칠 수 있다', async () => {
+  const rowsInCard = [item(1, { title: '합성 묶음 하나' }), item(2, { title: '합성 묶음 둘' })]
+  const { panel } = await open(scene({ sources: sourceRows(true), card: merged(rowsInCard), counts: counts({ P1: 2 }) }, [...rowsInCard, ...mixedRows().slice(1)]))
+  await panel.press(chip(panel, 'github') as never)
+  await expand(panel, '합성 묶음 하나')
+  const opened = () => rowsOf(panel).find(row => row.key === 'row-1-item')?.props.current
+  assert.equal(opened(), true)
+  // 펼친 줄은 화면에 있으므로 다음 틱에 접히지 않는다.
+  await tick(panel)
+  assert.equal(opened(), true)
+})
+
+test('게이트가 닫힌 채 처음 읽으면 기준을 잡지 않고 열린 뒤 처음 읽은 목록이 기준이다', async () => {
+  const closed = scene({ display: recordingGate, hold: { reason: 'recording', message: '기록 중입니다', until: null }, newest: 3 }, [], { hidden: 3 })
+  const { state, panel } = await openMarked(closed, null)
+  assert.equal(panel.persisted.storage.marks, undefined)
+  state.snapshot = scene({ sources: sourceRows(true), newest: 3 }, mixedRows())
+  await tick(panel)
+  assert.equal(freshWords(panel), 0)
+  assert.deepEqual(panel.persisted.storage.marks, { floor: 3, seen: [], known: 3, unseen: 0 })
+})
+
+test('보는 동안 2초가 지나면 본 것을 저장하고 화면의 점은 떠날 때 지운다', async () => {
+  const { panel } = await openMarked(scene({ sources: sourceRows(true) }, mixedRows()), { floor: 1, seen: [], known: 1, unseen: 0 })
+  later(3_000)
+  // 저장은 실제 시간으로 2초 뒤에 돈다. 닫아도 남도록 보는 동안 저장한다.
+  await new Promise(resolve => setTimeout(resolve, 2_100))
+  await panel.settled()
+  assert.deepEqual(panel.persisted.storage.marks, { floor: 3, seen: [], known: 3, unseen: 0 })
+  assert.equal(freshWords(panel), 2)
+  assert.deepEqual(tabLabels(panel), ['지금 3 ●', '대기', '세션'])
+  await panel.press(chip(panel, 'slack') as never)
+  await panel.settled()
+  assert.equal(freshWords(panel), 0)
+})
+
+test('머문 시간은 줄마다 잰다. 떠나기 직전에 온 새 일은 본 것으로 적지 않는다', async () => {
+  const { state, panel } = await openMarked(scene({ sources: sourceRows(true) }, mixedRows()), null)
+  later(10_000)
+  state.snapshot = scene({ sources: sourceRows(true), newest: 4 }, [...mixedRows(), item(4, { source: 'slack', sourceLabel: 'Slack', title: '합성 새 슬랙' })])
+  await tick(panel)
+  await panel.press(chip(panel, 'slack') as never)
+  await panel.settled()
+  assert.equal(freshWords(panel), 1)
+  assert.equal((panel.persisted.storage.marks as { unseen: number }).unseen, 1)
+})
+
+test('칩의 새 일이 카드에만 있으면 지금 탭으로 옮긴다', async () => {
+  const first = item(4, { tier: 'P0', title: '합성 새 긴급' })
+  const { panel } = await openMarked(scene({ sources: sourceRows(true), card: card([first]), counts: counts({ P0: 1 }) }, [...mixedRows(), first, parked(5)]), { floor: 3, seen: [], known: 3, unseen: 0 })
+  await tabTo(panel, 'waiting')
+  await panel.press(chip(panel, 'github') as never)
+  assert.equal(panel.valueOf({ type: 'Tabs' }), 'now')
 })

@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 
 use kairos_agenda::StateBuilder;
-use kairos_agenda::{Presenter, SourceHealthBook};
+use kairos_agenda::{Explainer, Presenter, SourceHealthBook};
 use kairos_core::model::SourceName;
 use kairos_core::{Instant, KairosResult};
 use kairos_ledger::{ObjectRepo, upcoming_deploys};
@@ -21,8 +21,10 @@ pub struct List;
 fn item_list(context: &AppContext, json: bool, all: bool) -> KairosResult<i32> {
     let database = context.open_db()?;
     let now = context.now();
-    let response = Presenter::new(&database).list_response(&context.next_context(&database, now)?, all)?;
+    let mut response = Presenter::new(&database).list_response(&context.next_context(&database, now)?, all)?;
     if json {
+        // 펼친 줄의 근거. golden이 지키는 Presenter 출력과 따로 채운다.
+        Explainer::new(database.connection()).fill(&mut response.items)?;
         context.console().emit(&response)?;
         return Ok(0);
     }

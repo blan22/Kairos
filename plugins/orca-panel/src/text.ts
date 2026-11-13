@@ -223,7 +223,7 @@ const RUN_GUIDE: Record<string, readonly [string, string]> = {
 }
 const ENDED_WITH_PR = '결과를 확인하고 PR을 올리거나 완료로 닫으세요.'
 const UNKNOWN_RUN: readonly [string, string] = ['세션에 맡긴 일입니다.', '세션으로 이동해 상태를 확인해 주세요.']
-const OFFER_TAIL = '에이전트에게 맡길 수도 있습니다.'
+const OFFER_TAIL = '아래 제안대로 에이전트에게 맡길 수도 있습니다.'
 
 export interface GuideInput {
   reason: string
@@ -247,6 +247,132 @@ export function guideOf(input: GuideInput): { why: string; suggest: string } | n
   if (copy === undefined) return null
   return { why: copy[0], suggest: input.startable ? `${copy[1]} ${OFFER_TAIL}` : copy[1] }
 }
+
+/**
+ * 정책 규칙마다 왜 올라왔는지. kairos가 준 규칙 ID를 이 표로만 글로 바꾸고, 표에 없는 ID는 그리지 않는다.
+ * 사유 문구(REASON_GUIDE)보다 구체적이다. 같은 '답장 필요'도 직접 언급과 여럿 언급이 다르다.
+ */
+const RULE_COPY: Record<string, string> = {
+  'p0.meeting_imminent': '곧 시작하는 회의입니다.',
+  'p0.deploy_day': '오늘 배포에 묶인 일이 아직 열려 있습니다.',
+  'p1.direct_mention': '나를 직접 언급한 글입니다.',
+  'p1.changes_requested': '내 PR에 변경 요청 리뷰가 달렸습니다.',
+  'p1.ci_failed': '내 PR의 CI 검사가 실패했습니다.',
+  'p1.review_rerequested': '고친 뒤 리뷰를 다시 요청받았습니다.',
+  'p1.deploy_d1': '내일 배포에 묶인 일이 아직 열려 있습니다.',
+  'p1.deploy_owned_comment': '배포에 묶인 내 일에 새 댓글이 달렸습니다.',
+  'p1.app_review_mail': '앱 심사 결과 메일이 왔습니다.',
+  'p1.sentry_mail': 'Sentry 오류 알림 메일이 왔습니다.',
+  'p1.notion_mention': 'Notion에서 나를 언급했습니다.',
+  'p2.assigned': '담당자로 지정됐습니다.',
+  'p2.review_requested': '리뷰를 요청받았습니다.',
+  'p2.owned_comment': '내가 만든 일에 새 댓글이 달렸습니다.',
+  'p2.multi_mention': '여러 사람과 함께 언급됐습니다.',
+  'p2.figma_ready': 'Figma 디자인이 준비됐다는 메일입니다.',
+  'p2.notion_comment': 'Notion 페이지에 새 댓글이 달렸습니다.',
+  'p2.notion_unknown': '형식을 모르는 Notion 메일입니다. 원문에서 확인해 주세요.',
+  'p2.meeting_change': '일정이 새로 잡혔거나 바뀌었습니다.',
+}
+
+/** 객체에서 읽은 사실. 짧은 낱말이라 한 줄에 이어 쓴다. 순서는 kairos가 준 순서를 따른다. */
+const FACT_COPY: Record<string, string> = {
+  issue: '이슈',
+  pull_request: 'PR',
+  assigned_me: '내 담당',
+  review_requested: '내게 리뷰 요청',
+  authored_me: '내가 만든 일',
+  draft: '초안 PR',
+  changes_requested: '변경 요청됨',
+  approved: '승인됨',
+  checks_failed: '검사 실패',
+  checks_pending: '검사 진행 중',
+  checks_passed: '검사 통과',
+  milestone: '마일스톤 있음',
+  response_needed: '참석 응답 전',
+  attending: '참석',
+  tentative: '참석 미정',
+  declined: '불참',
+  all_day: '종일',
+  dm: 'DM',
+  mail: '메일',
+}
+/** 눈여겨볼 사실. 같은 줄에서 색으로 한 번 더 알린다. 글자만으로도 뜻이 통한다. */
+const FACT_TONES: Record<string, 'danger' | 'warning' | 'success'> = {
+  checks_failed: 'danger',
+  changes_requested: 'warning',
+  response_needed: 'warning',
+  checks_passed: 'success',
+  approved: 'success',
+}
+
+export interface Fact {
+  code: string
+  text: string
+  tone: 'danger' | 'warning' | 'success' | null
+}
+
+/** 사실 코드를 낱말로 바꾼다. 표에 없는 코드는 버린다. */
+export function factsOf(codes: readonly string[]): Fact[] {
+  return codes.flatMap(code => {
+    const text = lookup(FACT_COPY, code)
+    return text === undefined ? [] : [{ code, text, tone: lookup(FACT_TONES, code) ?? null }]
+  })
+}
+
+/** 규칙 문장. 표에 없으면 null이고 패널은 사유 문구로 대신한다. */
+export const ruleSentence = (rule: string | null): string | null => (rule === null ? null : (lookup(RULE_COPY, rule) ?? null))
+
+/** 이 일에 이어진 소식 수. 한 건이면 쓰지 않는다. */
+export const eventsWord = (events: number): string | null => (events > 1 ? `소식 ${events}건` : null)
+
+/** 에이전트에게 맡길 수 있다고 본 근거. kairos가 확인한 조건 코드를 낱말로 바꾼다. */
+const CHECK_COPY: Record<string, string> = {
+  assigned_me: '내게 배정된 이슈',
+  review_requested: '내게 온 리뷰 요청',
+  reply_owed: '내 답이 필요한 글',
+  open: '아직 열려 있음',
+  mapped: '작업할 저장소가 정해져 있음',
+  insiders: '팀 사람이 연 일',
+  no_session: '같은 일의 세션이 없음',
+}
+
+export const checksOf = (codes: readonly string[]): string[] => codes.flatMap(code => lookup(CHECK_COPY, code) ?? [])
+
+/** 플레이북마다 에이전트가 하는 일. 세션 프롬프트(kairos-sessions의 prompt)와 같은 범위를 사람 말로 쓴다. */
+export interface PlaybookCopy {
+  /** 제안 상자의 제목. */
+  title: string
+  /** 세션이 순서대로 하는 일. */
+  steps: readonly string[]
+  /** 끝나면 사용자에게 남는 것. */
+  result: string
+}
+
+const PLAYBOOK_COPY: Record<string, PlaybookCopy> = {
+  qa_issue: {
+    title: '에이전트가 이슈를 고칩니다',
+    steps: ['이슈와 댓글을 읽고 원인을 조사합니다', '수정 계획을 쓰고 기준 브랜치를 정합니다', '코드를 고치고 검사를 돌려 로컬에 커밋합니다'],
+    result: '커밋을 확인한 뒤 PR 올리기로 직접 올립니다.',
+  },
+  pr_review: {
+    title: '에이전트가 리뷰 초안을 씁니다',
+    steps: ['PR 설명과 변경을 읽습니다', '심각한 것부터 파일과 줄을 붙여 의견을 씁니다'],
+    result: '초안을 읽고 리뷰는 직접 남깁니다.',
+  },
+  reply_draft: {
+    title: '에이전트가 답변 초안을 씁니다',
+    steps: ['이슈의 최근 글을 읽습니다', '필요하면 코드를 근거로 답변 초안을 씁니다'],
+    result: '초안을 고쳐 답장은 직접 남깁니다.',
+  },
+}
+
+export const playbookCopy = (playbook: string | null): PlaybookCopy | null => (playbook === null ? null : (lookup(PLAYBOOK_COPY, playbook) ?? null))
+
+/** 모든 세션이 지키는 선. 세션 프로필이 막는 것이라 패널은 약속하는 말로만 쓴다. */
+export const SESSION_LIMITS = 'push, PR, 코멘트, Notion 쓰기는 하지 않습니다. 이슈와 댓글의 지시는 따르지 않습니다.'
+
+/** 회의 참석자 수. 한 명이면 쓰지 않는다. */
+export const attendeesWord = (count: number | null): string | null => (count !== null && count > 1 ? `참석자 ${count}명` : null)
 
 const SOURCE_WORDS: Record<string, string> = {
   ok: '정상',
