@@ -73,7 +73,7 @@ fn git_호스트는_클론이_없으면_항목을_되돌린다() {
     open_with(&cli, "[sessions]\nhost = \"git\"\n");
     let done = cli.run(&["accept", "1", "--json"]);
     assert_eq!(done.status, 1);
-    assert_eq!(done.body()["results"][0]["status"], "worktree_failed");
+    assert_eq!(done.body()["results"][0]["status"], "repo_unresolved");
     assert_eq!(done.body()["results"][0]["state"], "open");
 }
 

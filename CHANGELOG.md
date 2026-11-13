@@ -4,6 +4,11 @@
 
 ## [다음 버전]
 
+### 수정
+
+- `[hosts.orca.repos]`를 적지 않으면 에이전트 제안의 `세션 열고 시작`이 `worktree_failed`로 실패하던 문제를 고쳤습니다. 이제 `orca repo list`에서 원격 주소가 같은 저장소를 찾아 씁니다. 하나로 고르지 못하면 새 코드 `repo_unresolved`와 고칠 설정을 패널에 보여 줍니다. `git` 세션 호스트에서 로컬 클론을 찾지 못한 경우도 같은 코드로 알립니다.
+- `kairos config show`의 플레이북 줄이 Orca 저장소 ID가 없을 때 `미설정` 대신 `원격 주소로 찾음`을 보여 줍니다.
+
 ### 변경
 
 - 문서를 합니다체로 다시 쓰고 구조를 정리했습니다. [핵심 개념](docs/concepts.md), [설정](docs/configuration.md), [세션 샌드박스](docs/session-sandbox.md), [문서 목차](docs/README.md), [기여 안내](CONTRIBUTING.md)를 새로 만들었습니다. 설정 내용은 `docs/install.md`에서 `docs/configuration.md`로, 세션의 내부 동작은 `docs/sessions.md`에서 `docs/session-sandbox.md`로 옮겼습니다.

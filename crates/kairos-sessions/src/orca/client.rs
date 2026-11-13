@@ -7,7 +7,7 @@ use kairos_core::js;
 use kairos_core::process::{ProcessEnd, ProcessRequest, ProcessRunner};
 use serde_json::{Map, Value};
 
-use super::replies::{OrcaTerminal, PsSnapshot, record, text};
+use super::replies::{OrcaTerminal, PsSnapshot, find_repo_for, record, text};
 use crate::launch::terminal_title;
 
 /// 패널은 accept를 115초에 끊는다(plugins/orca-panel/src/config.ts). 호출 제한의 합이 그 안에 들어오게 둔다. 끊겨도 추적이 정리한다.
@@ -68,6 +68,16 @@ fn orca_env(base: impl IntoIterator<Item = (String, String)>) -> BTreeMap<String
     base.into_iter().filter(|(key, _)| !CALLER_ENV.contains(&key.as_str())).collect()
 }
 
+/// 작업 저장소의 Orca ID를 찾은 결과.
+/// Unresolved 설정에도 없고 Orca의 저장소 목록에서도 하나로 고르지 못했다.
+/// Unavailable Orca가 응답하지 않았다.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) enum RepoLookup {
+    Found(String),
+    Unresolved,
+    Unavailable,
+}
+
 /// 터미널을 찾는 데 쓰는 run의 값.
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct LaunchedRun<'a> {
@@ -123,15 +133,30 @@ impl OrcaClient {
         self.call(&["reference", "find", url, "--json"], ORCA_READ)
     }
 
-    /// 대상 저장소와 기준 브랜치는 그 URL의 플레이북 대상(프로필)에서 온다. 대상이 없거나 Orca 저장소를 모르면 부르지 않는다.
-    pub(crate) fn worktree_create(&self, name: &str, url: &str) -> OrcaReply {
+    /// URL의 플레이북 대상이 일하는 저장소의 Orca ID. `[hosts.orca.repos]`가 먼저고, 없으면 `repo list`의 원격 주소로 찾는다.
+    pub(crate) fn workspace_repo(&self, url: &str) -> RepoLookup {
+        let Some(target) = kairos_core::profile::current().playbooks.target_for_url(url) else {
+            return RepoLookup::Unresolved;
+        };
+        if let Some(id) = &target.orca_repo {
+            return RepoLookup::Found(id.clone());
+        }
+        match self.call(&["repo", "list", "--json"], ORCA_READ) {
+            OrcaReply::Ok(result) => {
+                find_repo_for(&result, &target.workspace_repo).map_or(RepoLookup::Unresolved, RepoLookup::Found)
+            }
+            OrcaReply::Refused { .. } => RepoLookup::Unresolved,
+            OrcaReply::Lost | OrcaReply::Missing => RepoLookup::Unavailable,
+        }
+    }
+
+    /// 기준 브랜치는 그 URL의 플레이북 대상(프로필)에서 온다. 대상이 없으면 부르지 않는다.
+    /// `repo_id`는 `workspace_repo`가 고른 값이다.
+    pub(crate) fn worktree_create(&self, name: &str, url: &str, repo_id: &str) -> OrcaReply {
         let Some(target) = kairos_core::profile::current().playbooks.target_for_url(url) else {
             return OrcaReply::Refused { code: "no_playbook_target".to_owned() };
         };
-        let Some(orca_repo) = target.orca_repo.as_deref() else {
-            return OrcaReply::Refused { code: "orca_repo_unresolved".to_owned() };
-        };
-        let repo = format!("id:{orca_repo}");
+        let repo = format!("id:{repo_id}");
         self.call(
             &[
                 "worktree",

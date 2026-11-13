@@ -8,6 +8,7 @@ string_enum! {
     /// gate_closed      표시 게이트가 닫혀 있다. 사용자가 보지 못한 제안이다.
     /// aborted          수락 도중에 사용자가 끝이나 취소를 눌러 멈췄다.
     /// orca_unavailable Orca를 부르지 못했다.
+    /// repo_unresolved  작업 저장소의 Orca ID나 로컬 클론을 찾지 못해 worktree를 만들지 않았다. 항목은 되돌렸다.
     /// worktree_failed, checkout_failed, terminal_failed  그 단계에서 실패했고 항목은 되돌렸다.
     /// no_session       이 항목에 이동할 세션이 없다.
     /// session_gone     세션의 터미널이 없어졌다.
@@ -22,6 +23,7 @@ string_enum! {
         GateClosed => "gate_closed",
         Aborted => "aborted",
         OrcaUnavailable => "orca_unavailable",
+        RepoUnresolved => "repo_unresolved",
         WorktreeFailed => "worktree_failed",
         CheckoutFailed => "checkout_failed",
         TerminalFailed => "terminal_failed",

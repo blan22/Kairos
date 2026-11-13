@@ -233,7 +233,7 @@ fn show_lines(loaded: &Loaded, origin: bool) -> Vec<String> {
             target.repos.join(","),
             target.workspace_repo,
             target.base_branch,
-            target.orca_repo.as_deref().unwrap_or("미설정"),
+            target.orca_repo.as_deref().unwrap_or("원격 주소로 찾음"),
             from("playbooks")
         ));
     }

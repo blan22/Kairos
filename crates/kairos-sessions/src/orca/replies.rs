@@ -10,6 +10,10 @@ use super::client::OrcaResult;
 
 /// JS의 `\w`는 ASCII다.
 static HANDLE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^[A-Za-z0-9][A-Za-z0-9_:.-]*$").expect("상수 정규식"));
+/// Orca 저장소 ID. 설정 검사(`kairos-config`의 `orca_repo`)와 같은 모양이다.
+static UUID: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$").expect("상수 정규식")
+});
 
 pub(super) fn record(value: Option<&Value>) -> Option<&Map<String, Value>> {
     value.and_then(Value::as_object)
@@ -167,6 +171,42 @@ pub fn find_workspace_named(result: &OrcaResult, name: &str) -> Option<String> {
     })
 }
 
+/// `repo list`에서 `owner/name` 저장소의 Orca ID를 고른다. 원격 주소(`github.com/owner/name`)가 같은 저장소만 본다.
+/// 같은 원격의 클론이 여럿이면 폴더 이름이 저장소 이름과 같은 하나를 고른다. 그래도 하나가 아니면 고르지 않는다.
+/// ID는 `--repo id:<ID>` 인자로 들어가므로 소문자 UUID만 받는다.
+pub fn find_repo_for(result: &OrcaResult, workspace_repo: &str) -> Option<String> {
+    let remote = format!("github.com/{workspace_repo}");
+    let name = workspace_repo.rsplit('/').next().unwrap_or(workspace_repo);
+    let matches: Vec<(String, Option<&str>)> = list(result.get("repos"))
+        .iter()
+        .filter_map(|repo| {
+            let repo = repo.as_object()?;
+            let key = text(get(record(repo.get("gitRemoteIdentity")), "canonicalKey"))?;
+            if !key.eq_ignore_ascii_case(&remote) {
+                return None;
+            }
+            let id = text(repo.get("id"))?.to_ascii_lowercase();
+            if !UUID.is_match(&id) {
+                return None;
+            }
+            let folder = text(repo.get("path")).and_then(|path| path.trim_end_matches('/').rsplit('/').next());
+            Some((id, folder))
+        })
+        .collect();
+    if let [(id, _)] = matches.as_slice() {
+        return Some(id.clone());
+    }
+    let named: Vec<&String> = matches
+        .iter()
+        .filter(|(_, folder)| folder.is_some_and(|folder| folder.eq_ignore_ascii_case(name)))
+        .map(|(id, _)| id)
+        .collect();
+    match named.as_slice() {
+        [id] => Some((*id).clone()),
+        _ => None,
+    }
+}
+
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct PsSnapshot {
     /// paneKey별 에이전트 상태.
@@ -223,4 +263,70 @@ impl OrcaPane {
 
 pub fn focus_navigated(result: &OrcaResult) -> bool {
     get(record(result.get("focus")), "navigated") != Some(&Value::Bool(false))
+}
+
+#[cfg(test)]
+mod tests {
+    use serde_json::json;
+
+    use super::*;
+
+    const ONE: &str = "0000c0de-0000-4000-8000-000000000001";
+    const TWO: &str = "0000c0de-0000-4000-8000-000000000002";
+    const THREE: &str = "0000c0de-0000-4000-8000-000000000003";
+
+    fn repo(id: &str, path: &str, key: Option<&str>) -> Value {
+        let identity = key.map(|key| json!({ "canonicalKey": key, "remoteName": "origin" }));
+        json!({ "id": id, "path": path, "kind": "git", "gitRemoteIdentity": identity })
+    }
+
+    fn repos(rows: Vec<Value>) -> OrcaResult {
+        let Value::Object(result) = json!({ "repos": rows }) else { unreachable!() };
+        result
+    }
+
+    #[test]
+    fn 원격_주소가_같은_저장소_하나를_고른다() {
+        let result = repos(vec![
+            repo(ONE, "/synthetic/other", Some("github.com/contoso/other")),
+            repo(&TWO.to_ascii_uppercase(), "/synthetic/work", Some("github.com/Contoso/Atlas")),
+            repo(THREE, "/synthetic/plain", None),
+        ]);
+        assert_eq!(find_repo_for(&result, "contoso/atlas").as_deref(), Some(TWO));
+    }
+
+    #[test]
+    fn 같은_원격의_클론이_여럿이면_폴더_이름이_같은_하나를_고른다() {
+        let result = repos(vec![
+            repo(ONE, "/synthetic/atlas-2", Some("github.com/contoso/atlas")),
+            repo(TWO, "/synthetic/atlas/", Some("github.com/contoso/atlas")),
+            repo(THREE, "/synthetic/atlas-3", Some("github.com/contoso/atlas")),
+        ]);
+        assert_eq!(find_repo_for(&result, "contoso/atlas").as_deref(), Some(TWO));
+    }
+
+    #[test]
+    fn 하나로_고르지_못하면_없다() {
+        let none = repos(vec![repo(ONE, "/synthetic/atlas", Some("github.com/contoso/atlas-specs"))]);
+        assert_eq!(find_repo_for(&none, "contoso/atlas"), None);
+        let ambiguous = repos(vec![
+            repo(ONE, "/synthetic/atlas-2", Some("github.com/contoso/atlas")),
+            repo(TWO, "/synthetic/atlas-3", Some("github.com/contoso/atlas")),
+        ]);
+        assert_eq!(find_repo_for(&ambiguous, "contoso/atlas"), None);
+        let twins = repos(vec![
+            repo(ONE, "/synthetic/a/atlas", Some("github.com/contoso/atlas")),
+            repo(TWO, "/synthetic/b/atlas", Some("github.com/contoso/atlas")),
+        ]);
+        assert_eq!(find_repo_for(&twins, "contoso/atlas"), None);
+        assert_eq!(find_repo_for(&repos(vec![]), "contoso/atlas"), None);
+    }
+
+    #[test]
+    fn 인자에_넣을_수_없는_id는_받지_않는다() {
+        for id in ["id:--json", "0000c0de 0000", "", "../x"] {
+            let result = repos(vec![repo(id, "/synthetic/atlas", Some("github.com/contoso/atlas"))]);
+            assert_eq!(find_repo_for(&result, "contoso/atlas"), None, "{id}");
+        }
+    }
 }

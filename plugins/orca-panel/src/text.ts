@@ -175,6 +175,7 @@ const ACTION_FAILURES: Record<string, string> = {
   no_session: '이동할 세션이 없습니다.',
   session_gone: '세션의 터미널이 닫혀 있습니다.',
   orca_unavailable: 'Orca가 응답하지 않습니다.',
+  repo_unresolved: 'Orca에서 작업할 저장소를 찾지 못했습니다. config.toml의 [hosts.orca.repos]에 저장소 ID를 적어 주세요.',
   worktree_failed: '작업 공간을 만들지 못했습니다.',
   checkout_failed: '작업 공간을 확인하지 못했습니다.',
   terminal_failed: '터미널을 열지 못했습니다.',

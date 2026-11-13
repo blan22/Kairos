@@ -8,10 +8,10 @@ use kairos_ledger::ObjectRepo;
 use kairos_store::Connection;
 
 use super::{SessionLaunch, SessionLauncher, SessionOutcome, SessionRefusal, SessionStatus};
-use crate::git_host::{GitWorkspaces, git_selector};
+use crate::git_host::{GitHostError, GitWorkspaces, git_selector};
 use crate::launch::{RUN_ID, launch_command, shell_quote, terminal_title, worktree_name};
 use crate::orca::{
-    LaunchedRun, OrcaLiveAgent, OrcaReply, OrcaTerminal, OrcaWorktree, PsSnapshot, find_workspace_named,
+    LaunchedRun, OrcaLiveAgent, OrcaReply, OrcaTerminal, OrcaWorktree, PsSnapshot, RepoLookup, find_workspace_named,
 };
 use crate::run::{Adoption, RunLifecycle, RunRepo, RunState};
 use crate::sync::WORKING_WARN;
@@ -20,6 +20,7 @@ use kairos_core::profile::SessionHost;
 const NOT_ELIGIBLE: &str = "세션을 열 수 없는 항목입니다. 원래 앱에서 확인하세요";
 const NO_ORCA: &str = "Orca를 부르지 못했습니다";
 const NO_WORKTREE: &str = "worktree를 만들지 못했습니다";
+const NO_ORCA_REPO: &str = "Orca에서 작업 저장소를 찾지 못했습니다. config.toml의 [hosts.orca.repos]에 `orca repo list --json`의 id를 적으세요";
 
 enum Claim {
     Lost(SessionOutcome),
@@ -107,8 +108,17 @@ impl Attempt<'_, '_> {
 
     fn create_worktree(&self) -> KairosResult<Created> {
         let orca = self.launcher.orca;
+        let repo_id = match orca.workspace_repo(self.url) {
+            RepoLookup::Found(id) => id,
+            RepoLookup::Unavailable => {
+                return Ok(Created::Failed(self.fail(SessionStatus::OrcaUnavailable, NO_ORCA)?));
+            }
+            RepoLookup::Unresolved => {
+                return Ok(Created::Failed(self.fail(SessionStatus::RepoUnresolved, NO_ORCA_REPO)?));
+            }
+        };
         let name = worktree_name(self.run_id);
-        let created = orca.worktree_create(&name, self.url);
+        let created = orca.worktree_create(&name, self.url, &repo_id);
         let selector = match &created {
             OrcaReply::Missing => return Ok(Created::Failed(self.fail(SessionStatus::OrcaUnavailable, NO_ORCA)?)),
             OrcaReply::Refused { .. } => {
@@ -215,6 +225,9 @@ impl Attempt<'_, '_> {
         }
         let worktree = match git.create(self.url, self.run_id) {
             Ok(worktree) => worktree,
+            Err(error @ (GitHostError::NoTarget | GitHostError::NoClone)) => {
+                return self.fail(SessionStatus::RepoUnresolved, error.message());
+            }
             Err(error) => return self.fail(SessionStatus::WorktreeFailed, error.message()),
         };
         let launched_at = self.launcher.clock.now().to_iso();
