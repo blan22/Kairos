@@ -5,14 +5,14 @@ mod plan;
 mod remove;
 mod runtime;
 
-use std::fs::{self, DirBuilder, OpenOptions, Permissions};
-use std::os::unix::fs::{DirBuilderExt, OpenOptionsExt, PermissionsExt};
+use std::fs::{self, DirBuilder, OpenOptions};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
 
 use kairos_core::home::DIR_MODE;
+use kairos_core::platform::{CreateMode, set_mode};
 use kairos_core::process::ProcessRunner;
 use kairos_core::{KairosHome, KairosResult};
 
@@ -319,13 +319,13 @@ fn write_preview(plan: &InstallPlan, options: &InstallOptions, lines: &mut Vec<S
 
 fn write_files(plan: &InstallPlan, options: &InstallOptions) -> KairosResult<()> {
     options.home.ensure()?;
-    DirBuilder::new().recursive(true).mode(DIR_MODE).create(&plan.log_dir)?;
-    fs::set_permissions(&plan.log_dir, Permissions::from_mode(DIR_MODE))?;
+    DirBuilder::new().recursive(true).create_mode(DIR_MODE).create(&plan.log_dir)?;
+    set_mode(&plan.log_dir, DIR_MODE)?;
     // launchd가 만들면 644가 되어 doctor가 권한 문제로 본다. 미리 600으로 만든다.
     for name in ["collect.log", "watchdog.log"] {
         let log = plan.log_dir.join(name);
-        OpenOptions::new().append(true).create(true).mode(LOG_MODE).open(&log)?;
-        fs::set_permissions(&log, Permissions::from_mode(LOG_MODE))?;
+        OpenOptions::new().append(true).create(true).create_mode(LOG_MODE).open(&log)?;
+        set_mode(&log, LOG_MODE)?;
     }
     let binary_dir = match &options.binary_dir {
         Some(directory) => directory.clone(),
@@ -336,7 +336,8 @@ fn write_files(plan: &InstallPlan, options: &InstallOptions) -> KairosResult<()>
     runtime::link_current(options.home.root(), &plan.version)?;
     fs::create_dir_all(&plan.launch_agents_dir)?;
     for plist in &plan.plists {
-        let mut file = OpenOptions::new().write(true).create(true).truncate(true).mode(0o644).open(&plist.path)?;
+        let mut file =
+            OpenOptions::new().write(true).create(true).truncate(true).create_mode(0o644).open(&plist.path)?;
         std::io::Write::write_all(&mut file, plist.content.as_bytes())?;
     }
     Ok(())

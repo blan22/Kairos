@@ -153,6 +153,7 @@ fn 지문은_세션_자격_값이_바뀔_때만_바뀐다() {
 }
 
 #[test]
+#[cfg(unix)]
 fn 남이_쓸_수_있는_파일은_읽지_않는다() {
     use std::os::unix::fs::PermissionsExt;
     let dir = tempfile::tempdir().unwrap();

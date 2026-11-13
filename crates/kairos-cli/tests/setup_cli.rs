@@ -1,4 +1,6 @@
 //! setup의 설치 뒤 단계(알림 권한, Orca 패널)와 `kairos notify setup|test`. 실제 Orca, 알림 헬퍼, lsregister, open은 부르지 않는다.
+// 가짜 실행 파일(sh)과 unix 권한을 쓰는 시험이다. Windows는 단위 시험과 Windows 백엔드 시험으로 본다.
+#![cfg(unix)]
 #![allow(clippy::unwrap_used)]
 
 mod common;

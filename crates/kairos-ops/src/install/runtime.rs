@@ -1,8 +1,8 @@
-use std::fs::{self, DirBuilder, Permissions};
-use std::os::unix::fs::{DirBuilderExt, PermissionsExt};
+use std::fs::{self, DirBuilder};
 use std::path::{Path, PathBuf};
 
 use kairos_core::home::DIR_MODE;
+use kairos_core::platform::{self, CreateMode, set_mode};
 use kairos_core::{KairosError, KairosResult};
 
 use super::plan::InstallPlan;
@@ -23,17 +23,16 @@ pub(super) fn current_binary_dir() -> KairosResult<PathBuf> {
 
 /// 실행 파일을 임시 이름으로 복사한 뒤 rename한다. launchd가 3분마다 이 경로를 띄우므로 복사 중인 파일이 실행되면 안 된다.
 fn place_binary(source: &Path, target: &Path) -> KairosResult<()> {
-    let executable = Permissions::from_mode(EXECUTABLE_MODE);
     // 설치본의 kairos로 다시 설치하면 원본과 대상이 같다. 복사하면 파일이 비워진다.
     if fs::canonicalize(target).is_ok_and(|real| fs::canonicalize(source).is_ok_and(|origin| origin == real)) {
-        fs::set_permissions(target, executable)?;
+        set_mode(target, EXECUTABLE_MODE)?;
         return Ok(());
     }
     let mut temporary = target.as_os_str().to_owned();
     temporary.push(format!(".{}.tmp", std::process::id()));
     let temporary = PathBuf::from(temporary);
     let placed = fs::copy(source, &temporary)
-        .and_then(|_| fs::set_permissions(&temporary, executable))
+        .and_then(|_| set_mode(&temporary, EXECUTABLE_MODE))
         .and_then(|()| fs::rename(&temporary, target));
     if placed.is_err() {
         let _ = remove_if_present(&temporary);
@@ -156,10 +155,10 @@ pub(super) fn copy_runtime(plan: &InstallPlan, root: &Path, binary_dir: &Path) -
         if !same_place(binary_dir, &plan.runtime_dir.join("bin")) {
             return Err(KairosError::new(SAME_ROOT));
         }
-        fs::set_permissions(&plan.watchdog, Permissions::from_mode(EXECUTABLE_MODE))?;
+        set_mode(&plan.watchdog, EXECUTABLE_MODE)?;
         return Ok(());
     }
-    DirBuilder::new().recursive(true).mode(DIR_MODE).create(&plan.runtime_dir)?;
+    DirBuilder::new().recursive(true).create_mode(DIR_MODE).create(&plan.runtime_dir)?;
     let bin_dir = plan.runtime_dir.join("bin");
     fs::create_dir_all(&bin_dir)?;
     for name in BINARIES {
@@ -171,7 +170,7 @@ pub(super) fn copy_runtime(plan: &InstallPlan, root: &Path, binary_dir: &Path) -
     if root.join("plugins").exists() {
         copy_tree(&root.join("plugins"), &plan.runtime_dir.join("plugins"))?;
     }
-    fs::set_permissions(&plan.watchdog, Permissions::from_mode(EXECUTABLE_MODE))?;
+    set_mode(&plan.watchdog, EXECUTABLE_MODE)?;
     Ok(())
 }
 
@@ -181,7 +180,7 @@ pub(super) fn link_current(home: &Path, version: &str) -> KairosResult<()> {
     let link = home.join("current");
     let temporary = home.join(format!(".current.{}.tmp", std::process::id()));
     let _ = fs::remove_file(&temporary);
-    std::os::unix::fs::symlink(version, &temporary)?;
+    platform::symlink_dir(Path::new(version), &temporary)?;
     if let Err(error) = fs::rename(&temporary, &link) {
         let _ = fs::remove_file(&temporary);
         return Err(error.into());
@@ -200,7 +199,9 @@ mod tests {
         fs::write(&path, "binary").unwrap();
         place_binary(&path, &path).unwrap();
         assert_eq!(fs::read_to_string(&path).unwrap(), "binary");
-        assert_eq!(fs::metadata(&path).unwrap().permissions().mode() & 0o777, EXECUTABLE_MODE);
+        if cfg!(unix) {
+            assert_eq!(platform::mode_of(&fs::metadata(&path).unwrap()), Some(EXECUTABLE_MODE));
+        }
     }
 
     #[test]

@@ -1,6 +1,8 @@
 //! 지운 TS 원본이 남긴 출력과의 바이트 비교. tests/fixtures/golden은 원본을 지우기 전에 마지막으로 돌려 얼린 값이다.
 //! 다시 만들 수 없으니 이 시험이 깨지면 고정값을 고치기 전에 출력이 바뀌는 것이 의도인지부터 본다.
 //! plan-tick JSON, doctor 줄, watch.tsv와 틱이 쓰는 파일, 틱 보고, source_run을 이 시험이 지킨다.
+// 가짜 실행 파일(sh)과 unix 권한을 쓰는 시험이다. Windows는 단위 시험과 Windows 백엔드 시험으로 본다.
+#![cfg(unix)]
 #![allow(clippy::unwrap_used)]
 
 mod common;

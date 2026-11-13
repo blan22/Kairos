@@ -8,13 +8,16 @@ use std::time::Duration;
 
 use kairos_agenda::{ItemRepo, ItemState, playbook_of};
 use kairos_core::ports::Clock;
+#[cfg(unix)]
 use kairos_core::process::{ProcessRequest, ProcessRunner, SystemProcessRunner};
 use kairos_core::text::sanitize;
 use kairos_core::{Instant, KairosHome, KairosResult, string_enum};
 use kairos_ledger::{ObjectRepo, OutsiderMarkRepo};
 use kairos_source_github::{LiveAuthorReader, LiveAuthors};
 use kairos_store::Database;
+#[cfg(unix)]
 use signal_hook::consts::{SIGHUP, SIGINT, SIGTERM};
+#[cfg(unix)]
 use signal_hook::iterator::Signals;
 
 use crate::keychain::{Keychain, KeychainRead};
@@ -23,6 +26,7 @@ use crate::profile::{SessionCommand, SessionProfile, SessionToken};
 use crate::run::{FailCode, Run, RunLifecycle, RunRepo, RunState};
 
 const CHILD_POLL: Duration = Duration::from_millis(20);
+#[cfg(unix)]
 const SIGNAL_TIMEOUT: Duration = Duration::from_secs(5);
 const NOT_LAUNCHED: i32 = 127;
 /// `--settings` 파일을 안전하게 쓰지 못했거나 작업 공간을 확인하지 못해 띄우지 않았다. claude가 없는 것과 구분해 session_failed가 된다.
@@ -90,6 +94,7 @@ pub trait SessionSpawner {
 pub struct SystemSessionSpawner;
 
 /// `unsafe` 금지라 kill(2)을 직접 부르지 못한다. 표준 라이브러리의 신호 보내기는 불안정 기능이다.
+#[cfg(unix)]
 fn forward(pid: u32, signal: i32) {
     let name = if signal == SIGHUP { "HUP" } else { "TERM" };
     let pid = pid.to_string();
@@ -100,6 +105,7 @@ impl SessionSpawner for SystemSessionSpawner {
     fn spawn(&self, command: &SessionCommand) -> i32 {
         // 터미널이 닫혀도 끝을 적을 수 있게 신호를 넘기고 자식을 기다린다.
         // 처리기는 exec에서 기본값으로 돌아가므로 자식의 SIGINT는 그대로 동작한다. SIG_IGN이면 자식이 물려받아 Ctrl-C가 듣지 않는다.
+        #[cfg(unix)]
         let mut signals = Signals::new([SIGHUP, SIGTERM, SIGINT]).ok();
         // 버리면 파일을 지운다. 이 함수가 끝날 때까지 쥔다.
         let Ok(_settings) = command.write_settings() else {
@@ -117,6 +123,7 @@ impl SessionSpawner for SystemSessionSpawner {
         };
         loop {
             // 거두기 전의 자식은 pid를 쥐고 있어 다른 프로세스로 신호가 가지 않는다. 그래서 한 스레드에서 번갈아 본다.
+            #[cfg(unix)]
             for signal in signals.iter_mut().flat_map(Signals::pending) {
                 if signal != SIGINT {
                     forward(child.id(), signal);

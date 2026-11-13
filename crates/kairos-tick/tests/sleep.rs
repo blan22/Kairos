@@ -1,4 +1,6 @@
 //! 틱과 doctor가 함께 도는 시험이다. 판정 함수는 kairos-ops의 시험이 맡는다
+// 가짜 실행 파일(sh)과 unix 권한을 쓰는 시험이다. Windows는 단위 시험과 Windows 백엔드 시험으로 본다.
+#![cfg(unix)]
 #![allow(clippy::unwrap_used)]
 
 mod common;

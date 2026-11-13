@@ -1,5 +1,7 @@
 //! 설치 뒤 도구 명령(`uninstall --runtime|--purge`, `update`, `completions`)의 프로세스 시험.
 //! launchctl은 언제나 `--no-launchctl`로 막는다. 실제 잡을 내리면 안 된다. lsregister와 security는 가짜다.
+// 가짜 실행 파일(sh)과 unix 권한을 쓰는 시험이다. Windows는 단위 시험과 Windows 백엔드 시험으로 본다.
+#![cfg(unix)]
 #![allow(clippy::unwrap_used)]
 
 mod common;

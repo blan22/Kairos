@@ -1,5 +1,7 @@
 //! 표시와 항목 엔진 시험(R10~R12).
 //! 번호는 .codex/runs/2026-11-04-stage2.md의 표와 같다. 고정값은 모두 합성이다.
+// 가짜 실행 파일(sh)과 unix 권한을 쓰는 시험이다. Windows는 단위 시험과 Windows 백엔드 시험으로 본다.
+#![cfg(unix)]
 #![allow(clippy::unwrap_used)]
 
 #[path = "../../kairos-agenda/tests/common/mod.rs"]

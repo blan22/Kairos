@@ -1,4 +1,6 @@
 //! 알림을 누르면 헬퍼가 부르는 reveal과 next의 reveal 필드. 가짜 orca와 open만 부른다.
+// 가짜 실행 파일(sh)과 unix 권한을 쓰는 시험이다. Windows는 단위 시험과 Windows 백엔드 시험으로 본다.
+#![cfg(unix)]
 #![allow(clippy::unwrap_used)]
 
 mod common;

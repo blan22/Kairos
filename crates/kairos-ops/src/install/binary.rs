@@ -1,5 +1,4 @@
 use std::fs;
-use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 use std::sync::LazyLock;
 
@@ -25,7 +24,7 @@ pub(super) fn is_shim_dir(dir: &str) -> bool {
 
 /// 실행 권한은 소유자, 그룹, 기타 중 하나만 봐도 된다. `access(2)`는 `unsafe`라 쓰지 않는다.
 fn is_executable_file(path: &Path) -> bool {
-    fs::metadata(path).is_ok_and(|metadata| metadata.is_file() && metadata.permissions().mode() & 0o111 != 0)
+    kairos_core::platform::is_executable_file(path)
 }
 
 /// `search_path`와 고정 폴더에서 실행 파일을 찾는다.
@@ -102,7 +101,7 @@ pub(super) fn resolve_paths(
     })
 }
 
-#[cfg(test)]
+#[cfg(all(test, unix))]
 mod tests {
     use std::os::unix::fs::OpenOptionsExt;
 

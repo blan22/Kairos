@@ -17,13 +17,13 @@
 //! git 자격 증명은 환경으로 끄고, 접두어 거부 목록은 마지막 겹이다.
 
 use std::fmt;
-use std::fs::{self, DirBuilder, File, Metadata, OpenOptions};
+use std::fs::{self, DirBuilder, Metadata, OpenOptions};
 use std::io::{self, Read, Write};
-use std::os::unix::fs::{DirBuilderExt, MetadataExt, OpenOptionsExt, PermissionsExt};
 use std::path::{Path, PathBuf};
 use std::sync::LazyLock;
 
 use kairos_agenda::{NOTIFIER_APP_REL, ORCA_BIN, Playbook, issue_url_matches};
+use kairos_core::platform::{self, CreateMode, NoFollow, set_mode};
 use kairos_core::{KairosError, KairosHome, KairosResult};
 use regex::Regex;
 use serde_json::{Map, Value, json};
@@ -365,20 +365,18 @@ impl SessionToken {
             Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(None),
             Err(error) => return Err(error.into()),
         };
-        let owner = fs::metadata(home.root())?.uid();
+        let owner = platform::owner_of(&fs::metadata(home.root())?);
         let unsafe_file = |metadata: &Metadata| {
             !metadata.is_file()
-                || metadata.mode() & 0o077 != 0
-                || metadata.uid() != owner
-                || metadata.nlink() != 1
+                || platform::foreign_or_shared(metadata, owner, 0o077)
                 || metadata.len() > TOKEN_MAX_BYTES
         };
         if linked.file_type().is_symlink() || unsafe_file(&linked) {
             return Err(KairosError::new("session_token_unsafe"));
         }
-        let file = File::open(&path)?;
+        let file = OpenOptions::new().read(true).no_follow().open(&path)?;
         let opened = file.metadata()?;
-        if opened.dev() != linked.dev() || opened.ino() != linked.ino() || unsafe_file(&opened) {
+        if opened.file_type().is_symlink() || !platform::same_file(&opened, &linked) || unsafe_file(&opened) {
             return Err(KairosError::new("session_token_unsafe"));
         }
         let mut content = String::new();
@@ -452,29 +450,29 @@ impl SessionCommand {
         let unsafe_settings = || KairosError::new("session_settings_unsafe");
         let dir = settings.path.parent().ok_or_else(unsafe_settings)?;
         let home = dir.parent().ok_or_else(unsafe_settings)?;
-        let owner = fs::metadata(home).map_err(|_| unsafe_settings())?.uid();
-        match DirBuilder::new().mode(0o700).create(dir) {
+        let owner = platform::owner_of(&fs::metadata(home).map_err(|_| unsafe_settings())?);
+        match DirBuilder::new().create_mode(0o700).create(dir) {
             Ok(()) => {}
             Err(error) if error.kind() == io::ErrorKind::AlreadyExists => {}
             Err(_) => return Err(unsafe_settings()),
         }
         let folder = fs::symlink_metadata(dir).map_err(|_| unsafe_settings())?;
-        if folder.file_type().is_symlink() || !folder.is_dir() || folder.uid() != owner {
+        if folder.file_type().is_symlink() || !folder.is_dir() || platform::owner_of(&folder) != owner {
             return Err(unsafe_settings());
         }
-        if folder.mode() & 0o777 != 0o700 {
-            fs::set_permissions(dir, fs::Permissions::from_mode(0o700)).map_err(|_| unsafe_settings())?;
+        if platform::mode_of(&folder).is_some_and(|mode| mode & 0o777 != 0o700) {
+            set_mode(dir, 0o700).map_err(|_| unsafe_settings())?;
         }
         // create_new는 O_EXCL이라 이미 있는 이름(링크 포함)을 거부하고, O_NOFOLLOW는 링크를 한 번 더 막는다.
         let mut file = OpenOptions::new()
             .write(true)
             .create_new(true)
-            .mode(0o600)
-            .custom_flags(libc::O_NOFOLLOW)
+            .create_mode(0o600)
+            .no_follow()
             .open(&settings.path)
             .map_err(|_| unsafe_settings())?;
         let written = WrittenSettings(Some(settings.path.clone()));
-        file.set_permissions(fs::Permissions::from_mode(0o600)).map_err(|_| unsafe_settings())?;
+        platform::set_file_mode(&file, 0o600).map_err(|_| unsafe_settings())?;
         file.write_all(settings.content.as_bytes()).map_err(|_| unsafe_settings())?;
         file.sync_all().map_err(|_| unsafe_settings())?;
         Ok(written)

@@ -1,5 +1,7 @@
 //! 세션 끝까지 시험과 설치 시험(Rust 설치본 기준), 기본 경로 시험.
 //! 수집 명령의 시험 환경 시험.
+// 가짜 실행 파일(sh)과 unix 권한을 쓰는 시험이다. Windows는 단위 시험과 Windows 백엔드 시험으로 본다.
+#![cfg(unix)]
 #![allow(clippy::unwrap_used)]
 
 mod common;

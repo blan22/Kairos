@@ -3,11 +3,11 @@
 
 use std::fs;
 use std::io::Write;
-use std::os::unix::fs::OpenOptionsExt;
 use std::path::Path;
 
 use kairos_config::{CONNECTIONS_FILE, Layer, Loaded, ORG_FILE, USER_FILE};
 use kairos_core::KairosResult;
+use kairos_core::platform::CreateMode;
 use kairos_core::profile::Profile;
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
@@ -255,7 +255,7 @@ fn write_config(root: &Path, name: &str, content: &str, force: bool) -> KairosRe
         return Ok(false);
     }
     let temporary = root.join(format!(".{name}.{}.tmp", std::process::id()));
-    let mut file = fs::OpenOptions::new().write(true).create_new(true).mode(0o644).open(&temporary)?;
+    let mut file = fs::OpenOptions::new().write(true).create_new(true).create_mode(0o644).open(&temporary)?;
     file.write_all(content.as_bytes())?;
     file.sync_all()?;
     fs::rename(&temporary, &path)?;

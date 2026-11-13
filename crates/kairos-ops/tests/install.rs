@@ -1,4 +1,6 @@
 //! 설치. 시험은 크레이트 안의 합성 템플릿만 쓴다. launchctl은 가짜다
+// 가짜 실행 파일(sh)과 unix 권한을 쓰는 시험이다. Windows는 단위 시험과 Windows 백엔드 시험으로 본다.
+#![cfg(unix)]
 #![allow(clippy::unwrap_used)]
 
 mod common;

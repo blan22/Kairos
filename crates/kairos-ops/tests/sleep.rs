@@ -1,4 +1,6 @@
 //! 합성 시각과 가짜 실행기만 쓴다. 측정값은 .codex/runs/2026-11-04-stage2.md에 있다
+// 가짜 실행 파일(sh)과 unix 권한을 쓰는 시험이다. Windows는 단위 시험과 Windows 백엔드 시험으로 본다.
+#![cfg(unix)]
 #![allow(clippy::unwrap_used)]
 
 mod common;

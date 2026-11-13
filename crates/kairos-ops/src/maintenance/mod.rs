@@ -1,11 +1,11 @@
 mod repo;
 
-use std::fs::{self, DirBuilder, Permissions};
-use std::os::unix::fs::{DirBuilderExt, PermissionsExt};
+use std::fs::{self, DirBuilder};
 use std::path::{Path, PathBuf};
 use std::sync::LazyLock;
 
 use kairos_core::home::{DIR_MODE, FILE_MODE, write_file_atomic};
+use kairos_core::platform::{CreateMode, set_mode};
 use kairos_core::{Instant, KairosError, KairosHome, KairosResult, LocalDate, js};
 use kairos_ledger::{Invariants, check_invariants};
 use kairos_store::Connection;
@@ -73,13 +73,13 @@ impl<'a> Maintenance<'a> {
     /// 하루에 한 번 VACUUM INTO로 복사본을 만든다. 같은 권한(0700/0600)이고 최근 7개만 둔다.
     pub fn backup(&self, now: Instant) -> KairosResult<Option<PathBuf>> {
         let directory = backup_dir(self.home);
-        DirBuilder::new().recursive(true).mode(DIR_MODE).create(&directory)?;
-        fs::set_permissions(&directory, Permissions::from_mode(DIR_MODE))?;
+        DirBuilder::new().recursive(true).create_mode(DIR_MODE).create(&directory)?;
+        set_mode(&directory, DIR_MODE)?;
         let target = directory.join(format!("kairos-{}.db", now.local_date()));
         let mut created = None;
         if !target.exists() {
             MaintenanceRepo::new(self.connection).vacuum_into(&target)?;
-            fs::set_permissions(&target, Permissions::from_mode(FILE_MODE))?;
+            set_mode(&target, FILE_MODE)?;
             created = Some(target);
         }
         remove_stale_backups(&directory)?;

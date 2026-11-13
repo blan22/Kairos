@@ -487,6 +487,7 @@ version = "0.4.2"
 dependencies = [
  "chrono",
  "chrono-tz",
+ "libc",
  "regex",
  "serde",
  "serde_json",
@@ -543,7 +544,6 @@ dependencies = [
  "kairos-ledger",
  "kairos-source-github",
  "kairos-store",
- "libc",
  "regex",
  "serde",
  "serde_json",

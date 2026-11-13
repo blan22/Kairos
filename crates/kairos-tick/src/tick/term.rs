@@ -1,5 +1,6 @@
 //! 틱 동안만 도는 두 스레드. SIGTERM을 받는 쪽과 심장박동이다.
 
+#[cfg(unix)]
 use std::panic;
 use std::sync::mpsc::{self, RecvTimeoutError, Sender};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
@@ -7,12 +8,17 @@ use std::thread::{self, JoinHandle};
 use std::time::Duration;
 
 use kairos_core::KairosHome;
-use kairos_ops::{BEAT_MS, StallWatch, ToolResults};
+#[cfg(unix)]
+use kairos_ops::ToolResults;
+use kairos_ops::{BEAT_MS, StallWatch};
+#[cfg(unix)]
 use signal_hook::consts::SIGTERM;
+#[cfg(unix)]
 use signal_hook::iterator::{Handle, Signals};
 
 use crate::lock::CollectLock;
 
+#[cfg(unix)]
 const TERMINATED_EXIT_CODE: i32 = 143;
 
 /// 틱이 신호에 끊겨도 되는 구간을 표시한다.
@@ -49,11 +55,29 @@ impl HeldGate<'_> {
 }
 
 /// 신호 처리 스레드. finally는 신호로 죽을 때 돌지 않는다. 잠금과 메일 본문이 든 파일을 남기지 않는다.
+/// Windows의 작업 스케줄러는 신호 없이 프로세스를 끝낸다. 남은 잠금과 파일은 다음 틱이 정리한다.
+#[cfg(unix)]
 pub(super) struct TermWatch {
     handle: Handle,
     thread: Option<JoinHandle<()>>,
 }
 
+#[cfg(not(unix))]
+pub(super) struct TermWatch;
+
+#[cfg(not(unix))]
+impl TermWatch {
+    pub(super) fn install(
+        _gate: TermGate,
+        _home: &KairosHome,
+        _user_home: &std::path::Path,
+        _lock: CollectLock,
+    ) -> Option<Self> {
+        None
+    }
+}
+
+#[cfg(unix)]
 impl TermWatch {
     /// 등록하지 못하면 None이다. 그때도 틱은 돌고 죽으면 다음 틱이 정리한다.
     pub(super) fn install(
@@ -77,6 +101,7 @@ impl TermWatch {
     }
 }
 
+#[cfg(unix)]
 impl Drop for TermWatch {
     /// 메인이 문을 놓은 뒤에 불러야 한다. 처리 중인 신호가 문에서 기다리면 끝나지 않는다.
     fn drop(&mut self) {

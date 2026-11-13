@@ -1,4 +1,6 @@
 //! 잠금 시험은 .rs, 모드 판정은 tests/mode.rs에 있다
+// 가짜 실행 파일(sh)과 unix 권한을 쓰는 시험이다. Windows는 단위 시험과 Windows 백엔드 시험으로 본다.
+#![cfg(unix)]
 #![allow(clippy::unwrap_used)]
 
 mod common;

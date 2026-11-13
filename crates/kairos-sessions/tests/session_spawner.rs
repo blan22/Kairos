@@ -1,5 +1,7 @@
 //! 세션 끝까지 시험과 세션 생성 시험.
 //! 신호 처리기는 프로세스 전체에 남으므로 실제 실행은 이 시험 파일을 다시 띄운 대역 프로세스에서 한다.
+// 가짜 실행 파일(sh)과 unix 권한을 쓰는 시험이다. Windows는 단위 시험과 Windows 백엔드 시험으로 본다.
+#![cfg(unix)]
 #![allow(clippy::unwrap_used)]
 
 mod common;
