@@ -13,6 +13,7 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use common::TestHome;
+use kairos_core::platform::Os;
 use kairos_core::process::{ProcessOutput, ProcessRequest, ProcessRunner};
 use kairos_ops::{
     InstallMode, InstallOptions, InstallPaths, InstallPlan, Installer, PlanInput, UninstallOptions, VERSION,
@@ -72,7 +73,8 @@ fn plan(test: &TestHome, paths: &InstallPaths) -> Result<InstallPlan, kairos_cor
         home: &test.home,
         root: Path::new(ROOT),
         paths,
-        launch_agents_dir: Some(test.join("agents")),
+        service_dir: Some(test.join("agents")),
+        os: Os::MacOs,
     })
 }
 
@@ -100,7 +102,8 @@ impl Setup {
         let agents = test.join("agents");
         let options = InstallOptions {
             mode: install_mode,
-            launch_agents_dir: Some(agents.clone()),
+            service_dir: Some(agents.clone()),
+            os: Os::MacOs,
             claude: Some(bin.join("claude").to_string_lossy().into_owned()),
             gh: Some(bin.join("gh").to_string_lossy().into_owned()),
             binary_dir: Some(tools),
@@ -132,10 +135,10 @@ fn install_기본값은_dry_run이라_아무것도_쓰지_않는다() {
 fn plist_절대_경로_3분과_5분_간격_shim_없음_자리표시자_없음() {
     let test = TestHome::new();
     let plan = plan(&test, &paths()).unwrap();
-    let [collect, watchdog] = &plan.plists[..] else { panic!("plist 둘") };
+    let [collect, watchdog] = &plan.services[..] else { panic!("plist 둘") };
     assert_eq!(collect.label, "dev.kairos.collect");
     assert_eq!(watchdog.label, "dev.kairos.watchdog");
-    for plist in &plan.plists {
+    for plist in &plan.services {
         assert!(!plist.content.contains("{{"));
         for shim in [".volta/bin", ".cargo/bin", "shims"] {
             assert!(!plist.content.contains(shim));
@@ -159,7 +162,7 @@ fn plist_절대_경로_3분과_5분_간격_shim_없음_자리표시자_없음() 
 fn plist는_umask_077을_적어_launchd_기본값에_기대지_않는다() {
     let test = TestHome::new();
     let umask = regex::Regex::new(r"<key>Umask</key>\s*<integer>63</integer>").unwrap();
-    for plist in plan(&test, &paths()).unwrap().plists {
+    for plist in plan(&test, &paths()).unwrap().services {
         assert!(umask.is_match(&plist.content));
     }
 }
@@ -182,8 +185,10 @@ fn install_apply는_실행본과_유효한_plist만_만들고_launchctl을_부�
     assert!(runtime.join("ops/kairos-watchdog.zsh").exists());
     assert!(!runtime.join("test").exists());
     assert_eq!(mode(&applied.plan.log_dir), 0o700);
-    for plist in &applied.plan.plists {
-        let lint = Command::new("/usr/bin/plutil").arg("-lint").arg(&plist.path).output().unwrap();
+    // plutil은 macOS에만 있다. 다른 OS는 plist 문법을 검사하지 않는다.
+    let plutil = std::path::Path::new("/usr/bin/plutil");
+    for plist in applied.plan.services.iter().filter(|_| plutil.exists()) {
+        let lint = Command::new(plutil).arg("-lint").arg(&plist.path).output().unwrap();
         assert!(lint.status.success(), "{}", String::from_utf8_lossy(&lint.stdout));
     }
 }
@@ -222,7 +227,7 @@ fn install_register만_launchctl_bootstrap을_부른다() {
     );
     assert_eq!(calls[0], ["bootout", "gui/501/dev.kairos.collect"]);
     assert_eq!(calls[1][1], "gui/501");
-    assert_eq!(calls[1][2], registered.plan.plists[0].path.to_string_lossy());
+    assert_eq!(calls[1][2], registered.plan.services[0].path.to_string_lossy());
 }
 
 #[test]
@@ -297,7 +302,9 @@ fn uninstall은_우리_라벨_둘만_내리고_dry_run은_아무것도_바꾸지
     fs::write(setup.agents.join("other.plist"), "x").unwrap();
     let fake = FakeLaunchctl::ok();
     let dry = UninstallOptions {
-        launch_agents_dir: Some(setup.agents.clone()),
+        service_dir: Some(setup.agents.clone()),
+        home: None,
+        os: Os::MacOs,
         dry_run: true,
         skip_launchctl: false,
         before_removal: false,
@@ -359,7 +366,7 @@ fn 미리보기는_지정한_폴더에만_쓴다() {
     let dry = installer(&FakeLaunchctl::ok()).install(&options).unwrap();
     assert_eq!(fs::read_dir(&preview).unwrap().count(), 2);
     assert!(!setup.agents.exists());
-    assert_eq!(fs::read_to_string(preview.join("dev.kairos.collect.plist")).unwrap(), dry.plan.plists[0].content);
+    assert_eq!(fs::read_to_string(preview.join("dev.kairos.collect.plist")).unwrap(), dry.plan.services[0].content);
 }
 
 #[test]
@@ -378,7 +385,9 @@ fn 내리기만_할_때는_launchctl을_부르지_않고_plist를_지운다() {
     installer(&FakeLaunchctl::ok()).install(&setup.options).unwrap();
     let fake = FakeLaunchctl::ok();
     let options = UninstallOptions {
-        launch_agents_dir: Some(setup.agents.clone()),
+        service_dir: Some(setup.agents.clone()),
+        home: None,
+        os: Os::MacOs,
         dry_run: false,
         skip_launchctl: true,
         before_removal: false,
@@ -391,7 +400,9 @@ fn 내리기만_할_때는_launchctl을_부르지_않고_plist를_지운다() {
 #[test]
 fn 지우기_앞_단계는_내리지_못한_잡이_아직_올라_있으면_실패로_알린다() {
     let options = |setup: &Setup| UninstallOptions {
-        launch_agents_dir: Some(setup.agents.clone()),
+        service_dir: Some(setup.agents.clone()),
+        home: None,
+        os: Os::MacOs,
         dry_run: false,
         skip_launchctl: false,
         before_removal: true,

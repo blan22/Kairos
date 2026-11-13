@@ -210,6 +210,8 @@ fn 모르는_옵션도_json_오류로_답한다() {
     assert_eq!((done.status, &body["ok"], &body["error"]["code"]), (2, &json!(false), &json!("usage")));
 }
 
+/// 세션을 여는 흐름이다. 세션은 macOS에서만 연다.
+#[cfg(target_os = "macos")]
 #[test]
 fn 플레이북_대상이_아닌_항목의_accept는_아무것도_바꾸지_않는다() {
     let cli = cli_with_item();

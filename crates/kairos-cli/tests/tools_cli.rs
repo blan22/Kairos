@@ -8,7 +8,7 @@ mod common;
 
 use std::fs;
 use std::os::unix::fs::symlink;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use common::*;
@@ -35,7 +35,29 @@ impl Installed {
     }
 }
 
-/// 설치본 모양(`data/0.2.0`, `current`, `~/.local/bin/kairos`)과 수집 기록, plist를 둔다.
+/// 이 OS의 수집 잡 등록 파일. macOS는 plist, Linux는 timer, Windows는 작업 XML이다.
+fn collect_job() -> String {
+    kairos_ops::Scheduler::for_os(kairos_core::platform::Os::current()).file_names("dev.kairos.collect").remove(0)
+}
+
+/// 데이터를 지운 뒤 키체인 토큰을 지우는 마지막 호출. Linux는 secret-tool로 찾은 뒤 지운다.
+fn token_delete_call() -> &'static str {
+    match kairos_core::platform::Os::current() {
+        kairos_core::platform::Os::Linux => "security clear service kairos account session-gh-token",
+        _ => "security delete-generic-password -s kairos -a session-gh-token",
+    }
+}
+
+/// 알림 헬퍼 번들을 LaunchServices에서 빼는 호출. macOS에만 있다.
+fn notifier_calls(app: &Path) -> Vec<String> {
+    if kairos_core::platform::Os::current() == kairos_core::platform::Os::MacOs {
+        vec![format!("lsregister -u {}", app.display())]
+    } else {
+        Vec::new()
+    }
+}
+
+/// 설치본 모양(`data/0.2.0`, `current`, `~/.local/bin/kairos`)과 수집 기록, 잡 파일을 둔다.
 fn installed() -> Installed {
     let mut cli = Cli::new();
     let root = cli.root.clone();
@@ -54,7 +76,7 @@ fn installed() -> Installed {
     symlink(data.join("current/bin/kairos"), root.join(".local/bin/kairos")).unwrap();
     let agents = root.join("agents");
     fs::create_dir_all(&agents).unwrap();
-    fs::write(agents.join("dev.kairos.collect.plist"), "x").unwrap();
+    fs::write(agents.join(collect_job()), "x").unwrap();
     let log = root.join("calls.log");
     let log_text = log.to_str().unwrap();
     for name in ["lsregister", "security"] {
@@ -75,7 +97,7 @@ fn uninstall_runtime은_확인을_받고_실행본과_명령_링크만_지운다
     assert!(!setup.data.join("0.2.0").exists());
     assert!(fs::symlink_metadata(setup.data.join("current")).is_err());
     assert!(fs::symlink_metadata(setup.cli.root.join(".local/bin/kairos")).is_err());
-    assert!(!setup.agents.join("dev.kairos.collect.plist").exists());
+    assert!(!setup.agents.join(collect_job()).exists());
     // 데이터는 남는다.
     assert!(setup.data.join("kairos.db").is_file() && setup.data.join("backup").is_dir());
     assert!(done.out.contains(&format!("데이터 폴더는 남겼습니다: {}", setup.data.display())), "{}", done.out);
@@ -83,7 +105,7 @@ fn uninstall_runtime은_확인을_받고_실행본과_명령_링크만_지운다
     // 임시 폴더 경로는 따옴표가 필요 없는 글자뿐이다.
     assert!(done.out.contains(&format!("orca plugin dev unload {}\n", panel.display())), "{}", done.out);
     let app = setup.data.join("0.2.0/ops/notifier/KairosNotifier.app");
-    assert_eq!(setup.calls(), [format!("lsregister -u {}", app.display())]);
+    assert_eq!(setup.calls(), notifier_calls(&app));
 }
 
 #[test]
@@ -95,7 +117,7 @@ fn uninstall은_답이_없거나_아니오면_아무것도_바꾸지_않는다()
         assert!(done.out.contains("아무것도 바꾸지 않았습니다"), "{}", done.out);
         assert!(setup.data.join("0.2.0/bin/kairos").is_file());
         assert!(setup.data.join("kairos.db").is_file());
-        assert!(setup.agents.join("dev.kairos.collect.plist").exists(), "잡도 내리지 않는다");
+        assert!(setup.agents.join(collect_job()).exists(), "잡도 내리지 않는다");
         assert!(setup.calls().is_empty(), "{:?}", setup.calls());
     }
 }
@@ -109,7 +131,7 @@ fn uninstall_dry_run은_지울_것만_보여_준다() {
     assert!(done.out.contains(&format!("  {}", setup.data.join("0.2.0").display())), "{}", done.out);
     assert!(done.out.contains("키체인의 세션 토큰"), "{}", done.out);
     assert!(setup.data.join("0.2.0/bin/kairos").is_file() && setup.data.join("kairos.db").is_file());
-    assert!(setup.agents.join("dev.kairos.collect.plist").exists());
+    assert!(setup.agents.join(collect_job()).exists());
     assert!(setup.calls().is_empty(), "{:?}", setup.calls());
 }
 
@@ -121,7 +143,7 @@ fn uninstall_purge는_데이터_폴더와_키체인_토큰까지_지운다() {
     assert!(!setup.data.exists());
     assert!(setup.cli.root.is_dir(), "홈 폴더는 그대로다");
     assert!(done.out.contains(&format!("지움 {}", setup.data.display())), "{}", done.out);
-    assert_eq!(setup.calls().last().unwrap(), "security delete-generic-password -s kairos -a session-gh-token");
+    assert_eq!(setup.calls().last().unwrap(), token_delete_call());
 }
 
 #[test]
@@ -140,7 +162,7 @@ fn uninstall_purge는_홈_폴더와_표지_없는_폴더를_거절한다() {
     assert_eq!(done.status, 1, "{}{}", done.out, done.err);
     assert!(done.out.contains("kairos 데이터 폴더로 보이지 않습니다"), "{}", done.out);
     assert!(plain.is_dir() && setup.data.join("kairos.db").is_file());
-    assert!(setup.agents.join("dev.kairos.collect.plist").exists());
+    assert!(setup.agents.join(collect_job()).exists());
 }
 
 #[test]
@@ -154,7 +176,7 @@ fn uninstall_runtime은_홈_폴더를_데이터_폴더로_주면_지우지_않�
     assert!(done.out.contains("지우지 않음: 데이터 폴더가 홈 폴더이거나 그 위입니다"), "{}", done.out);
     assert!(fs::symlink_metadata(user_home.join(".local/bin/kairos")).is_ok());
     assert!(setup.data.join("0.2.0/bin/kairos").is_file());
-    assert!(setup.agents.join("dev.kairos.collect.plist").exists(), "잡도 내리지 않는다");
+    assert!(setup.agents.join(collect_job()).exists(), "잡도 내리지 않는다");
     // 데이터 폴더를 가리키는 링크에 `/`를 붙여도 거절한다.
     let alias = user_home.join("alias");
     symlink(&setup.data, &alias).unwrap();
@@ -208,7 +230,7 @@ fn uninstall은_runtime과_purge를_함께_주면_purge다() {
     assert!(!setup.data.exists());
     // 데이터 폴더를 지운 뒤에 토큰을 지운다. 데이터를 지우다 멈추면 토큰은 남는다.
     let calls = setup.calls();
-    assert_eq!(calls.last().unwrap(), "security delete-generic-password -s kairos -a session-gh-token");
+    assert_eq!(calls.last().unwrap(), token_delete_call());
 }
 
 #[test]
@@ -256,6 +278,10 @@ fn update는_설치_방식에_맞는_명령을_알려_주고_아무것도_바꾸
 fn completions는_셸이_읽을_수_있는_스크립트를_낸다() {
     let cli = Cli::new();
     for (shell, bin) in [("zsh", "/bin/zsh"), ("bash", "/bin/bash")] {
+        // 셸이 없는 컴퓨터(zsh 없는 Linux)는 문법 검사를 건너뛴다.
+        if !Path::new(bin).exists() {
+            continue;
+        }
         let done = cli.run(&["completions", shell]);
         assert_eq!((done.status, done.err.as_str()), (0, ""), "{shell}");
         assert!(done.out.contains("doctor") && !done.out.contains("plan-tick"), "{}", done.out);

@@ -187,7 +187,8 @@ pub fn remove_data(home: &Path, user_home: &Path) -> KairosResult<()> {
     Ok(())
 }
 
-#[cfg(all(test, unix))]
+#[cfg(test)]
+#[cfg(unix)]
 mod tests {
     use std::os::unix::fs::symlink;
 

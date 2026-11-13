@@ -23,7 +23,7 @@ use std::path::{Path, PathBuf};
 use std::sync::LazyLock;
 
 use kairos_agenda::{NOTIFIER_APP_REL, ORCA_BIN, Playbook, issue_url_matches};
-use kairos_core::platform::{self, CreateMode, NoFollow, set_mode};
+use kairos_core::platform::{self, CreateMode, NoFollow, Os, set_mode};
 use kairos_core::{KairosError, KairosHome, KairosResult};
 use regex::Regex;
 use serde_json::{Map, Value, json};
@@ -310,6 +310,22 @@ const TOOLS_DENIED: [&str; 19] = [
 
 const FIX_TOOLS_ALLOWED: [&str; 2] = ["Edit", "Write"];
 
+/// macOS가 아닌 OS에서 세션을 거절할 때의 문구. 까닭은 `Os::supports_sessions`에 있다.
+pub const SESSIONS_UNSUPPORTED: &str = "이 OS에서는 세션 경계를 지키는 샌드박스가 없어 세션을 열지 않습니다. 세션은 macOS에서만 맡깁니다. 수집, 패널, 알림은 그대로 씁니다";
+
+/// Linux에서 더 막는 쓰기 자리. 사용자 systemd 유닛과 자동 시작은 launchd 폴더와 같은 제어 평면이다. 키링은 비밀 저장소다.
+/// `/run/user`(사용자 세션 버스 `$XDG_RUNTIME_DIR/bus`)와 `/run/dbus`(시스템 버스)는 소켓째 가린다.
+/// seccomp 도구가 없는 설치에서도 Secret Service와 systemd 사용자 관리자에 닿지 못하게 한다.
+const LINUX_DENY_WRITE: [&str; 5] =
+    ["~/.config/systemd", "~/.config/autostart", "~/.local/share/keyrings", "/run/user", "/run/dbus"];
+/// Linux에서 더 막는 읽기 자리. GNOME 키링 파일은 `~/Library/Keychains`와 같다.
+const LINUX_DENY_READ: [&str; 4] = ["~/.local/share/keyrings", "~/.password-store", "/run/user", "/run/dbus"];
+const LINUX_READ_DENIED: [&str; 2] = ["~/.local/share/keyrings/**", "~/.password-store/**"];
+const LINUX_EDIT_DENIED: [&str; 3] = ["~/.config/systemd/**", "~/.config/autostart/**", "~/.local/share/keyrings/**"];
+/// Linux의 서비스 관리자, 세션 버스, 비밀 저장소, 알림 도구. macOS의 launchctl, security, osascript에 맞선다.
+const LINUX_SHELL_DENIED: [&str; 9] =
+    ["systemctl", "systemd-run", "loginctl", "busctl", "dbus-send", "gdbus", "secret-tool", "notify-send", "xdg-open"];
+
 fn bash(prefix: &str) -> String {
     format!("Bash({prefix}:*)")
 }
@@ -568,6 +584,30 @@ impl SessionProfile {
             workspace: None,
             workspace_unverified: false,
         }
+    }
+
+    /// OS에 따라 더 막는다. Linux는 systemd, 세션 버스, 키링을 막는다. 다른 OS는 그대로다.
+    /// Linux 세션은 아직 열지 않는다(`Os::supports_sessions`). 이 목록은 열 때의 바닥이고 그것만으로 충분하지 않다.
+    /// 기본 목록은 모든 OS에 같게 둔다. macOS 경로는 Linux에 없어도 해가 없다.
+    #[must_use]
+    pub fn for_os(mut self, os: Os) -> Self {
+        if os != Os::Linux {
+            return self;
+        }
+        let shell: Vec<String> = LINUX_SHELL_DENIED
+            .iter()
+            .flat_map(|name| {
+                std::iter::once((*name).to_owned()).chain(BIN_DIRS.iter().map(move |dir| format!("{dir}/{name}")))
+            })
+            .map(|prefix| bash(&prefix))
+            .chain(LINUX_READ_DENIED.iter().map(|path| format!("Read({path})")))
+            .collect();
+        self.denied_tools.extend(shell.iter().cloned());
+        self.fix_denied_tools.extend(shell);
+        self.fix_denied_tools.extend(LINUX_EDIT_DENIED.iter().map(|path| format!("Edit({path})")));
+        self.deny_write.extend(LINUX_DENY_WRITE.map(str::to_owned));
+        self.deny_read.extend(LINUX_DENY_READ.map(str::to_owned));
+        self
     }
 
     /// 고치는 세션의 작업 공간. kairos-run이 현재 폴더로 정한다. 없으면 qa_issue 명령을 만들지 않는다.

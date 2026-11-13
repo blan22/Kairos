@@ -76,8 +76,14 @@ fn 세션_토큰은_stdin으로_받아_키체인에_넣고_파일을_지운다()
     let done = cli.pipe(&["connect", "session-token"], format!("{token}\n").as_bytes());
     assert_eq!(done.status, 0, "{}{}", done.out, done.err);
     let calls = fs::read_to_string(&log).unwrap();
-    // 토큰은 인자가 아니라 stdin으로 갔다.
-    assert!(calls.starts_with("-i\nadd-generic-password -U -s kairos -a session-gh-token"), "{calls}");
+    // 토큰은 인자가 아니라 stdin으로 갔다. macOS는 security -i, Linux는 secret-tool store다.
+    let first = match kairos_core::platform::Os::current() {
+        kairos_core::platform::Os::Linux => {
+            "store --label=kairos-session-token service kairos account session-gh-token\ngithub_pat_"
+        }
+        _ => "-i\nadd-generic-password -U -s kairos -a session-gh-token",
+    };
+    assert!(calls.starts_with(first), "{calls}");
     assert!(!calls.lines().next().unwrap().contains("github_pat_"));
     assert!(!cli.root.join("session-gh-token").exists());
 }

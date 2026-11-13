@@ -62,10 +62,32 @@ impl Os {
         }
     }
 
-    /// 에이전트 세션을 띄울 수 있는가. Claude Code 샌드박스는 macOS, Linux(WSL2 포함)에만 있다.
-    /// 네이티브 Windows는 샌드박스 없이 세션을 띄우지 않는다.
+    /// 에이전트 세션을 띄울 수 있는가. 세션 경계를 지키는 샌드박스가 있을 때만이다. 지금은 macOS뿐이다.
+    /// - 네이티브 Windows에는 Claude Code 샌드박스가 없다.
+    /// - Linux(WSL2 포함)의 샌드박스(bubblewrap)는 glob 쓰기 차단(하위 `.git`, `.claude`, `CLAUDE.md`)을 버린다.
+    ///   seccomp 도구가 없으면 유닉스 소켓도 막지 않는다. 경계를 glob 없이 다시 짜기 전에는 열지 않는다.
     pub const fn supports_sessions(self) -> bool {
-        !matches!(self, Self::Windows)
+        matches!(self, Self::MacOs)
+    }
+
+    /// 데이터 폴더가 이 사용자만 쓰는 자리인지 소유자와 권한 비트로 확인하지 못하는 OS에서 그 까닭.
+    /// Windows는 권한 목록(ACL)을 읽지 않는다. 대신 기본 ACL이 본인 전용인 `%LOCALAPPDATA%` 아래만 받는다.
+    pub fn private_home_problem(self, home: &Path, user_home: &Path) -> Option<String> {
+        if self != Self::Windows {
+            return None;
+        }
+        let local = user_home.join("AppData").join("Local");
+        let (home, local) = (
+            std::fs::canonicalize(home).unwrap_or_else(|_| home.to_path_buf()),
+            std::fs::canonicalize(&local).unwrap_or(local),
+        );
+        (!home.starts_with(&local)).then(|| {
+            format!(
+                "데이터 폴더({})가 {} 밖에 있습니다. Windows에서는 다른 사용자가 쓸 수 없는 자리인지 확인하지 못해 멈춥니다. KAIROS_HOME을 그 아래로 옮기세요",
+                home.display(),
+                local.display()
+            )
+        })
     }
 }
 
@@ -352,8 +374,16 @@ mod tests {
     }
 
     #[test]
-    fn 세션은_windows에서만_막는다() {
-        assert!(Os::MacOs.supports_sessions() && Os::Linux.supports_sessions());
-        assert!(!Os::Windows.supports_sessions());
+    fn 세션은_macos에서만_연다() {
+        assert!(Os::MacOs.supports_sessions());
+        assert!(!Os::Linux.supports_sessions() && !Os::Windows.supports_sessions());
+    }
+
+    #[test]
+    fn windows는_localappdata_아래의_데이터_폴더만_받는다() {
+        let user = Path::new("/synthetic/home");
+        assert_eq!(Os::Windows.private_home_problem(&user.join("AppData/Local/kairos"), user), None);
+        assert!(Os::Windows.private_home_problem(Path::new("/synthetic/shared/kairos"), user).is_some());
+        assert_eq!(Os::Linux.private_home_problem(Path::new("/synthetic/shared/kairos"), user), None);
     }
 }

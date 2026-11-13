@@ -9,6 +9,8 @@ license.workspace = true
 repository.workspace = true
 
 [dependencies]
+chrono.workspace = true
+chrono-tz.workspace = true
 kairos-core.workspace = true
 kairos-ledger = { path = "../kairos-ledger" }
 kairos-policy = { path = "../kairos-policy" }
@@ -16,6 +18,7 @@ kairos-source-mcp = { path = "../kairos-source-mcp" }
 kairos-store.workspace = true
 libc.workspace = true
 regex.workspace = true
+rusqlite.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 

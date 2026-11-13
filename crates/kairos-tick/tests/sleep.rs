@@ -92,7 +92,8 @@ fn doctor_잠자기_코드는_문제가_아니라_안내로_나온다() {
     assert!(report.lines.iter().any(|line| line.contains(SLEEP_INTERRUPTED)));
 }
 
-/// pmset 출력이 틱의 판정까지 이어지는지 본다. 가짜 측정 없이 실제 경로로 돈다.
+/// pmset 출력이 틱의 판정까지 이어지는지 본다. 가짜 측정 없이 실제 경로로 돈다. pmset은 macOS에만 있다.
+#[cfg(target_os = "macos")]
 #[test]
 fn 측정을_주입하지_않으면_pmset의_횟수로_판정한다() {
     let (_dir, home) = temp_home();

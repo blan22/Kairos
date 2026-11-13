@@ -6,8 +6,12 @@
 mod common;
 
 use common::*;
-use kairos_agenda::{DisplayMode, KairosControl};
+#[cfg(target_os = "macos")]
+use kairos_agenda::DisplayMode;
+use kairos_agenda::KairosControl;
+#[cfg(target_os = "macos")]
 use kairos_core::model::SourceName;
+#[cfg(target_os = "macos")]
 use serde_json::json;
 
 fn home_with_issue() -> Cli {
@@ -16,10 +20,13 @@ fn home_with_issue() -> Cli {
     cli
 }
 
+#[cfg(target_os = "macos")]
 fn display_on() -> KairosControl {
     KairosControl::default().with_display_mode(DisplayMode::On)
 }
 
+/// 세션을 여는 흐름이다. 세션은 macOS에서만 연다.
+#[cfg(target_os = "macos")]
 #[test]
 fn r26_차단_시험_표시가_없으면_accept가_세션을_열지_않고_시작_버튼도_없다() {
     let mut cli = home_with_issue();
@@ -36,6 +43,8 @@ fn r26_차단_시험_표시가_없으면_accept가_세션을_열지_않고_시�
     assert!(!actions.iter().any(|action| action["id"] == "start"));
 }
 
+/// 세션을 여는 흐름이다. 세션은 macOS에서만 연다.
+#[cfg(target_os = "macos")]
 #[test]
 fn r26_kairos_sessions_on은_사용자가_켜고_세션_안에서는_거절한다() {
     let mut cli = home_with_issue();
@@ -54,6 +63,8 @@ fn r26_kairos_sessions_on은_사용자가_켜고_세션_안에서는_거절한�
     assert_eq!(cli.control().session_test_passed_at(), None);
 }
 
+/// 세션을 여는 흐름이다. 세션은 macOS에서만 연다.
+#[cfg(target_os = "macos")]
 #[test]
 fn r27_게이트가_닫혀_있으면_accept가_세션을_열지_않는다() {
     let mut cli = home_with_issue();
@@ -70,6 +81,8 @@ fn r27_게이트가_닫혀_있으면_accept가_세션을_열지_않는다() {
     assert!(!orca.called());
 }
 
+/// 세션을 여는 흐름이다. 세션은 macOS에서만 연다.
+#[cfg(target_os = "macos")]
 #[test]
 fn r27_세션_안에서_부른_accept는_거절한다_되돌리기와_이동은_막지_않는다() {
     let mut cli = home_with_issue();
@@ -92,6 +105,8 @@ fn r28_doctor가_세션_잠금_상태를_보여_준다() {
     assert!(cli.run(&["doctor"]).out.contains("세션: 잠김"));
 }
 
+/// 세션을 여는 흐름이다. 세션은 macOS에서만 연다.
+#[cfg(target_os = "macos")]
 #[test]
 fn 패널_워커처럼_세션_값이_없으면_sessions_on이_켜진다_빈_값은_없는_값이다() {
     let cli = Cli::new();

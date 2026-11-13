@@ -126,6 +126,9 @@ impl Notify {
                 1,
             ));
         }
+        if kairos_core::platform::Os::current() != kairos_core::platform::Os::MacOs {
+            return Self::desktop(context, reply, mode);
+        }
         let helper = match NotifierHelper::installed(context) {
             Ok(helper) => helper,
             Err(missing) => return Ok(reply.fail("notifier_missing", missing.message(), 1)),
@@ -165,6 +168,42 @@ impl Notify {
             return reply.success(json!({ "notify": { "permission": helper.permission().as_str() } }));
         }
         Ok(i32::from(grant != Grant::Authorized))
+    }
+
+    /// Linux(notify-send)와 Windows(토스트). 앱별 권한 창이 없다. `setup`은 도구가 있는지만 알리고 `test`는 고정 문구를 보낸다.
+    fn desktop(context: &AppContext, reply: Reply<'_>, mode: &str) -> KairosResult<i32> {
+        let Some(notifier) = context.notifier() else {
+            return Ok(reply.fail(
+                "notifier_missing",
+                "알림 도구가 없습니다. Linux는 notify-send(libnotify)를 설치하세요. Windows는 PowerShell이 필요합니다",
+                1,
+            ));
+        };
+        if mode != "test" {
+            if reply.json() {
+                return reply.success(json!({ "notify": { "permission": "authorized" } }));
+            }
+            context.console().print("이 OS의 알림은 따로 권한을 받지 않습니다. kairos notify test로 확인하세요");
+            return Ok(0);
+        }
+        let alert = kairos_core::ports::Alert {
+            tier: kairos_core::ports::AlertTier::P1,
+            title: "kairos".to_owned(),
+            body: "시험 알림입니다. 이 알림이 보이면 알림이 켜져 있습니다.".to_owned(),
+            items: Vec::new(),
+        };
+        match notifier.deliver(&alert) {
+            kairos_core::ports::Delivery::Posted if reply.json() => {
+                reply.success(json!({ "notify": { "test": "posted" } }))
+            }
+            kairos_core::ports::Delivery::Posted => {
+                context
+                    .console()
+                    .print("시험 알림을 보냈습니다. 보이지 않으면 방해 금지 모드와 OS 알림 설정을 확인하세요");
+                Ok(0)
+            }
+            _ => Ok(reply.fail("notify_failed", "시험 알림을 보내지 못했습니다", 1)),
+        }
     }
 }
 

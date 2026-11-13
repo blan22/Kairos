@@ -80,6 +80,7 @@ fn doctor(script: &mut Script, name: &str, now: &str, login: Option<Quiet>) {
         home: script.home.clone(),
         user_home: script.home.root().with_file_name("rust-user"),
         env: BTreeMap::new(),
+        os: kairos_core::platform::Os::MacOs,
     };
     let mut doctor = Doctor::new(config, fixed(now), missing_runner(), sources(now));
     if let Some(login) = login {

@@ -15,6 +15,8 @@ const FINGERPRINT: &str = "ap1-0123456789abcdef0123456789abcdef";
 struct Fakes {
     cli: Cli,
     log: PathBuf,
+    /// macOS 시험만 읽는다.
+    #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
     panel: PathBuf,
 }
 
@@ -74,11 +76,14 @@ fn fakes(status: &str, orca_approved: bool) -> Fakes {
 }
 
 /// setup의 앞 네 단계는 Enter로 지금 값을 지키고 설치는 하지 않는다. 그 뒤에 `tail`을 넘긴다.
+#[cfg(target_os = "macos")]
 fn answers(tail: &str) -> Vec<u8> {
     // 소스 다섯, GitHub 다시 읽기, Google 주소, Slack ID, 이름, 설치.
     format!("{}{tail}", "\n".repeat(10)).into_bytes()
 }
 
+/// macOS 알림 헬퍼(KairosNotifier.app)의 흐름이다.
+#[cfg(target_os = "macos")]
 #[test]
 fn setup은_알림_권한을_받고_패널을_승인한다() {
     let fakes = fakes("notDetermined", false);
@@ -133,6 +138,8 @@ fn setup은_묻지_않으면_패널을_승인하지_않는다() {
     );
 }
 
+/// macOS 알림 헬퍼(KairosNotifier.app)의 흐름이다.
+#[cfg(target_os = "macos")]
 #[test]
 fn setup은_이미_받은_권한과_승인을_다시_묻지_않는다() {
     let fakes = fakes("authorized", true);
@@ -164,6 +171,8 @@ fn setup은_설치본이_없으면_다섯째_단계를_건너뛴다() {
     assert!(done.out.contains("설치본이 없어 건너뜁니다"), "{}", done.out);
 }
 
+/// macOS 알림 헬퍼(KairosNotifier.app)의 흐름이다.
+#[cfg(target_os = "macos")]
 #[test]
 fn setup_yes는_묻지_않고_계정을_기록하고_패널까지_승인한다() {
     let fakes = fakes("notDetermined", false);
@@ -222,9 +231,12 @@ fn setup_yes는_모양이_틀린_계정을_기록하지_않는다() {
     assert!(!connections.contains("not an id"), "{connections}");
 }
 
+#[cfg(target_os = "macos")]
 const SETTINGS: &str =
     "open x-apple.systempreferences:com.apple.Notifications-Settings.extension?id=dev.kairos.notifier";
 
+/// macOS 알림 헬퍼(KairosNotifier.app)의 흐름이다.
+#[cfg(target_os = "macos")]
 #[test]
 fn setup은_거절된_알림에_권한_창_대신_시스템_설정을_연다() {
     let fakes = fakes("denied", true);
@@ -238,6 +250,8 @@ fn setup은_거절된_알림에_권한_창_대신_시스템_설정을_연다() {
     assert!(calls.iter().all(|call| !call.starts_with("lsregister")), "{calls:?}");
 }
 
+/// macOS 알림 헬퍼(KairosNotifier.app)의 흐름이다.
+#[cfg(target_os = "macos")]
 #[test]
 fn setup은_시스템_설정을_열지_않겠다고_하거나_yes면_열지_않는다() {
     let declined = fakes("denied", true);
@@ -254,6 +268,8 @@ fn setup은_시스템_설정을_열지_않겠다고_하거나_yes면_열지_않�
     assert!(yes.calls().iter().all(|call| !call.starts_with("open ")), "{:?}", yes.calls());
 }
 
+/// macOS 알림 헬퍼(KairosNotifier.app)의 흐름이다.
+#[cfg(target_os = "macos")]
 #[test]
 fn notify_setup은_묻지_않고_권한_창을_띄운다() {
     let fakes = fakes("notDetermined", true);
@@ -267,6 +283,8 @@ fn notify_setup은_묻지_않고_권한_창을_띄운다() {
     );
 }
 
+/// macOS 알림 헬퍼(KairosNotifier.app)의 흐름이다.
+#[cfg(target_os = "macos")]
 #[test]
 fn notify_setup은_이미_받았으면_그대로_두고_거절됐으면_시스템_설정을_연다() {
     let granted = fakes("authorized", true);
@@ -284,6 +302,8 @@ fn notify_setup은_이미_받았으면_그대로_두고_거절됐으면_시스�
     assert_eq!(json.body()["notify"], serde_json::json!({ "permission": "denied" }));
 }
 
+/// macOS 알림 헬퍼(KairosNotifier.app)의 흐름이다.
+#[cfg(target_os = "macos")]
 #[test]
 fn notify_test는_고정_문구의_알림을_보내고_권한이_없으면_알린다() {
     let fakes = fakes("authorized", true);
@@ -307,6 +327,8 @@ fn notify_test는_고정_문구의_알림을_보내고_권한이_없으면_알�
     assert_eq!((failed.status, &failed.body()["error"]["code"]), (1, &serde_json::json!("notify_failed")));
 }
 
+/// macOS 알림 헬퍼(KairosNotifier.app)의 흐름이다.
+#[cfg(target_os = "macos")]
 #[test]
 fn notify_setup과_test는_설치본이_없거나_세션_안이면_하지_않는다() {
     let bare = Cli::new();

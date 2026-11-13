@@ -65,6 +65,12 @@ pub(super) struct TermWatch {
 #[cfg(not(unix))]
 pub(super) struct TermWatch;
 
+/// unix 판과 같이 틱 끝에서 놓는 자리를 지킨다. 놓을 것은 없다.
+#[cfg(not(unix))]
+impl Drop for TermWatch {
+    fn drop(&mut self) {}
+}
+
 #[cfg(not(unix))]
 impl TermWatch {
     pub(super) fn install(

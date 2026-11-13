@@ -14,6 +14,7 @@ use common::fakes::*;
 use common::*;
 use kairos_agenda::{ControlFile, DisplayStart, EngineReport, StateBuilder};
 use kairos_core::model::{QuerySpec, Source, SourceName, SourceResult};
+use kairos_core::platform::Os;
 use kairos_core::ports::FixedClock;
 use kairos_core::process::ProcessOutput;
 use kairos_store::Database;
@@ -261,7 +262,7 @@ fn 수집_중단은_문제로_올리고_모르는_값은_알_수_없음으로_�
 }
 
 fn doctor_with(home: &kairos_core::KairosHome, env: BTreeMap<String, String>, answer: &'static str) -> Doctor {
-    let config = DoctorConfig { home: home.clone(), user_home: home.file("user"), env };
+    let config = DoctorConfig { home: home.clone(), user_home: home.file("user"), env, os: Os::MacOs };
     let claude = runner(move |_| ProcessOutput::exited(0, answer));
     Doctor::new(config, Arc::new(FixedClock(at(T1))), claude, Vec::new())
 }

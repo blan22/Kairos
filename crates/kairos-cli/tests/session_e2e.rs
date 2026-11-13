@@ -13,6 +13,7 @@ use std::process::{Command, Stdio};
 
 use common::*;
 use kairos_core::KairosHome;
+#[cfg(target_os = "macos")]
 use kairos_core::model::SourceName;
 use kairos_ops::VERSION;
 use kairos_tick::permission_problems;
@@ -21,6 +22,7 @@ use serde_json::json;
 const RUN_ID: &str = "11111111-2222-4333-8444-555555555555";
 
 /// 받은 인자와 토큰을 적는다.
+#[cfg(target_os = "macos")]
 fn fake_claude(cli: &Cli) -> (String, std::path::PathBuf) {
     let claude = cli.root.join("fake-claude");
     let dump = cli.root.join("claude-argv");
@@ -32,6 +34,8 @@ fn fake_claude(cli: &Cli) -> (String, std::path::PathBuf) {
     (claude.to_str().unwrap().to_owned(), dump)
 }
 
+/// 세션을 여는 흐름이다. 세션은 macOS에서만 연다.
+#[cfg(target_os = "macos")]
 #[test]
 fn 끝까지_쉼표_따옴표_셸_문자가_든_제목이_있어도_claude_인자에는_url만_들어간다() {
     let mut cli = Cli::new();
@@ -74,6 +78,8 @@ fn 끝까지_쉼표_따옴표_셸_문자가_든_제목이_있어도_claude_인�
     assert_eq!(gh_calls, "auth token --user kairos-dev\napi graphql --input -\n", "띄우기 직전에 글을 다시 읽는다");
 }
 
+/// 세션을 여는 흐름이다. 세션은 macOS에서만 연다.
+#[cfg(target_os = "macos")]
 #[test]
 fn kairos_run은_gh로_글을_다시_읽지_못하면_claude를_띄우지_않는다() {
     let mut cli = cli_with_issue();
@@ -108,17 +114,31 @@ fn asset_root(cli: &Cli) -> std::path::PathBuf {
     fs::create_dir_all(root.join("plugins/collector")).unwrap();
     fs::write(root.join("plugins/collector/hook.txt"), "합성").unwrap();
     let repo = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../ops");
-    for entry in fs::read_dir(repo).unwrap() {
-        let entry = entry.unwrap();
-        // 알림 헬퍼 폴더(ops/notifier)는 이 시험의 대상이 아니다. 템플릿과 감시자만 옮긴다.
-        if !entry.file_type().unwrap().is_file() {
-            continue;
+    // 알림 헬퍼 폴더(ops/notifier)는 이 시험의 대상이 아니다. 템플릿과 감시자만 옮긴다. systemd와 Windows 템플릿은 하위 폴더에 있다.
+    for folder in ["", "systemd", "windows"] {
+        fs::create_dir_all(root.join("ops").join(folder)).unwrap();
+        for entry in fs::read_dir(repo.join(folder)).unwrap() {
+            let entry = entry.unwrap();
+            if !entry.file_type().unwrap().is_file() {
+                continue;
+            }
+            let text = fs::read_to_string(entry.path()).unwrap();
+            let kept: Vec<&str> = text.lines().filter(|line| !line.contains("{{NODE}}")).collect();
+            fs::write(root.join("ops").join(folder).join(entry.file_name()), format!("{}\n", kept.join("\n"))).unwrap();
         }
-        let text = fs::read_to_string(entry.path()).unwrap();
-        let kept: Vec<&str> = text.lines().filter(|line| !line.contains("{{NODE}}")).collect();
-        fs::write(root.join("ops").join(entry.file_name()), format!("{}\n", kept.join("\n"))).unwrap();
     }
     root
+}
+
+/// 이 OS의 스케줄러가 쓰는 파일 이름. 첫째가 등록 파일이다.
+fn job_files(label: &str) -> Vec<String> {
+    kairos_ops::Scheduler::for_os(kairos_core::platform::Os::current()).file_names(label)
+}
+
+/// 수집 잡의 실행 파일과 claude가 적힌 파일. systemd는 서비스 유닛이다.
+fn collect_job(agents: &Path) -> String {
+    let names = job_files("dev.kairos.collect");
+    fs::read_to_string(agents.join(names.last().unwrap())).unwrap()
 }
 
 fn fake_tool(cli: &Cli, name: &str) -> String {
@@ -157,10 +177,12 @@ fn install은_kairos_run을_실행_권한으로_복사한다() {
     assert_eq!(fs::metadata(runtime.join("bin/kairos")).unwrap().permissions().mode() & 0o777, 0o755);
     assert!(runtime.join("plugins/collector/hook.txt").exists());
     assert!(runtime.join("ops/kairos-watchdog.zsh").exists());
-    assert!(agents.join("dev.kairos.collect.plist").exists());
-    let plist = fs::read_to_string(agents.join("dev.kairos.collect.plist")).unwrap();
-    assert!(plist.contains(runtime.join("bin/kairos").to_str().unwrap()));
-    assert!(plist.contains(&claude));
+    for name in job_files("dev.kairos.collect") {
+        assert!(agents.join(&name).exists(), "{name}");
+    }
+    let job = collect_job(&agents);
+    assert!(job.contains(runtime.join("bin/kairos").to_str().unwrap()), "{job}");
+    assert!(job.contains(&claude), "{job}");
 }
 
 #[test]
@@ -251,7 +273,10 @@ fn install_dry_run_미리보기는_지정한_폴더에만_plist를_쓴다() {
     let mut names: Vec<String> =
         fs::read_dir(&preview).unwrap().map(|entry| entry.unwrap().file_name().into_string().unwrap()).collect();
     names.sort();
-    assert_eq!(names, ["dev.kairos.collect.plist", "dev.kairos.watchdog.plist"]);
+    let mut expected: Vec<String> =
+        ["dev.kairos.collect", "dev.kairos.watchdog"].into_iter().flat_map(job_files).collect();
+    expected.sort();
+    assert_eq!(names, expected);
     assert!(!agents.exists());
     assert!(!data.exists());
 }
@@ -273,7 +298,7 @@ fn kairos_home이_기본_경로를_바꾼다() {
     cli.set("KAIROS_HOME", custom.to_str().unwrap());
     assert!(cli.run(&["doctor"]).out.contains(&format!("데이터 폴더 {} ", custom.display())));
     cli.env.remove("KAIROS_HOME");
-    let default = cli.root.join("Library").join("Application Support").join("kairos");
+    let default = kairos_core::platform::Os::current().default_data_dir(&cli.root);
     assert!(cli.run(&["doctor"]).out.contains(&format!("데이터 폴더 {} ", default.display())));
     assert!(default.join("kairos.db").exists());
 }
@@ -288,6 +313,8 @@ fn 시험_환경에_운영_값이_남아_있지_않다() {
     assert_eq!(cli.env["PATH"], "/usr/bin:/bin");
 }
 
+/// 세션을 여는 흐름이다. 세션은 macOS에서만 연다.
+#[cfg(target_os = "macos")]
 #[test]
 fn kairos_run은_argv가_틀리면_db를_열기_전에_2로_끝난다() {
     let cli = Cli::new();
@@ -299,6 +326,8 @@ fn kairos_run은_argv가_틀리면_db를_열기_전에_2로_끝난다() {
     assert_eq!(none.status.code(), Some(2));
 }
 
+/// 세션을 여는 흐름이다. 세션은 macOS에서만 연다.
+#[cfg(target_os = "macos")]
 #[test]
 fn kairos_run은_없는_run을_거절하고_claude를_띄우지_않는다() {
     let cli = Cli::new();
@@ -313,6 +342,8 @@ fn kairos_run은_없는_run을_거절하고_claude를_띄우지_않는다() {
 }
 
 /// 토큰이 없을 때 소유자의 키체인 gh 로그인으로 내려가지 않는다. 고정 문구로 거절하고 claude를 띄우지 않는다.
+/// 세션을 여는 흐름이다. 세션은 macOS에서만 연다.
+#[cfg(target_os = "macos")]
 #[test]
 fn kairos_run은_읽기_전용_토큰이_없으면_claude를_띄우지_않는다() {
     let mut cli = cli_with_issue();
@@ -337,6 +368,8 @@ fn kairos_run은_읽기_전용_토큰이_없으면_claude를_띄우지_않는다
     assert!(!dump.exists());
 }
 
+/// 세션을 여는 흐름이다. 세션은 macOS에서만 연다.
+#[cfg(target_os = "macos")]
 #[test]
 fn 세션_거부_목록의_kairos_경로는_실제_설치_폴더다() {
     let mut cli = cli_with_issue();
@@ -361,4 +394,22 @@ fn 세션_거부_목록의_kairos_경로는_실제_설치_폴더다() {
     assert!(argv.contains(&format!("Bash({}:*)", kairos.display())), "{argv}");
     assert!(argv.contains(&format!("Bash({}:*)", bin.join("kairos-run").display())));
     assert_eq!(cli.state()["runs"], json!({ "active": 1, "ready": 0 }), "끝을 적어도 state는 다음 명령이 쓴다");
+}
+
+/// macOS가 아니면 세션을 어느 길로도 열지 않는다. 수락, `sessions on`, kairos-run 모두 거절한다.
+#[cfg(not(target_os = "macos"))]
+#[test]
+fn macos가_아니면_수락과_sessions_on과_kairos_run이_세션을_거절한다() {
+    let cli = Cli::new();
+    let on = cli.json(&["sessions", "on"]);
+    assert_eq!(on.status, 1);
+    assert_eq!(on.body()["error"]["code"], json!("sessions_unsupported"));
+    let accept = cli.json(&["accept", "1"]);
+    assert_eq!(accept.status, 1);
+    assert_eq!(accept.body()["error"]["code"], json!("sessions_unsupported"));
+    let cancel = cli.json(&["accept", "1", "--cancel"]);
+    assert_ne!(cancel.body()["error"]["code"], json!("sessions_unsupported"), "되돌리기는 막지 않는다");
+    let run = Command::new(RUN_BIN).arg(RUN_ID).env_clear().envs(&cli.env).output().unwrap();
+    assert_eq!(run.status.code(), Some(1));
+    assert!(String::from_utf8_lossy(&run.stderr).contains("세션 경계를 지키는 샌드박스가 없어"));
 }

@@ -189,7 +189,7 @@ fn fake_claude(root: &Path) -> PathBuf {
         "prev=\n\
          for arg in \"$@\"; do\n\
          if [ \"$prev\" = --settings ]; then\n\
-         stat -f '%Lp' \"$arg\" > \"{mode}\"; stat -f '%Lp' \"$(dirname \"$arg\")\" > \"{dir_mode}\"; cat \"$arg\" > \"{content}\"\n\
+         mode() {{ stat -c '%a' \"$1\" 2>/dev/null || stat -f '%Lp' \"$1\"; }}; mode \"$arg\" > \"{mode}\"; mode \"$(dirname \"$arg\")\" > \"{dir_mode}\"; cat \"$arg\" > \"{content}\"\n\
          fi\n\
          prev=$arg\n\
          done\n",

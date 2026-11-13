@@ -13,10 +13,9 @@ use common::*;
 use kairos_core::Instant;
 use kairos_core::model::Outcome;
 use kairos_core::ports::Clock;
-use kairos_core::process::{ProcessEnd, ProcessOutput, ProcessRequest, ProcessRunner};
 use kairos_ops::{
-    ResumeFile, SLEEP_GAP_MS, SLEEP_INTERRUPTED, SleepDetector, StallWatch, TickClockRepo, counts_as_failure,
-    parse_sleep_count, slept_during,
+    ResumeFile, SLEEP_GAP_MS, SLEEP_INTERRUPTED, StallWatch, TickClockRepo, counts_as_failure, parse_sleep_count,
+    parse_suspend_success, slept_during,
 };
 
 #[derive(Default)]
@@ -81,23 +80,41 @@ fn 깨진_깨어난_시각은_없는_것으로_읽는다() {
 
 // 아래는 원본에 없는 시험이다. 원본은 collect 시험으로만 지나간 분기를 여기서 직접 고정한다.
 
-struct FakePmset(ProcessOutput);
+/// pmset은 macOS에만 있다.
+#[cfg(target_os = "macos")]
+mod pmset {
+    use kairos_core::process::{ProcessEnd, ProcessOutput, ProcessRequest, ProcessRunner};
+    use kairos_ops::SleepDetector;
 
-impl ProcessRunner for FakePmset {
-    fn run(&self, request: &ProcessRequest) -> ProcessOutput {
-        assert_eq!(request.program, "/usr/bin/pmset");
-        assert_eq!(request.args, ["-g", "stats"]);
-        self.0.clone()
+    use super::*;
+
+    struct FakePmset(ProcessOutput);
+
+    impl ProcessRunner for FakePmset {
+        fn run(&self, request: &ProcessRequest) -> ProcessOutput {
+            assert_eq!(request.program, "/usr/bin/pmset");
+            assert_eq!(request.args, ["-g", "stats"]);
+            self.0.clone()
+        }
+    }
+
+    #[test]
+    fn 잠자기_횟수는_pmset이_성공했을_때만_읽는다() {
+        let count = |output| SleepDetector::new(Arc::new(FakePmset(output))).sleep_count();
+        assert_eq!(count(ProcessOutput::exited(0, "Sleep Count:7\n")), Some(7));
+        assert_eq!(count(ProcessOutput::exited(1, "Sleep Count:7\n")), None);
+        assert_eq!(count(ProcessOutput::ended(ProcessEnd::TimedOut)), None);
+        assert_eq!(count(ProcessOutput::ended(ProcessEnd::Missing)), None);
     }
 }
 
 #[test]
-fn 잠자기_횟수는_pmset이_성공했을_때만_읽는다() {
-    let count = |output| SleepDetector::new(Arc::new(FakePmset(output))).sleep_count();
-    assert_eq!(count(ProcessOutput::exited(0, "Sleep Count:7\n")), Some(7));
-    assert_eq!(count(ProcessOutput::exited(1, "Sleep Count:7\n")), None);
-    assert_eq!(count(ProcessOutput::ended(ProcessEnd::TimedOut)), None);
-    assert_eq!(count(ProcessOutput::ended(ProcessEnd::Missing)), None);
+fn linux는_커널이_센_절전_횟수를_읽고_모양이_다르면_none이다() {
+    assert_eq!(parse_suspend_success("12\n"), Some(12));
+    assert_eq!(parse_suspend_success("0"), Some(0));
+    for bad in ["", "\n", "-1\n", "12 3\n", "abc"] {
+        assert_eq!(parse_suspend_success(bad), None, "{bad:?}");
+    }
 }
 
 #[test]

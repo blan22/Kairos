@@ -13,18 +13,32 @@ use crate::app::AppContext;
 use crate::args::{ArgParser, OptionSpec, flag, text};
 use crate::command::Command;
 
-const INSTALL_OPTIONS: [OptionSpec; 8] = [
+const INSTALL_OPTIONS: [OptionSpec; 9] = [
     flag("dry-run"),
     flag("apply"),
     flag("register"),
+    text("service-dir"),
     text("launch-agents-dir"),
     text("preview-dir"),
     text("claude"),
     text("gh"),
     text("root"),
 ];
-const UNINSTALL_OPTIONS: [OptionSpec; 6] =
-    [flag("dry-run"), text("launch-agents-dir"), flag("no-launchctl"), flag("runtime"), flag("purge"), flag("yes")];
+const UNINSTALL_OPTIONS: [OptionSpec; 8] = [
+    flag("dry-run"),
+    text("service-dir"),
+    text("launch-agents-dir"),
+    flag("no-scheduler"),
+    flag("no-launchctl"),
+    flag("runtime"),
+    flag("purge"),
+    flag("yes"),
+];
+
+/// 스케줄러 파일 폴더. `--launch-agents-dir`는 0.4까지의 이름이다.
+fn service_dir(parsed: &crate::args::ParsedArgs) -> Option<PathBuf> {
+    parsed.text("service-dir").or_else(|| parsed.text("launch-agents-dir")).map(PathBuf::from)
+}
 
 /// 화면에 찍을 경로. 폴더 이름에 든 제어 문자와 bidi 문자는 찍지 않는다.
 fn shown(path: &Path) -> String {
@@ -63,7 +77,7 @@ impl Command for Install {
         };
         let options = InstallOptions {
             mode,
-            launch_agents_dir: parsed.text("launch-agents-dir").map(PathBuf::from),
+            service_dir: service_dir(&parsed),
             preview_dir: parsed.text("preview-dir").map(PathBuf::from),
             claude: parsed.text("claude").map(str::to_owned),
             gh: parsed.text("gh").map(str::to_owned),
@@ -81,7 +95,7 @@ impl Command for Uninstall {
         "uninstall"
     }
 
-    /// 기본은 launchd 잡만 내린다. `--runtime`은 실행본과 명령 링크까지, `--purge`는 데이터 폴더와 키체인의 세션 토큰까지 지운다.
+    /// 기본은 스케줄러 잡(launchd, systemd timer, 예약 작업)만 내린다. `--runtime`은 실행본과 명령 링크까지, `--purge`는 데이터 폴더와 키체인의 세션 토큰까지 지운다.
     /// 지울 것을 먼저 보여 주고 `y`일 때만 지운다(`--yes`면 묻지 않는다). 잡을 먼저 내려 수집이 지우는 중인 DB를 쓰지 않게 한다.
     fn execute(&self, context: &AppContext, args: &[String]) -> KairosResult<i32> {
         let parsed = ArgParser::new(&UNINSTALL_OPTIONS).parse(args)?;
@@ -123,10 +137,12 @@ impl Command for Uninstall {
             }
         }
         let options = UninstallOptions {
-            launch_agents_dir: parsed.text("launch-agents-dir").map(PathBuf::from),
+            service_dir: service_dir(&parsed),
+            home: Some(context.home().clone()),
             dry_run,
-            skip_launchctl: parsed.flag("no-launchctl"),
+            skip_launchctl: parsed.flag("no-scheduler") || parsed.flag("no-launchctl"),
             before_removal: runtime,
+            ..UninstallOptions::default()
         };
         let result = Installer::new(context.runner()).uninstall(&options)?;
         let mut failed = result.failed;
@@ -135,12 +151,12 @@ impl Command for Uninstall {
         }
         // 시험과 복구용 옵션이다. 잡이 내려갔는지 확인하지 않고 지우게 되므로 알린다.
         if runtime && options.skip_launchctl && !dry_run {
-            console.print("launchctl을 부르지 않았습니다. 올라 있는 잡이 있으면 지운 경로를 계속 가리킵니다");
+            console.print("스케줄러를 부르지 않았습니다. 올라 있는 잡이 있으면 지운 경로를 계속 가리킵니다");
         }
         let Some(plan) = plan else {
             return Ok(i32::from(failed));
         };
-        // 내려가지 않은 잡은 지운 경로를 계속 가리킨다. 그 자리에 다시 놓이는 파일을 launchd가 돌리므로 여기서 멈춘다.
+        // 내려가지 않은 잡은 지운 경로를 계속 가리킨다. 그 자리에 다시 놓이는 파일을 스케줄러가 돌리므로 여기서 멈춘다.
         if failed && !dry_run {
             console.print("잡을 내리지 못해 실행본과 데이터는 지우지 않았습니다. 위 줄을 확인한 뒤 다시 실행하세요");
             return Ok(1);
@@ -171,8 +187,10 @@ impl Uninstall {
         let console = context.console();
         let (home, user_home) = (context.home().root(), context.user_home());
         // 번들을 지우기 전에 LaunchServices에서 뺀다. 실패해도 이어 간다. 없는 번들은 macOS가 스스로 정리한다.
-        for app in plan.notifier_apps() {
-            notifier::unregister(context, &app);
+        if kairos_core::platform::Os::current() == kairos_core::platform::Os::MacOs {
+            for app in plan.notifier_apps() {
+                notifier::unregister(context, &app);
+            }
         }
         for line in remove_runtime(plan)? {
             console.print(&sanitize_text(&line, PLAIN_LIMIT));

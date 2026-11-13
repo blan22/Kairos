@@ -155,6 +155,18 @@ fn drain(mut pipe: impl Read + Send + 'static, limit: usize, overflow: Arc<Atomi
     })
 }
 
+/// Windows에서 콘솔 프로그램을 띄울 때 창을 만들지 않는다(`CREATE_NO_WINDOW`). 출력은 파이프로 받는다.
+#[cfg(windows)]
+pub fn hide_console(command: &mut Command) {
+    use std::os::windows::process::CommandExt;
+    const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+    command.creation_flags(CREATE_NO_WINDOW);
+}
+
+/// unix에는 콘솔 창이 없다.
+#[cfg(not(windows))]
+pub const fn hide_console(_command: &mut Command) {}
+
 impl ProcessRunner for SystemProcessRunner {
     fn run(&self, request: &ProcessRequest) -> ProcessOutput {
         let mut command = Command::new(&request.program);
@@ -167,6 +179,7 @@ impl ProcessRunner for SystemProcessRunner {
         if let Some(cwd) = &request.cwd {
             command.current_dir(cwd);
         }
+        hide_console(&mut command);
         let mut child = match command.spawn() {
             Ok(child) => child,
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => {

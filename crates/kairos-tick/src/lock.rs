@@ -163,7 +163,8 @@ impl CollectLock {
     }
 }
 
-#[cfg(all(test, unix))]
+#[cfg(test)]
+#[cfg(unix)]
 mod tests {
     use std::os::unix::fs::PermissionsExt;
 
@@ -218,6 +219,10 @@ mod tests {
     /// 원본은 process.kill을 가짜로 바꿨다. pid 1은 root의 launchd라 실제 EPERM이 돌아온다.
     #[test]
     fn pid가_다른_사용자_프로세스로_재사용되면_eperm_하루가_지난_잠금만_넘겨받는다() {
+        // root로 돌면(컨테이너) pid 1에도 신호를 보낼 수 있어 EPERM이 오지 않는다. 이 장면을 만들 수 없다.
+        if rustix::process::geteuid().is_root() {
+            return;
+        }
         let (_dir, home) = temp_home();
         assert_eq!(test_kill_process(Pid::from_raw(1).unwrap()), Err(Errno::PERM));
         held(&home, 1, 3_600_000);

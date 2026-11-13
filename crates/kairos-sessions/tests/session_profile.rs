@@ -990,3 +990,30 @@ fn 세션은_알림_앱을_불러_임의_문구의_알림을_띄울_수_없다()
         assert!(profile.denied_tools(Playbook::QaIssue).contains(&rule), "{rule}");
     }
 }
+
+/// Linux는 기본 목록 뒤에 systemd, 세션 버스, 키링을 더 막는다. 기본 목록은 그대로라 macOS 고정값이 바뀌지 않는다.
+#[test]
+fn linux는_기본_목록_뒤에_systemd와_세션_버스와_키링을_더_막는다() {
+    use kairos_core::platform::Os;
+    assert_eq!(profile().for_os(Os::MacOs), profile());
+    let linux = profile().for_os(Os::Linux);
+    for playbook in [Playbook::QaIssue, Playbook::PrReview] {
+        let (base, more) = (profile().denied_tools(playbook), linux.denied_tools(playbook));
+        assert!(more.len() > base.len(), "{playbook}");
+        for rule in [
+            "Bash(systemctl:*)",
+            "Bash(/usr/bin/secret-tool:*)",
+            "Bash(notify-send:*)",
+            "Read(~/.local/share/keyrings/**)",
+        ] {
+            assert!(more.iter().any(|tool| tool == rule), "{playbook} {rule}");
+        }
+        assert!(base.iter().all(|tool| more.contains(tool)), "{playbook}: 기본 규칙을 빼지 않는다");
+    }
+    assert!(linux.denied_tools(Playbook::QaIssue).iter().any(|tool| tool == "Edit(~/.config/systemd/**)"));
+    let command = linux.command("/synthetic/claude", RUN, Playbook::QaIssue, &issue_url(1), session_token()).unwrap();
+    let sandbox = &settings_of(&command)["sandbox"]["filesystem"];
+    let has = |key: &str, path: &str| sandbox[key].as_array().unwrap().iter().any(|value| value == path);
+    assert!(has("denyWrite", "~/.config/systemd") && has("denyWrite", "~/.local/share/keyrings"));
+    assert!(has("denyRead", "~/.local/share/keyrings") && has("denyRead", "~/.password-store"));
+}

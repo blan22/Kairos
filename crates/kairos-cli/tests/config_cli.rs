@@ -60,6 +60,8 @@ fn 남이_쓸_수_있는_설정은_읽지_않는다() {
     assert!(done.err.contains("config_unsafe"), "{}", done.err);
 }
 
+/// 세션을 여는 흐름이다. 세션은 macOS에서만 연다.
+#[cfg(target_os = "macos")]
 #[test]
 fn 세션_자격_설정이_바뀌면_세션이_다시_잠긴다() {
     let cli = Cli::new();

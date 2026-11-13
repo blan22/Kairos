@@ -96,6 +96,7 @@ fn doctor(paths: &Paths, now: &str) -> DoctorReport {
         home: paths.home.clone(),
         user_home: paths.user_home.clone(),
         env: std::collections::BTreeMap::new(),
+        os: kairos_core::platform::Os::MacOs,
     };
     let clock: Arc<dyn Clock> = Arc::new(FixedClock(at(now)));
     Doctor::new(config, clock, missing_runner(), notion_sources())

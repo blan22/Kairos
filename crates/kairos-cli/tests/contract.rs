@@ -192,6 +192,8 @@ fn pause의_분은_js_number를_따른다() {
     assert_eq!((huge.status, huge.err.as_str()), (1, "kairos pause 실패: unexpected\n"));
 }
 
+/// 세션을 여는 흐름이다. 세션은 macOS에서만 연다.
+#[cfg(target_os = "macos")]
 #[test]
 fn 세션_밖_문구와_빈_환경값() {
     let cli = Cli::new();

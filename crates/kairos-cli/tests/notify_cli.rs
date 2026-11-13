@@ -35,3 +35,27 @@ fn next는_패널_표면만_받는다_알림은_카드_예산_계약을_쓰지_�
     let bad = cli.run(&["next", "--seen", "--surface", "notification", "--json"]);
     assert_eq!((bad.status, &bad.body()["error"]["code"]), (2, &json!("usage")));
 }
+
+/// Linux는 notify-send로 보낸다. 앱별 권한 창이 없어 setup은 알리기만 한다.
+#[cfg(target_os = "linux")]
+#[test]
+fn linux의_notify_setup은_권한을_묻지_않고_test는_notify_send로_보낸다() {
+    let mut cli = Cli::new();
+    let (bin, log) = (cli.root.join("fake-notify-send"), cli.root.join("notify-send.log"));
+    write_script(&bin, &format!("#!/bin/sh\nprintf '%s\\n' \"$@\" >> '{}'\n", log.display()));
+    cli.set("KAIROS_NOTIFIER", bin.to_str().unwrap());
+    let setup = cli.run(&["notify", "setup"]);
+    assert_eq!(
+        (setup.status, setup.out.as_str()),
+        (0, "이 OS의 알림은 따로 권한을 받지 않습니다. kairos notify test로 확인하세요\n")
+    );
+    assert!(!log.exists(), "setup은 알림을 보내지 않는다");
+    let test = cli.json(&["notify", "test"]);
+    assert_eq!(test.status, 0, "{}", test.err);
+    assert_eq!(test.body()["notify"]["test"], json!("posted"));
+    let argv = std::fs::read_to_string(&log).unwrap();
+    assert!(argv.starts_with("--app-name=kairos\n--urgency=normal\n--\nkairos\n시험 알림입니다."), "{argv}");
+
+    cli.set("KAIROS_NOTIFIER", cli.root.join("missing").to_str().unwrap());
+    assert_eq!(cli.json(&["notify", "test"]).body()["error"]["code"], json!("notifier_missing"));
+}

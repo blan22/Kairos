@@ -1,6 +1,7 @@
 //! 세션 호스트와 호출한 호스트. 실제 git, Orca, claude는 띄우지 않는다.
 // 가짜 실행 파일(sh)과 unix 권한을 쓰는 시험이다. Windows는 단위 시험과 Windows 백엔드 시험으로 본다.
-#![cfg(unix)]
+// 세션은 macOS에서만 연다(`Os::supports_sessions`). 다른 OS의 거절은 session_e2e가 본다.
+#![cfg(target_os = "macos")]
 #![allow(clippy::unwrap_used)]
 
 mod common;
@@ -30,7 +31,7 @@ fn git_호스트는_worktree를_만들고_띄울_명령을_돌려준다() {
     let mut cli = Cli::new();
     let clone = cli.root.join("src/atlas");
     fs::create_dir_all(clone.join(".git")).unwrap();
-    let worktrees = cli.dir().join("worktrees");
+    let worktrees = cli.outside().join("worktrees");
     let (git, log) = (cli.root.join("fake-git"), cli.root.join("git.log"));
     // worktree add의 경로 인자(-b 이름 뒤)를 만든다.
     write_script(
@@ -109,7 +110,7 @@ const ENDED: &str = "UPDATE runs SET state = 'ended', ended_at = '2026-03-02T01:
 fn accepted_fix_session(cli: &mut Cli) -> (std::path::PathBuf, std::path::PathBuf) {
     let clone = cli.root.join("src/atlas");
     fs::create_dir_all(clone.join(".git")).unwrap();
-    let worktrees = cli.dir().join("worktrees");
+    let worktrees = cli.outside().join("worktrees");
     let (git, log) = (cli.root.join("fake-git"), cli.root.join("git.log"));
     write_script(
         &git,

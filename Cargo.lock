@@ -512,6 +512,8 @@ dependencies = [
 name = "kairos-ops"
 version = "0.4.2"
 dependencies = [
+ "chrono",
+ "chrono-tz",
  "kairos-core",
  "kairos-ledger",
  "kairos-policy",
@@ -519,6 +521,7 @@ dependencies = [
  "kairos-store",
  "libc",
  "regex",
+ "rusqlite",
  "serde",
  "serde_json",
  "tempfile",
