@@ -431,7 +431,7 @@ dependencies = [
 
 [[package]]
 name = "kairos-agenda"
-version = "0.4.0"
+version = "0.4.1"
 dependencies = [
  "kairos-config",
  "kairos-core",
@@ -448,7 +448,7 @@ dependencies = [
 
 [[package]]
 name = "kairos-cli"
-version = "0.4.0"
+version = "0.4.1"
 dependencies = [
  "kairos-agenda",
  "kairos-config",
@@ -470,7 +470,7 @@ dependencies = [
 
 [[package]]
 name = "kairos-config"
-version = "0.4.0"
+version = "0.4.1"
 dependencies = [
  "chrono-tz",
  "kairos-core",
@@ -483,7 +483,7 @@ dependencies = [
 
 [[package]]
 name = "kairos-core"
-version = "0.4.0"
+version = "0.4.1"
 dependencies = [
  "chrono",
  "chrono-tz",
@@ -494,7 +494,7 @@ dependencies = [
 
 [[package]]
 name = "kairos-ledger"
-version = "0.4.0"
+version = "0.4.1"
 dependencies = [
  "kairos-core",
  "kairos-policy",
@@ -509,7 +509,7 @@ dependencies = [
 
 [[package]]
 name = "kairos-ops"
-version = "0.4.0"
+version = "0.4.1"
 dependencies = [
  "kairos-core",
  "kairos-ledger",
@@ -525,7 +525,7 @@ dependencies = [
 
 [[package]]
 name = "kairos-policy"
-version = "0.4.0"
+version = "0.4.1"
 dependencies = [
  "kairos-core",
  "regex",
@@ -536,7 +536,7 @@ dependencies = [
 
 [[package]]
 name = "kairos-sessions"
-version = "0.4.0"
+version = "0.4.1"
 dependencies = [
  "kairos-agenda",
  "kairos-core",
@@ -554,7 +554,7 @@ dependencies = [
 
 [[package]]
 name = "kairos-source-github"
-version = "0.4.0"
+version = "0.4.1"
 dependencies = [
  "fancy-regex",
  "kairos-core",
@@ -568,7 +568,7 @@ dependencies = [
 
 [[package]]
 name = "kairos-source-mcp"
-version = "0.4.0"
+version = "0.4.1"
 dependencies = [
  "fancy-regex",
  "kairos-core",
@@ -582,7 +582,7 @@ dependencies = [
 
 [[package]]
 name = "kairos-store"
-version = "0.4.0"
+version = "0.4.1"
 dependencies = [
  "kairos-core",
  "rusqlite",
@@ -591,7 +591,7 @@ dependencies = [
 
 [[package]]
 name = "kairos-tick"
-version = "0.4.0"
+version = "0.4.1"
 dependencies = [
  "kairos-agenda",
  "kairos-core",
