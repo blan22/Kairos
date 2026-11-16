@@ -143,6 +143,10 @@ schema = 1
 [mcp]
 # `kairos mcp serve`가 에이전트에 여는 동작. 기본은 읽기만입니다.
 # allow_actions = ["later", "done", "keep", "add", "accept"]
+
+[updates]
+# 새 버전을 하루에 한 번 확인하고 알립니다. 끄려면 false로 둡니다.
+# check = true
 ```
 
 ## 근무 일정과 방해 금지
@@ -187,3 +191,14 @@ lunch = []
 ## MCP로 열 동작
 
 `kairos mcp serve`는 기본으로 읽기 도구(`kairos_next`, `kairos_list`)만 엽니다. 상태를 바꾸는 동작은 `[mcp] allow_actions`에 적은 것(`later`, `done`, `keep`, `add`, `accept`)만 추가됩니다. `accept`는 `[hosts] enabled`에 `claude-code`도 있어야 나옵니다. 자세한 내용은 [호스트 계약](surface-protocol.md#mcp)에 있습니다.
+
+## 새 버전 확인
+
+수집은 하루에 한 번 `gh`로 공개 저장소의 최신 릴리스 버전을 확인합니다. 새 버전이 있으면 알림, Orca 패널의 안내 띠, 터미널 명령 뒤의 안내 한 줄로 알립니다. 버전 번호만 읽고, 설치는 `kairos update --apply`를 실행했을 때만 합니다([설치](install.md#업데이트)).
+
+사내 미러로 설치했거나 알림을 받고 싶지 않다면 `config.toml`에서 끕니다. 끄면 확인하지 않고, 이미 기록된 새 버전도 알리지 않습니다. `kairos update --check`와 `--apply`는 끈 상태에서도 직접 실행할 수 있습니다.
+
+```toml
+[updates]
+check = false
+```

@@ -9,7 +9,7 @@ use std::sync::Arc;
 
 use kairos_agenda::{
     ControlFile, DesktopNotifier, KairosControl, NOTIFIER_APP_REL, NativeNotifier, NextContext, ORCA_BIN,
-    OrcaPanelOpener, SourceHealth, SourceHealthBook, StateBuilder,
+    OrcaPanelOpener, SourceHealth, SourceHealthBook, StateBuilder, UpdateView,
 };
 use kairos_core::model::Source;
 use kairos_core::platform::{self, Os};
@@ -17,7 +17,10 @@ use kairos_core::ports::{Clock, Notifier, PanelOpener, SystemClock};
 use kairos_core::process::{ProcessRunner, SystemProcessRunner};
 use kairos_core::{Instant, KairosError, KairosHome, KairosResult, home, js};
 use kairos_ledger::OffDateBook;
-use kairos_ops::{ResumeFile, default_service_dir, find_binary, find_claude, find_orca, system_tool};
+use kairos_ops::{
+    BundleFetcher, GhReleaseProbe, ReleaseProbe, ResumeFile, UpdateFile, Version, default_service_dir, find_binary,
+    find_claude, find_orca, system_tool,
+};
 use kairos_sessions::OrcaClient;
 use kairos_source_github::GithubConfig;
 use kairos_store::Database;
@@ -124,6 +127,8 @@ pub struct AppContext {
     notifier_bin: Option<String>,
     panel: Option<Arc<dyn PanelOpener>>,
     sleep: Option<Arc<dyn SleepProbe>>,
+    /// 새 판 확인. 운영 조립만 gh 탐침을 넣는다. 시험 조립은 실제 gh를 찾지 않게 비워 둔다.
+    releases: Option<Arc<dyn ReleaseProbe>>,
     layout: Option<InstallLayout>,
     console: Console,
 }
@@ -150,6 +155,7 @@ impl AppContext {
             notifier_bin: None,
             panel: None,
             sleep: None,
+            releases: None,
             layout: None,
             console: Console::captured(""),
         }
@@ -171,6 +177,10 @@ impl AppContext {
         if let Some(notifier) = notifier {
             context = context.with_notifier(notifier);
         }
+        // 새 판은 gh로 판 번호만 묻는다. gh가 없으면 묻지 않는다.
+        if let Some(gh) = context.gh_bin() {
+            context.releases = Some(Arc::new(GhReleaseProbe::new(runner.clone(), gh, &context.env)));
+        }
         // 알림 뒤의 패널 열기는 Orca를 켰을 때만이다. 다른 호스트는 reveal.json과 next --json으로 스스로 연다.
         if let Some(orca_bin) = orca_bin.filter(|_| kairos_core::profile::current().hosts.is_enabled("orca")) {
             context = context.with_panel(Arc::new(OrcaPanelOpener::with_bin(runner, orca_bin)));
@@ -181,6 +191,48 @@ impl AppContext {
     /// 조립할 때 고른 알림. 없으면 알리지 않는다.
     pub fn notifier(&self) -> Option<Arc<dyn Notifier>> {
         self.notifier.clone()
+    }
+
+    /// gh. `KAIROS_GH`가 있으면 그 값, 없으면 PATH와 고정 폴더에서 찾는다.
+    pub fn gh_bin(&self) -> Option<String> {
+        configured_binary(&self.env, "KAIROS_GH", "gh")
+    }
+
+    /// 조립할 때 고른 새 판 확인. 없으면 묻지 않는다.
+    pub fn release_probe(&self) -> Option<Arc<dyn ReleaseProbe>> {
+        self.releases.clone()
+    }
+
+    #[must_use]
+    pub fn with_release_probe(mut self, releases: Arc<dyn ReleaseProbe>) -> Self {
+        self.releases = Some(releases);
+        self
+    }
+
+    /// 새 판 묶음을 받아 확인하고 푸는 일. gh는 `gh_bin`이다.
+    pub fn bundle_fetcher(&self) -> BundleFetcher {
+        let os = Os::current();
+        let gh = self.gh_bin().unwrap_or_else(|| "gh".to_owned());
+        let tar = match os {
+            Os::MacOs => "/usr/bin/tar".to_owned(),
+            Os::Linux => ["/usr/bin/tar", "/bin/tar"]
+                .into_iter()
+                .find(|path| Path::new(path).is_file())
+                .unwrap_or("tar")
+                .to_owned(),
+            Os::Windows => system_tool("tar.exe"),
+        };
+        BundleFetcher::new(self.runner.clone(), gh, tar, &self.env, os)
+    }
+
+    /// 지금 판보다 새 판이 있을 때만 그 소식이다. 확인을 끈 설정이면 적힌 기록이 있어도 없다.
+    pub fn update_notice(&self) -> Option<UpdateView> {
+        if kairos_core::profile::current().update_check_off {
+            return None;
+        }
+        let current = Version::current();
+        let latest = UpdateFile::new(&self.home).read().available(current)?;
+        Some(UpdateView { current: current.to_string(), latest: latest.to_string() })
     }
 
     #[must_use]
@@ -370,8 +422,12 @@ impl AppContext {
             self.panel.clone(),
             self.sources.sources().to_vec(),
         );
-        match &self.sleep {
+        let tick = match &self.sleep {
             Some(sleep) => tick.with_sleep_probe(sleep.clone()),
+            None => tick,
+        };
+        match &self.releases {
+            Some(releases) => tick.with_release_probe(releases.clone()),
             None => tick,
         }
     }

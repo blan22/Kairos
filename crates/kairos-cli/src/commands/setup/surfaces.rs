@@ -44,17 +44,25 @@ fn text_of(output: &ProcessOutput) -> String {
 impl Wizard<'_> {
     /// 다섯째 단계. 설치본이 없으면 건너뛴다.
     pub(super) fn surfaces(&self) -> KairosResult<()> {
-        self.step("5/5 알림과 Orca 패널");
-        let Ok(runtime) = fs::canonicalize(self.root.join("current")) else {
-            self.console.print("설치본이 없어 건너뜁니다. 설치한 뒤 kairos setup을 다시 실행하세요");
+        if !self.refresh_surfaces("5/5 알림과 Orca 패널")? {
             return Ok(());
-        };
-        self.notifier(&runtime)?;
-        self.panel(&runtime)?;
+        }
         self.console.print("");
         self.console.print("상태는 kairos doctor로 봅니다.");
         self.console.print("세션은 잠겨 있습니다. 차단 시험을 확인한 뒤 kairos sessions on으로 켭니다");
         Ok(())
+    }
+
+    /// 알림 권한과 Orca 패널. setup과 `update --finish`가 함께 쓴다. 설치본이 없으면 건너뛰고 거짓이다.
+    pub(super) fn refresh_surfaces(&self, title: &str) -> KairosResult<bool> {
+        self.step(title);
+        let Ok(runtime) = fs::canonicalize(self.root.join("current")) else {
+            self.console.print("설치본이 없어 건너뜁니다. 설치한 뒤 kairos setup을 다시 실행하세요");
+            return Ok(false);
+        };
+        self.notifier(&runtime)?;
+        self.panel(&runtime)?;
+        Ok(true)
     }
 
     fn run(&self, program: &str, args: &[&str], timeout: Duration) -> ProcessOutput {

@@ -84,6 +84,37 @@ impl Command for Setup {
     }
 }
 
+/// `kairos update --finish`. 새 판 묶음의 실행 파일이 부른다. 조직, 소스, 계정은 묻지 않고 지금 값을 지킨다.
+/// 이 실행 파일 옆의 설치 자료로 설치하고 등록한 뒤, setup의 마지막 단계(알림 권한, Orca 패널)만 묻는다.
+/// 패널 승인은 setup과 같이 `y`로 답할 때만 한다. 새 판의 패널은 파일이 바뀌어 Orca가 다시 승인을 받는다.
+pub(crate) fn finish_update(context: &AppContext) -> KairosResult<i32> {
+    let console = context.console();
+    let root = context.home().root();
+    let wizard = Wizard { context, console, root, yes: false, given: Given::default() };
+    wizard.step(&format!("1/2 kairos {} 설치", kairos_ops::VERSION));
+    let Some(assets) = context.layout()?.binary_asset_root() else {
+        console.print("실행 파일 옆에 설치 자료(ops/, plugins/)가 없어 설치하지 않습니다");
+        return Ok(1);
+    };
+    context.home().ensure()?;
+    let options = InstallOptions { mode: InstallMode::Register, ..InstallOptions::new(context.home().clone(), assets) };
+    let result = Installer::new(context.runner()).install(&options);
+    for line in result.iter().flat_map(|result| &result.lines) {
+        console.print(line);
+    }
+    if result?.failed {
+        console.print("설치하지 못했습니다. 지금 판은 그대로입니다. 위 메시지를 확인하세요");
+        return Ok(1);
+    }
+    wizard.refresh_surfaces("2/2 알림과 Orca 패널")?;
+    console.print("");
+    console.print(&format!(
+        "kairos {}로 올렸습니다. 설정과 데이터는 그대로입니다. 상태는 kairos doctor로 봅니다",
+        kairos_ops::VERSION
+    ));
+    Ok(0)
+}
+
 struct Wizard<'a> {
     context: &'a AppContext,
     console: &'a Console,
@@ -94,6 +125,7 @@ struct Wizard<'a> {
 }
 
 /// 옵션으로 받은 본인 식별자. 있으면 묻지 않고 쓴다. 모양은 저장할 때 검사한다.
+#[derive(Default)]
 struct Given {
     google: Option<String>,
     slack: Option<String>,

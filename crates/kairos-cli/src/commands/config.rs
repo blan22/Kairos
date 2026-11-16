@@ -56,6 +56,10 @@ schema = 1
 [mcp]
 # `kairos mcp serve`가 에이전트에 여는 동작. 기본은 읽기만이다.
 # allow_actions = ["later", "done", "keep", "add", "accept"]
+
+[updates]
+# 새 판을 하루 한 번 확인하고 알린다. 끄려면 false로 둔다. 내려받는 것은 kairos update --apply를 실행할 때뿐이다.
+# check = true
 "#;
 
 pub struct Config;
@@ -180,6 +184,7 @@ fn profile_view(profile: &Profile) -> Value {
             "tools": binding.tools,
         }))).collect::<serde_json::Map<_, _>>(),
         "mcpActions": profile.mcp_actions,
+        "updateCheck": !profile.update_check_off,
     })
 }
 
@@ -225,6 +230,7 @@ fn show_lines(loaded: &Loaded, origin: bool) -> Vec<String> {
         format!("끈 소스: {}{}", list(&profile.disabled_sources), from("sources.disabled")),
         format!("호스트: {}{}", list(&profile.hosts.enabled), from("hosts.enabled")),
         format!("MCP로 연 동작: {}{}", list(&profile.mcp_actions), from("mcp.allow_actions")),
+        format!("새 판 확인: {}{}", if profile.update_check_off { "끔" } else { "켬" }, from("updates.check")),
     ];
     for target in &profile.playbooks.targets {
         lines.push(format!(

@@ -3,14 +3,14 @@
 use std::collections::BTreeSet;
 
 use kairos_agenda::{
-    CardChooser, ControlFile, DisplayGate, EngineReport, EngineStatus, KairosControl, NextContext, P0Alerts, P1Alerts,
-    P1NotifyInput, P1NotifyReport, RefreshInput, StateBuilder,
+    CardChooser, ControlFile, DisplayGate, EngineReport, EngineStatus, KairosControl, NextContext, P0Alerts,
+    P1AlertMode, P1Alerts, P1NotifyInput, P1NotifyReport, RefreshInput, StateBuilder,
 };
 use kairos_core::model::Source;
-use kairos_core::ports::Notifier;
+use kairos_core::ports::{Alert, AlertTier, Notifier};
 use kairos_core::{Instant, KairosError, KairosHome, KairosResult};
 use kairos_ledger::OffDateBook;
-use kairos_ops::TickClockRepo;
+use kairos_ops::{TickClockRepo, UPDATE_TITLE, Version, update_body};
 use kairos_store::Database;
 
 use super::ItemRefresher;
@@ -110,5 +110,28 @@ impl Settler<'_> {
             P1Alerts::new(self.database, notifier).notify(&input)
         })
         .unwrap_or_default()
+    }
+
+    /// 새 판을 알린다. P1과 같은 조용한 때(끄기, 표시 게이트, 포커스, 점심, 쉬는 날)를 따른다.
+    /// 알림은 P1 급이고 항목이 없다. 누르면 아무 항목도 열지 않는다. 문구는 고정이고 판 번호만 바뀐다.
+    /// 나간 뒤에만 참이다. 참일 때만 호출한 쪽이 알린 판을 적는다.
+    pub(super) fn alert_update(&self, notifier: Option<&dyn Notifier>, latest: Version) -> bool {
+        let Some(notifier) = notifier else {
+            return false;
+        };
+        self.guarded(|| {
+            let context = self.p1_context()?;
+            if CardChooser::new(self.database.connection()).p1_alert_mode(&context)? != P1AlertMode::Send {
+                return Ok(false);
+            }
+            let alert = Alert {
+                tier: AlertTier::P1,
+                title: UPDATE_TITLE.to_owned(),
+                body: update_body(latest),
+                items: Vec::new(),
+            };
+            Ok(notifier.notify(&alert))
+        })
+        .unwrap_or(false)
     }
 }

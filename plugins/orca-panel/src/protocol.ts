@@ -173,6 +173,14 @@ export interface NextView {
   budget: BudgetView | null
   /** 열린 항목 중 가장 큰 ID. 상태 표시줄이 새 항목을 가린다. 오래된 kairos는 주지 않아 null이다. */
   newest: number | null
+  /** 새 판 소식. 새 판이 없거나 오래된 kairos, 형식이 틀리면 null이다. */
+  update: UpdateView | null
+}
+
+/** 지금 판과 새 판. 둘 다 `주.부.수` 숫자다. 올리는 명령은 패널이 고정 문구로 보여 준다. */
+export interface UpdateView {
+  current: string
+  latest: string
 }
 
 export interface ListView {

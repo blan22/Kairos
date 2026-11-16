@@ -367,6 +367,10 @@ impl Builder {
             self.profile.mcp_actions.clone_from(&raw.mcp.allow_actions);
             self.set("mcp.allow_actions", Layer::User);
         }
+        if let Some(check) = raw.updates.check {
+            self.profile.update_check_off = !check;
+            self.set("updates.check", Layer::User);
+        }
         Ok(())
     }
 

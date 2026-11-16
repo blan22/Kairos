@@ -237,3 +237,74 @@ fn p1_알림을_꺼도_p0_알림은_나간다() {
     assert_eq!(report.notified, 1);
     assert_eq!(recorder.messages(), ["회의 임박 1건"]);
 }
+
+/// 정해 둔 판을 답하고 물은 횟수를 센다.
+struct Releases {
+    latest: Option<kairos_ops::Version>,
+    asked: AtomicUsize,
+}
+
+impl kairos_ops::ReleaseProbe for Releases {
+    fn latest(&self) -> Option<kairos_ops::Version> {
+        self.asked.fetch_add(1, Ordering::SeqCst);
+        self.latest
+    }
+}
+
+fn releases(latest: Option<kairos_ops::Version>) -> Arc<Releases> {
+    Arc::new(Releases { latest, asked: AtomicUsize::new(0) })
+}
+
+/// 지금 판보다 큰 판.
+fn newer() -> kairos_ops::Version {
+    kairos_ops::Version::parse("999.0.0").unwrap()
+}
+
+#[test]
+fn 새_판은_하루_한_번_묻고_판마다_한_번만_알린다() {
+    let (_dir, home) = collect_home(&control_on());
+    let recorder = Arc::new(Recorder::new());
+    let probe = releases(Some(newer()));
+    let first = tick(&home, T1, vec![]).notifier(recorder.clone()).releases(probe.clone()).run();
+    assert_eq!(first.update_notified.as_deref(), Some("999.0.0"));
+    let alert = recorder.alerts().pop().unwrap();
+    assert_eq!((alert.title.as_str(), alert.items.len()), (kairos_ops::UPDATE_TITLE, 0));
+    assert_eq!(alert.body, kairos_ops::update_body(newer()));
+    // 같은 날의 다음 틱은 묻지도 알리지도 않는다. 보고에 키가 없다.
+    let second = tick(&home, T2, vec![]).notifier(recorder.clone()).releases(probe.clone()).run();
+    assert_eq!((second.update_notified.as_deref(), probe.asked.load(Ordering::SeqCst)), (None, 1));
+    assert!(!serde_json::to_string(&second).unwrap().contains("updateNotified"));
+    assert_eq!(recorder.alerts().len(), 1);
+    assert_eq!(kairos_ops::UpdateFile::new(&home).read().notified, Some(newer()));
+}
+
+#[test]
+fn 새_판_알림은_p1처럼_조용한_때를_따르고_못_보내면_다음_틱에_다시_보낸다() {
+    // 표시가 닫혀 있으면 알리지 않지만 확인은 적는다.
+    let (_dir, home) = collect_home(&KairosControl::default());
+    let recorder = Arc::new(Recorder::new());
+    let report = tick(&home, T1, vec![]).notifier(recorder.clone()).releases(releases(Some(newer()))).run();
+    assert_eq!((report.update_notified, recorder.alerts().len()), (None, 0));
+    assert_eq!(kairos_ops::UpdateFile::new(&home).read().latest, Some(newer()));
+
+    // 전달에 실패하면 알린 판을 적지 않는다. 다음 틱은 묻지 않고 적힌 판으로 다시 알린다.
+    let (_other_dir, other) = collect_home(&control_on());
+    let failing = Arc::new(Recorder::failing());
+    let probe = releases(Some(newer()));
+    let failed = tick(&other, T1, vec![]).notifier(failing).releases(probe.clone()).run();
+    assert_eq!(failed.update_notified, None);
+    let retried = tick(&other, T2, vec![]).notifier(recorder).releases(probe.clone()).run();
+    assert_eq!((retried.update_notified.as_deref(), probe.asked.load(Ordering::SeqCst)), (Some("999.0.0"), 1));
+}
+
+#[test]
+fn 지금_판이_최신이거나_탐침이_없으면_알리지_않는다() {
+    let (_dir, home) = collect_home(&control_on());
+    let recorder = Arc::new(Recorder::new());
+    let same = releases(Some(kairos_ops::Version::current()));
+    assert_eq!(tick(&home, T1, vec![]).notifier(recorder.clone()).releases(same).run().update_notified, None);
+    let (_other_dir, other) = collect_home(&control_on());
+    assert_eq!(tick(&other, T1, vec![]).notifier(recorder.clone()).run().update_notified, None);
+    assert!(!kairos_ops::UpdateFile::new(&other).read().ok);
+    assert!(recorder.alerts().is_empty());
+}

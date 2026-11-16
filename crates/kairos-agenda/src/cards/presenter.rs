@@ -43,6 +43,16 @@ pub struct NextResponse {
     /// 열린 항목 중 가장 큰 ID. 호스트가 사용자가 아직 보지 않은 새 항목이 있는지 가린다. CLI가 채운다. 없으면 키가 없다.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub newest: Option<i64>,
+    /// 지금 판보다 새 판이 나왔을 때만 있다. 데이터 폴더의 `update.json`이라 CLI가 채운다. 없으면 키가 없다.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub update: Option<UpdateView>,
+}
+
+/// 새 판 소식. 두 값 모두 `주.부.수` 숫자 판 번호다. 올리는 명령은 고정 문자열이라 싣지 않는다.
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+pub struct UpdateView {
+    pub current: String,
+    pub latest: String,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize)]
@@ -124,6 +134,7 @@ fn next(connection: &Connection, context: &NextContext, options: NextOptions) ->
         reveal: None,
         sources: None,
         newest: None,
+        update: None,
     })
 }
 

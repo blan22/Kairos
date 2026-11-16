@@ -23,6 +23,7 @@ import type {
   RunView,
   SourceView,
   Tier,
+  UpdateView,
   WhyView,
 } from './protocol.ts'
 import { sectionOf, sortRows, trimRows } from './rows.ts'
@@ -280,6 +281,16 @@ function parseBudget(value: unknown): BudgetView | null {
   }
 }
 
+/** kairos의 판 번호 모양. 자리마다 1~4자리 숫자다. */
+const VERSION = /^\d{1,4}\.\d{1,4}\.\d{1,4}$/
+
+function parseUpdate(value: unknown): UpdateView | null {
+  if (!isRecord(value)) return null
+  const { current, latest } = value
+  if (typeof current !== 'string' || typeof latest !== 'string' || !VERSION.test(current) || !VERSION.test(latest)) return null
+  return { current, latest }
+}
+
 /** 필수 값이 없으면 null이다. 호출한 쪽이 형식 오류로 표시한다. */
 export function parseNext(value: Json): NextView | null {
   const display = parseGate(value.display)
@@ -300,6 +311,7 @@ export function parseNext(value: Json): NextView | null {
     sources: parseSources(value.sources),
     budget: parseBudget(value.budget),
     newest: itemId(value.newest),
+    update: parseUpdate(value.update),
   }
 }
 

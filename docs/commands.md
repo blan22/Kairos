@@ -47,7 +47,7 @@ kairos config validate | show [--origin] | path | init [--org <파일> [--sha256
 kairos install [--dry-run [--preview-dir 폴더]] | --apply | --register [--claude 경로] [--gh 경로] [--root 폴더]
 kairos uninstall [--dry-run] [--runtime | --purge] [--yes]
 kairos collect [--force] | --resume | --skip-slack-until <Message_ts 또는 ISO 시각> | --reread-notion
-kairos update [--json]
+kairos update [--check] [--apply] [--json]
 kairos completions zsh|bash
 KAIROS_HOME=<비어 있는 새 폴더> kairos demo [--json]
 kairos help [<명령> | --all]
@@ -123,12 +123,19 @@ kairos mcp serve
 
 ## update
 
-현재 버전, 설치 방식, 업데이트 명령을 알려 줍니다. 아무것도 내려받거나 바꾸지 않습니다.
+새 버전을 확인하고 올립니다. 옵션 없이 실행하면 현재 버전, 알고 있는 최신 버전, 설치 방식, 업데이트 명령을 알려 주고 아무것도 바꾸지 않습니다.
 
+- 최신 버전은 수집이 하루에 한 번 `gh`로 확인해 데이터 폴더의 `update.json`에 기록합니다. 확인에 실패하면 3시간 뒤에 다시 확인합니다. 버전 번호만 읽고 내려받지는 않습니다.
+- `--check`는 지금 바로 확인해 기록합니다.
+- `--apply`는 새 버전을 설치합니다. 설정과 데이터는 그대로 둡니다. 자세한 순서는 [설치](install.md#업데이트)에 있습니다.
+  - 일반 터미널에서만 동작합니다. 세션, Orca 터미널, Claude Code 안에서는 거절합니다.
+  - 릴리스 패키지로 설치했다면 새 버전의 패키지를 받아 SHA256과 빌드 증명을 확인한 뒤 설치합니다. 하나라도 맞지 않으면 설치하지 않습니다.
+  - 저장소에서 빌드했다면 `<저장소>/scripts/install.sh --update`를 실행합니다. 스크립트의 종료 코드를 그대로 돌려줍니다.
 - 설치 방식은 설치 스크립트가 데이터 폴더의 `install-source`에 기록해 둡니다(`release` 또는 `source:<저장소 경로>`).
-- 저장소에서 빌드했다면 `<저장소>/scripts/install.sh --update`를, 릴리스 패키지로 설치했다면 설치 명령 한 줄을 알려 줍니다.
-- `--json`은 `update.version`, `update.method`(`source`, `release`, `unknown`), `update.command`를 출력합니다. 알려 줄 명령이 없으면 `command` 키 자체가 빠집니다.
+- `--json`은 `update.version`, `update.method`(`source`, `release`, `unknown`), `update.command`를 출력합니다. 확인 기록이 있으면 `update.latest`, `update.available`, `update.checkedAt`이 추가됩니다. 값이 없으면 키 자체가 빠집니다. `--apply`는 `--json`을 받지 않습니다.
 - `command`는 사람이 터미널에 붙여 넣는 셸 문자열입니다. 호스트는 이 값을 실행하지 않습니다.
+- 새 버전이 있으면 터미널에서 실행한 다른 명령 뒤에 안내 한 줄이 stderr로 나옵니다. `--json` 출력과 호스트의 호출에는 붙지 않습니다.
+- 확인을 끄려면 `config.toml`에 `[updates] check = false`를 적습니다([설정](configuration.md#새-버전-확인)).
 
 ## completions
 

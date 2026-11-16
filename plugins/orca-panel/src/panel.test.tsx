@@ -25,6 +25,7 @@ import {
   snapshotOf,
   sourceRows,
   startable,
+  updateNotice,
 } from './fixtures.ts'
 import * as panelModule from './panel.tsx'
 import type { ActionInput, ActionOutcome, Snapshot, SnapshotInput } from './protocol.ts'
@@ -2678,4 +2679,26 @@ test('칩의 새 일이 카드에만 있으면 지금 탭으로 옮긴다', asyn
   await tabTo(panel, 'waiting')
   await panel.press(chip(panel, 'github') as never)
   assert.equal(panel.valueOf({ type: 'Tabs' }), 'now')
+})
+
+test('새 판 띠는 판과 고정 명령을 보여 주고 닫은 판은 다시 띄우지 않는다', async () => {
+  const { state, panel } = await openLive(scene({ update: updateNotice('9.1.0', '9.0.2') }))
+  assert.ok(texts(panel).includes('kairos 9.1.0이 나왔습니다'))
+  assert.ok(panel.find({ type: 'Code', text: 'kairos update --apply' }))
+  await panel.press(panel.find({ label: '새 판 안내 닫기' }) as never)
+  assert.ok(!texts(panel).includes('kairos 9.1.0이 나왔습니다'))
+  await tick(panel)
+  assert.ok(!texts(panel).includes('kairos 9.1.0이 나왔습니다'))
+  // 더 새 판은 다시 띄운다.
+  state.snapshot = scene({ update: updateNotice('9.2.0', '9.0.2') })
+  await tick(panel)
+  assert.ok(texts(panel).includes('kairos 9.2.0이 나왔습니다'))
+})
+
+test('새 판 띠는 기록 중에도 보이고 소식이 없으면 그리지 않는다', async () => {
+  const { panel } = await open(scene({ update: updateNotice(), display: recordingGate, card: null }))
+  assert.ok(texts(panel).includes('kairos 9.1.0이 나왔습니다'))
+  view?.unmount()
+  const plain = await open(scene())
+  assert.equal(plain.panel.find({ label: '새 판 안내 닫기' }), null)
 })

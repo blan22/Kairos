@@ -103,7 +103,15 @@ pub fn kairos_main() -> i32 {
             return refuse(&args, error.code, &message);
         }
     }
-    registry().dispatch(&AppContext::system(), &args)
+    let context = AppContext::system();
+    let code = registry().dispatch(&context, &args);
+    // 사람이 터미널에서 쓴 명령에만 새 판 안내를 붙인다. 호스트와 스크립트는 파이프로 부른다.
+    if std::io::IsTerminal::is_terminal(&std::io::stderr())
+        && let Some(line) = commands::update_hint(&context, &args)
+    {
+        eprintln!("{line}");
+    }
+    code
 }
 
 /// `kairos-run`의 몸통.

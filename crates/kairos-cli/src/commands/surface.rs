@@ -9,7 +9,7 @@ use std::time::{Duration, SystemTime};
 use kairos_agenda::{CONTRACT_VERSION, REVEAL_FILE, SESSION_APPROVAL_FILE, SessionApproval, SessionLock};
 use kairos_core::KairosResult;
 use kairos_core::model::SourceMode;
-use kairos_ops::VERSION;
+use kairos_ops::{UPDATE_FILE, VERSION};
 use serde_json::json;
 
 use crate::app::AppContext;
@@ -22,7 +22,8 @@ pub const SURFACES: [&str; 4] = ["panel", "orca", "claude-code", "vscode"];
 /// 항목에 붙는 조작. 호스트는 이 이름과 항목 ID만 넘긴다.
 const ITEM_ACTIONS: [&str; 9] = ["start", "later", "done", "keep", "keep_deploy", "ack", "move", "cancel", "pr"];
 /// 바뀌면 호스트가 다시 읽어야 하는 파일.
-const WATCHED: [&str; 5] = ["state.json", "control.json", REVEAL_FILE, SESSION_APPROVAL_FILE, "engine.json"];
+const WATCHED: [&str; 6] =
+    ["state.json", "control.json", REVEAL_FILE, SESSION_APPROVAL_FILE, "engine.json", UPDATE_FILE];
 const DEFAULT_INTERVAL_MS: u64 = 2000;
 const MIN_INTERVAL_MS: u64 = 250;
 
@@ -50,7 +51,7 @@ impl Command for Hello {
                 json!({ "name": source.name().as_str(), "connected": connected })
             })
             .collect();
-        let body = json!({
+        let mut body = json!({
             "contract": CONTRACT_VERSION,
             "engine": VERSION,
             "surfaces": SURFACES,
@@ -61,6 +62,10 @@ impl Command for Hello {
             "sources": sources,
             "home": context.home().root().to_string_lossy(),
         });
+        // 새 판이 있을 때만 키가 있다.
+        if let Some(update) = context.update_notice() {
+            body["update"] = json!(update);
+        }
         let reply = Reply::new(context, parsed.flag("json"));
         if reply.json() {
             return reply.success(body);

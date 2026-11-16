@@ -27,7 +27,7 @@ pub use card_chooser::{CardChooser, P1AlertMode};
 pub use explain::{Explainer, OfferWhy, WhyView};
 pub use focus_tracker::{FocusTracker, FocusView};
 pub use playbook::{Playbook, issue_url_matches, label_of, playbook_for, playbook_of, reason_label, safe_url};
-pub use presenter::{ListResponse, NextOptions, NextResponse, Presenter, RunsView};
+pub use presenter::{ListResponse, NextOptions, NextResponse, Presenter, RunsView, UpdateView};
 pub use views::{Card, CardAction, DeployView, Hold, HoldReason, ItemView, NextContext, ReadyCard};
 
 /// 패널과 수락 쪽이 맞추는 JSON 형식 번호. 필드를 빼거나 뜻을 바꾸면 올린다.
