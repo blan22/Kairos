@@ -99,8 +99,9 @@ impl Command for Reveal {
         // reveal.json은 모든 호스트가 본다(VS Code 확장은 파일을 지켜보고 목록을 연다). Orca는 켰을 때만 부른다.
         let orca_enabled = kairos_core::profile::current().hosts.is_enabled("orca");
         let (mut panel_opened, mut activated) = (false, false);
-        if orca_enabled {
-            let opener = OrcaPanelOpener::with_bin(context.runner(), context.panel_orca_bin());
+        // 믿을 수 있는 orca를 못 찾았으면 아무것도 부르지 않는다.
+        if let Some(orca) = context.panel_orca_bin().filter(|_| orca_enabled) {
+            let opener = OrcaPanelOpener::with_bin(context.runner(), orca);
             panel_opened = opener.open();
             activated = activate_orca(context);
             if !panel_opened && activated {

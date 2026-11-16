@@ -90,11 +90,10 @@ impl Wizard<'_> {
     }
 
     fn panel(&self, runtime: &Path) -> KairosResult<()> {
-        let orca = self.context.panel_orca_bin();
-        if !Path::new(&orca).is_file() {
+        let Some(orca) = self.context.panel_orca_bin().filter(|orca| Path::new(orca).is_file()) else {
             self.console.print("Orca가 없어 패널을 건너뜁니다");
             return Ok(());
-        }
+        };
         let dir = join(runtime, &PANEL_DIR);
         if !dir.is_dir() {
             self.console.print("설치본에 Orca 패널이 없습니다. 다시 설치하세요");

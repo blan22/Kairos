@@ -12,12 +12,12 @@ use kairos_agenda::{
     OrcaPanelOpener, SourceHealth, SourceHealthBook, StateBuilder,
 };
 use kairos_core::model::Source;
-use kairos_core::platform::Os;
+use kairos_core::platform::{self, Os};
 use kairos_core::ports::{Clock, Notifier, PanelOpener, SystemClock};
 use kairos_core::process::{ProcessRunner, SystemProcessRunner};
 use kairos_core::{Instant, KairosError, KairosHome, KairosResult, home, js};
 use kairos_ledger::OffDateBook;
-use kairos_ops::{ResumeFile, default_service_dir, find_binary, find_claude, system_tool};
+use kairos_ops::{ResumeFile, default_service_dir, find_binary, find_claude, find_orca, system_tool};
 use kairos_sessions::OrcaClient;
 use kairos_source_github::GithubConfig;
 use kairos_store::Database;
@@ -28,7 +28,7 @@ pub use layout::InstallLayout;
 
 /// 환경에서 실행 파일을 고른다. `값.trim() || findBinary(이름)`이다. 빈 값은 없는 값이다.
 fn configured_binary(env: &BTreeMap<String, String>, key: &str, name: &str) -> Option<String> {
-    given(env, key).map(str::to_owned).or_else(|| find_binary(name, env.get("PATH").map_or("", String::as_str)))
+    given(env, key).map(str::to_owned).or_else(|| find_binary(name, search_path(env)))
 }
 
 /// 앞으로 끌어올 때 쓰는 open. 시험은 `KAIROS_OPEN`으로 가짜를 준다.
@@ -58,12 +58,24 @@ fn doctor_notifier_bin(env: &BTreeMap<String, String>, layout: Option<&InstallLa
     Path::is_file(&bin).then(|| bin.to_string_lossy().into_owned())
 }
 
+/// 실행 파일을 찾을 PATH. Windows는 환경 변수 이름의 대소문자를 가리지 않고, 보통 `Path`로 들어온다.
+fn search_path(env: &BTreeMap<String, String>) -> &str {
+    let found = match Os::current() {
+        Os::Windows => env.iter().find(|(key, _)| key.eq_ignore_ascii_case("PATH")).map(|(_, value)| value),
+        _ => env.get("PATH"),
+    };
+    found.map_or("", String::as_str)
+}
+
 /// 패널을 여는 orca의 기본 경로. macOS는 앱 번들 안의 고정 경로다. 다른 OS는 설치 위치가 하나가 아니라 PATH에서 찾는다.
-fn default_orca_bin(env: &BTreeMap<String, String>) -> String {
+/// PATH에서는 본인(사용자 홈의 주인)이나 root 소유이고 남이 고칠 수 없는 파일만 고른다. 못 찾으면 None이고 패널을 열지 않는다.
+fn default_orca_bin(env: &BTreeMap<String, String>) -> Option<String> {
     match Os::current() {
-        Os::MacOs => ORCA_BIN.to_owned(),
+        Os::MacOs => Some(ORCA_BIN.to_owned()),
         Os::Linux | Os::Windows => {
-            find_binary("orca", env.get("PATH").map_or("", String::as_str)).unwrap_or_else(|| "orca".to_owned())
+            let user_home = env.get("HOME").map_or_else(home::user_home, PathBuf::from);
+            let owner = std::fs::metadata(user_home).ok().and_then(|metadata| platform::owner_of(&metadata));
+            find_orca(search_path(env), owner)
         }
     }
 }
@@ -83,7 +95,7 @@ fn system_notifier(
         // 준 값이 없는 파일이면 알리지 않는다. macOS와 같다.
         Os::Linux => match given(env, "KAIROS_NOTIFIER") {
             Some(bin) => Path::is_file(Path::new(bin)).then(|| bin.to_owned()),
-            None => find_binary("notify-send", env.get("PATH").map_or("", String::as_str)),
+            None => find_binary("notify-send", search_path(env)),
         }
         .map(|bin| Arc::new(DesktopNotifier::notify_send(runner, bin)) as Arc<dyn Notifier>),
         Os::Windows => {
@@ -160,7 +172,7 @@ impl AppContext {
             context = context.with_notifier(notifier);
         }
         // 알림 뒤의 패널 열기는 Orca를 켰을 때만이다. 다른 호스트는 reveal.json과 next --json으로 스스로 연다.
-        if kairos_core::profile::current().hosts.is_enabled("orca") {
+        if let Some(orca_bin) = orca_bin.filter(|_| kairos_core::profile::current().hosts.is_enabled("orca")) {
             context = context.with_panel(Arc::new(OrcaPanelOpener::with_bin(runner, orca_bin)));
         }
         Self { layout, ..context }
@@ -279,10 +291,9 @@ impl AppContext {
         OrcaClient::new(self.runner.clone(), bin, self.home.root()).with_env(self.env.clone())
     }
 
-    /// 패널을 여는 orca. `KAIROS_ORCA`가 있으면 그 값, 없으면 틱과 같은 고정 경로다.
-    /// 알림을 눌러 불릴 때는 PATH가 비어 있어서 PATH를 찾지 않는다.
-    pub fn panel_orca_bin(&self) -> String {
-        given(&self.env, "KAIROS_ORCA").map_or_else(|| default_orca_bin(&self.env), str::to_owned)
+    /// 패널을 여는 orca. `KAIROS_ORCA`가 있으면 그 값, 없으면 틱과 같은 기본 경로다. 못 찾으면 None이다.
+    pub fn panel_orca_bin(&self) -> Option<String> {
+        given(&self.env, "KAIROS_ORCA").map(str::to_owned).or_else(|| default_orca_bin(&self.env))
     }
 
     /// Orca를 앞으로 끌어오는 open.
@@ -344,7 +355,7 @@ impl AppContext {
                 Os::MacOs => self.user_home.join("Library").join("LaunchAgents"),
                 os => default_service_dir(os, &self.home),
             };
-            find_claude(self.env.get("PATH").map_or("", String::as_str), &services)
+            find_claude(search_path(&self.env), &services)
         })
     }
 

@@ -80,6 +80,30 @@ pub(super) fn find_binary_for(os: Os, name: &str, search_path: &str) -> Option<S
         .find(|candidate| runnable(os, Path::new(candidate)))
 }
 
+/// 패널을 여는 orca. 알림을 눌러 부르는 reveal은 사용자 PATH를 그대로 받으므로 남이 고칠 수 있는 파일은 고르지 않는다.
+/// unix는 `owner`나 root 소유이고 그룹과 기타가 쓸 수 없는 실행 파일만 받는다. `owner`를 모르면 root 소유만 받는다.
+/// 패널(TS `findOrca`)처럼 PATH의 절대 경로 항목만 본다. Windows는 `orca.exe`만 받는다(`.cmd`는 cmd.exe를 거친다). 못 찾으면 None이다.
+pub fn find_orca(search_path: &str, owner: Option<u32>) -> Option<String> {
+    find_orca_for(Os::current(), search_path, owner)
+}
+
+pub(super) fn find_orca_for(os: Os, search_path: &str, owner: Option<u32>) -> Option<String> {
+    let file = os.exe("orca");
+    platform::split_path_list(os, search_path)
+        .filter(|dir| platform::is_absolute(os, dir))
+        .map(|dir| os_join(os, &[dir, &file]))
+        .find(|candidate| trusted_executable(Path::new(candidate), owner))
+}
+
+fn trusted_executable(path: &Path, owner: Option<u32>) -> bool {
+    let Ok(metadata) = std::fs::metadata(path) else {
+        return false;
+    };
+    platform::is_executable_file(path)
+        && platform::mode_of(&metadata).is_none_or(|mode| mode & 0o022 == 0)
+        && platform::owner_of(&metadata).is_none_or(|uid| uid == 0 || Some(uid) == owner)
+}
+
 /// 지금 설치된 수집 잡이 쓰는 claude의 폴더.
 ///
 /// 원본은 지금 도는 node의 폴더를 후보로 썼다. volta 환경에서는 PATH에 shim만 있고 실제 claude가 그 옆에 있어서다.
@@ -142,7 +166,7 @@ pub(super) fn resolve_paths(
 #[cfg(test)]
 #[cfg(unix)]
 mod tests {
-    use std::os::unix::fs::OpenOptionsExt;
+    use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
 
     use super::*;
     use std::fs;
@@ -261,6 +285,41 @@ mod tests {
             check_given(Os::MacOs, &shim.to_string_lossy()).unwrap_err().code(),
             "install paths must not be shims"
         );
+    }
+
+    fn owner_of(path: &Path) -> u32 {
+        use std::os::unix::fs::MetadataExt;
+        fs::metadata(path).unwrap().uid()
+    }
+
+    #[test]
+    fn orca는_남이_쓸_수_있는_파일을_건너뛰고_뒤의_파일을_고른다() {
+        let dir = tempfile::tempdir().unwrap();
+        let (shared, mine) = (dir.path().join("shared"), dir.path().join("mine"));
+        executable(&shared.join("orca"), 0o777);
+        executable(&mine.join("orca"), 0o755);
+        // 만든 뒤에 권한을 다시 준다. umask가 그룹과 기타의 쓰기 비트를 지운다.
+        fs::set_permissions(shared.join("orca"), fs::Permissions::from_mode(0o777)).unwrap();
+        let me = owner_of(&mine.join("orca"));
+        let search_path = format!("{}:{}", shared.display(), mine.display());
+        assert_eq!(find_orca_for(Os::Linux, &search_path, Some(me)), Some(format!("{}/orca", mine.display())));
+        fs::set_permissions(mine.join("orca"), fs::Permissions::from_mode(0o775)).unwrap();
+        assert_eq!(find_orca_for(Os::Linux, &search_path, Some(me)), None, "그룹이 쓸 수 있어도 고르지 않는다");
+    }
+
+    #[test]
+    fn orca는_본인이나_root_소유만_고르고_상대_경로는_보지_않는다() {
+        let dir = tempfile::tempdir().unwrap();
+        executable(&dir.path().join("orca"), 0o755);
+        let me = owner_of(&dir.path().join("orca"));
+        let search_path = dir.path().to_string_lossy();
+        assert!(find_orca_for(Os::Linux, &search_path, Some(me)).is_some());
+        // root로 도는 시험에서는 root 소유라 받는다.
+        if me != 0 {
+            assert_eq!(find_orca_for(Os::Linux, &search_path, Some(me + 1)), None);
+            assert_eq!(find_orca_for(Os::Linux, &search_path, None), None, "본인을 모르면 root 소유만 받는다");
+        }
+        assert_eq!(find_orca_for(Os::Linux, "relative/dir", Some(me)), None);
     }
 
     #[test]

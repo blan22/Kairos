@@ -20,7 +20,7 @@ use kairos_core::process::ProcessRunner;
 use kairos_core::{KairosHome, KairosResult};
 
 pub use allowlist::collector_allowlist;
-pub use binary::{find_binary, find_claude};
+pub use binary::{find_binary, find_claude, find_orca};
 use launchctl::Launchctl;
 pub use plan::{
     InstallPaths, InstallPlan, PlanInput, ServiceFile, VERSION, default_launch_agents_dir, default_service_dir,
