@@ -21,7 +21,7 @@ note() { print -r -- "  $1" }
 
 # 받다가 끊긴 스크립트가 반만 실행되지 않게 함수로 감싼다.
 main() {
-  [[ $(uname -s) == Darwin && $(uname -m) == arm64 ]] || fail "Apple Silicon Mac에서만 설치합니다"
+  [[ $(uname -s) == Darwin && $(uname -m) == arm64 ]] || fail "Apple Silicon Mac에서만 설치합니다. Linux는 install-release-linux.sh, Windows는 install-release.ps1을 쓰세요"
   local work
   work=$(/usr/bin/mktemp -d)
   trap "/bin/rm -rf ${(q)work}" EXIT

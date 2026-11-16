@@ -1,11 +1,11 @@
 use std::ffi::OsStr;
 use std::fs::{self, Metadata, OpenOptions};
 use std::io::{self, Read};
-use std::os::unix::fs::{MetadataExt, OpenOptionsExt};
 use std::path::Path;
 use std::sync::LazyLock;
 
 use kairos_core::KairosResult;
+use kairos_core::platform::{self, NoFollow};
 use kairos_source_mcp::shared::ModeFailure;
 use regex::Regex;
 
@@ -52,8 +52,8 @@ impl ResultFile<'_> {
         let check = || -> io::Result<bool> {
             let current = fs::symlink_metadata(self.path)?;
             let expected = fs::canonicalize(self.project_dir)?.join(basename(self.session_dir())).join(RESULTS_DIR);
-            Ok(opened.dev() == current.dev()
-                && opened.ino() == current.ino()
+            Ok(platform::same_file(opened, &current)
+                && !current.file_type().is_symlink()
                 && fs::canonicalize(self.results_dir())? == expected)
         };
         check().unwrap_or(false)
@@ -72,7 +72,7 @@ impl ResultFile<'_> {
             }
         }
         // O_NOFOLLOW는 마지막 조각의 링크를 막고, O_NONBLOCK은 FIFO를 여는 데서 멈추지 않게 한다.
-        let opened = OpenOptions::new().read(true).custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK).open(self.path);
+        let opened = OpenOptions::new().read(true).no_follow_nonblocking().open(self.path);
         let mut file = match opened {
             Ok(file) => file,
             Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(Err(ModeFailure::RecoverMissing)),
@@ -80,10 +80,11 @@ impl ResultFile<'_> {
         };
         let stat = file.metadata()?;
         // 하드 링크면 밖의 파일이 이름만 안에 있는 것이다.
-        if !stat.is_file() || stat.nlink() > 1 || !self.is_still_in_place(&stat) {
+        let linked = platform::links_of(&stat).is_some_and(|links| links > 1);
+        if !stat.is_file() || stat.file_type().is_symlink() || linked || !self.is_still_in_place(&stat) {
             return Ok(Err(ModeFailure::RecoverOutside));
         }
-        if stat.size() > self.max_bytes {
+        if stat.len() > self.max_bytes {
             if consume {
                 remove_if_present(Path::new(self.path))?;
             }
@@ -139,7 +140,7 @@ mod tests {
 
         let elsewhere = dir.path().join("elsewhere");
         fs::rename(&results, &elsewhere).unwrap();
-        std::os::unix::fs::symlink(&elsewhere, &results).unwrap();
+        platform::symlink_dir(&elsewhere, &results).unwrap();
         assert!(!file.is_still_in_place(&opened), "inode가 같아도 폴더가 밖이면 거부한다");
     }
 

@@ -24,7 +24,7 @@ mod sync;
 mod workspace;
 
 pub use git_host::{GIT_BIN, GitHostError, GitWorkspaces, GitWorktree, is_git_selector};
-pub use keychain::{KEYCHAIN_ACCOUNT, KEYCHAIN_SERVICE, Keychain, KeychainRead, SECURITY_BIN};
+pub use keychain::{KEYCHAIN_ACCOUNT, KEYCHAIN_SERVICE, Keychain, KeychainRead, SECRET_TOOL_BIN, SECURITY_BIN};
 pub use launch::{RUN_ID, launch_command, shell_quote, terminal_title, worktree_name};
 pub use launcher::{
     SessionAdmission, SessionLaunch, SessionLauncher, SessionOutcome, SessionRefusal, SessionResult, SessionStatus,
@@ -35,7 +35,7 @@ pub use orca::{
 };
 pub use profile::{
     CLEARED_ENV, FIX_TOOLS, SESSION_GH_TOKEN_FILE, SESSION_MARKER_ENV, SESSION_SETTINGS_DIR, SESSION_TOOLS,
-    SessionCommand, SessionProfile, SessionToken, WrittenSettings, session_tools,
+    SESSIONS_UNSUPPORTED, SessionCommand, SessionProfile, SessionToken, WrittenSettings, session_tools,
 };
 pub use pull_request::{PrDraft, PrOutcome, PrStatus, PullRequestPublisher};
 pub use run::{Run, RunRepo, RunState};

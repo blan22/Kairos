@@ -3,14 +3,22 @@
 use std::{env, fs};
 
 use kairos_core::KairosResult;
+use kairos_core::platform::Os;
 use kairos_core::text::sanitize;
-use kairos_sessions::{SessionProfile, SessionRunner, SessionSpawner, SessionWorkspace};
+use kairos_sessions::{SESSIONS_UNSUPPORTED, SessionProfile, SessionRunner, SessionSpawner, SessionWorkspace};
 use kairos_source_github::{GithubConfig, LiveAuthorReader};
 
 use crate::app::AppContext;
 
 fn session(context: &AppContext, argv: &[String], spawner: &dyn SessionSpawner) -> KairosResult<i32> {
-    let mut profile = SessionProfile::new(context.layout()?.root(), context.home().root(), context.user_home());
+    // 샌드박스 없이는 띄우지 않는다. 수락과 `sessions on`도 막지만 마지막 관문은 여기다.
+    let os = Os::current();
+    if !os.supports_sessions() {
+        context.console().error(SESSIONS_UNSUPPORTED);
+        return Ok(1);
+    }
+    let mut profile =
+        SessionProfile::new(context.layout()?.root(), context.home().root(), context.user_home()).for_os(os);
     // 세션 터미널은 worktree에서 뜨고 claude는 이 폴더를 물려받는다. 확인하지 못하면 고치는 세션은 뜨지 않는다.
     // `.git`이 있는데 확인하지 못하면 읽는 세션도 git 자리를 막지 못하므로 뜨지 않는다.
     if let Ok(cwd) = env::current_dir() {

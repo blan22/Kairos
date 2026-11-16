@@ -3,20 +3,22 @@
 use std::thread;
 use std::time::{Duration, Instant};
 
-use kairos_agenda::{ORCA_BUNDLE_ID, OrcaPanelOpener, REVEAL_MAX_ITEMS, RevealFile, RevealView};
+use kairos_agenda::{ORCA_BUNDLE_ID, OrcaPanelOpener, REVEAL_MAX_ITEMS, RevealFile, RevealView, parse_reveal_link};
 use kairos_core::KairosResult;
+use kairos_core::platform::Os;
 use kairos_core::ports::PanelOpener;
 use kairos_core::process::ProcessRequest;
 use serde_json::json;
 
 use super::shared::parse_ids;
 use crate::app::AppContext;
-use crate::args::{ArgParser, OptionSpec, flag};
+use crate::args::{ArgParser, OptionSpec, flag, text};
 use crate::command::Command;
 use crate::reply::Reply;
 
-const USAGE: &str = "사용법: kairos reveal <항목 ID>... [--json]";
-const OPTIONS: [OptionSpec; 1] = [flag("json")];
+const USAGE: &str = "사용법: kairos reveal <항목 ID>... [--json] | kairos reveal --link kairos-reveal:items=<ID,...>";
+/// `--link`는 Windows 토스트를 누르면 등록된 링크 처리기가 넘긴다.
+const OPTIONS: [OptionSpec; 2] = [flag("json"), text("link")];
 const OPEN_TIMEOUT: Duration = Duration::from_secs(5);
 /// `execFile`의 기본 maxBuffer.
 const MAX_OUTPUT: usize = 1024 * 1024;
@@ -25,8 +27,11 @@ const MAX_OUTPUT: usize = 1024 * 1024;
 const PANEL_RETRY_FOR: Duration = Duration::from_secs(8);
 const PANEL_RETRY_INTERVAL: Duration = Duration::from_millis(500);
 
-/// `open -b`. Orca 창을 앞으로 끌어온다. 패널 명령은 포커스를 가져가지 않는다.
+/// `open -b`. Orca 창을 앞으로 끌어온다. 패널 명령은 포커스를 가져가지 않는다. macOS에만 있다.
 fn activate_orca(context: &AppContext) -> bool {
+    if Os::current() != Os::MacOs {
+        return false;
+    }
     let request = ProcessRequest::new(context.open_bin(), ["-b", ORCA_BUNDLE_ID], OPEN_TIMEOUT).max_output(MAX_OUTPUT);
     context.runner().run(&request).success()
 }
@@ -59,7 +64,23 @@ impl Command for Reveal {
     fn execute(&self, context: &AppContext, args: &[String]) -> KairosResult<i32> {
         let parsed = ArgParser::with_positionals(&OPTIONS).parse(args)?;
         let reply = Reply::new(context, parsed.flag("json"));
-        let ids = match parse_ids(parsed.positionals(), reply) {
+        let linked: Vec<String>;
+        let values = match parsed.text("link") {
+            None => parsed.positionals(),
+            Some(_) if !parsed.positionals().is_empty() => {
+                return Ok(reply.usage("항목 ID와 --link는 함께 쓰지 않습니다"));
+            }
+            Some(link) => match parse_reveal_link(link) {
+                None => return Ok(reply.fail("bad_link", "kairos-reveal 링크가 아닙니다", 2)),
+                // 항목이 없는 알림(감시자 경고)은 눌러도 아무 일도 하지 않는다. macOS 헬퍼와 같다.
+                Some(ids) if ids.is_empty() => return Ok(0),
+                Some(ids) => {
+                    linked = ids.iter().map(i64::to_string).collect();
+                    &linked
+                }
+            },
+        };
+        let ids = match parse_ids(values, reply) {
             Ok(ids) => ids,
             Err(code) => return Ok(code),
         };

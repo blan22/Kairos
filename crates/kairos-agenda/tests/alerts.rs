@@ -1,5 +1,7 @@
 //! P0 알림과 알림 헬퍼 시험, 패널 명령 시험.
 //! CLI와 collect를 거치지 않는 시험만 여기 있다.
+// 가짜 실행 파일(sh)과 unix 권한을 쓰는 시험이다. Windows는 단위 시험과 Windows 백엔드 시험으로 본다.
+#![cfg(unix)]
 #![allow(clippy::unwrap_used)]
 
 mod common;

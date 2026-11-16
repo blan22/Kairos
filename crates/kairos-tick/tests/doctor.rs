@@ -1,4 +1,6 @@
 //! doctor 시험(R12, R28 포함).
+// 가짜 실행 파일(sh)과 unix 권한을 쓰는 시험이다. Windows는 단위 시험과 Windows 백엔드 시험으로 본다.
+#![cfg(unix)]
 #![allow(clippy::unwrap_used)]
 
 mod common;
@@ -12,6 +14,7 @@ use common::fakes::*;
 use common::*;
 use kairos_agenda::{ControlFile, DisplayStart, EngineReport, StateBuilder};
 use kairos_core::model::{QuerySpec, Source, SourceName, SourceResult};
+use kairos_core::platform::Os;
 use kairos_core::ports::FixedClock;
 use kairos_core::process::ProcessOutput;
 use kairos_store::Database;
@@ -259,7 +262,7 @@ fn 수집_중단은_문제로_올리고_모르는_값은_알_수_없음으로_�
 }
 
 fn doctor_with(home: &kairos_core::KairosHome, env: BTreeMap<String, String>, answer: &'static str) -> Doctor {
-    let config = DoctorConfig { home: home.clone(), user_home: home.file("user"), env };
+    let config = DoctorConfig { home: home.clone(), user_home: home.file("user"), env, os: Os::MacOs };
     let claude = runner(move |_| ProcessOutput::exited(0, answer));
     Doctor::new(config, Arc::new(FixedClock(at(T1))), claude, Vec::new())
 }

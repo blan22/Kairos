@@ -1,10 +1,10 @@
-use std::fs::{self, OpenOptions, Permissions};
+use std::fs::{self, OpenOptions};
 use std::io::Write;
-use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use crate::KairosResult;
+use crate::platform::{CreateMode, Os, set_mode};
 
 pub const DIR_MODE: u32 = 0o700;
 pub const FILE_MODE: u32 = 0o600;
@@ -20,12 +20,12 @@ impl KairosHome {
         Self { root: root.into() }
     }
 
-    /// `KAIROS_HOME`이 있으면 그 값, 없으면 `~/Library/Application Support/kairos`.
+    /// `KAIROS_HOME`이 있으면 그 값, 없으면 운영체제의 기본 폴더(`Os::default_data_dir`)다.
     pub fn from_env() -> Self {
         let override_root = std::env::var("KAIROS_HOME").ok().filter(|value| !crate::js::trim(value).is_empty());
         match override_root {
             Some(root) => Self::at(crate::js::trim(&root)),
-            None => Self::at(user_home().join("Library").join("Application Support").join("kairos")),
+            None => Self::at(Os::current().default_data_dir(&user_home())),
         }
     }
 
@@ -76,10 +76,10 @@ impl KairosHome {
         find(&root, user_home).or_else(|| find(&resolved(&root)?, &home))
     }
 
-    /// 폴더를 만들고 권한을 0700으로 고정한다. umask에 맡기지 않는다.
+    /// 폴더를 만들고 권한을 0700으로 고정한다. umask에 맡기지 않는다. Windows는 사용자 프로필의 ACL을 물려받는다.
     pub fn ensure(&self) -> KairosResult<()> {
         fs::create_dir_all(&self.root)?;
-        fs::set_permissions(&self.root, Permissions::from_mode(DIR_MODE))?;
+        set_mode(&self.root, DIR_MODE)?;
         Ok(())
     }
 }
@@ -109,7 +109,7 @@ pub fn write_file_atomic(path: &Path, content: &str) -> KairosResult<()> {
     let sequence = TEMP_SEQUENCE.fetch_add(1, Ordering::Relaxed);
     let temporary = dir.join(format!(".{:x}-{sequence:x}.tmp", std::process::id()));
     let written = (|| -> std::io::Result<()> {
-        let mut file = OpenOptions::new().write(true).create_new(true).mode(FILE_MODE).open(&temporary)?;
+        let mut file = OpenOptions::new().write(true).create_new(true).create_mode(FILE_MODE).open(&temporary)?;
         file.write_all(content.as_bytes())?;
         file.sync_all()?;
         fs::rename(&temporary, path)
@@ -123,6 +123,7 @@ pub fn write_file_atomic(path: &Path, content: &str) -> KairosResult<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::platform::mode_of;
 
     #[test]
     fn 원자적_쓰기는_0600이고_임시_파일을_남기지_않는다() {
@@ -132,13 +133,16 @@ mod tests {
         write_file_atomic(&home.file("a.json"), "{}\n").unwrap();
         write_file_atomic(&home.file("a.json"), "{\"b\":1}\n").unwrap();
         assert_eq!(fs::read_to_string(home.file("a.json")).unwrap(), "{\"b\":1}\n");
-        assert_eq!(fs::metadata(home.file("a.json")).unwrap().permissions().mode() & 0o777, 0o600);
-        assert_eq!(fs::metadata(&dir).unwrap().permissions().mode() & 0o777, 0o700);
+        if cfg!(unix) {
+            assert_eq!(mode_of(&fs::metadata(home.file("a.json")).unwrap()), Some(0o600));
+            assert_eq!(mode_of(&fs::metadata(&dir).unwrap()), Some(0o700));
+        }
         assert_eq!(fs::read_dir(&dir).unwrap().count(), 1);
         fs::remove_dir_all(&dir).unwrap();
     }
 
     #[test]
+    #[cfg(unix)]
     fn git_작업_트리_안의_데이터_폴더를_찾는다() {
         let base = std::env::temp_dir().join(format!("kairos-worktree-{}", std::process::id()));
         let (repo, linked, user) = (base.join("repo"), base.join("linked"), base.join("user"));

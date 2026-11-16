@@ -52,7 +52,7 @@ GitHub 저장소의 **Security** 탭에서 [Report a vulnerability](https://gith
 
 - `kairos mcp serve`는 기본으로 읽기 도구만 엽니다. 설정, 연동, 설치, 세션 잠금은 도구로 제공하지 않습니다.
 - 설정 파일은 본인 소유이고 그룹이나 다른 사용자가 쓸 수 없을 때만 읽습니다. 값마다 형식을 검사하고 토큰처럼 보이는 값은 거부합니다. 정규식은 설정으로 받지 않습니다.
-- 호스트는 kairos 실행 파일을 셸 없이 인자 배열로 호출하고, 실행 파일이 본인 소유이며 다른 사용자가 고칠 수 없을 때만 호출합니다.
+- 호스트는 kairos 실행 파일을 셸 없이 인자 배열로 호출합니다. VS Code 확장과 Claude Code 플러그인은 실행 파일이 본인 소유이며 다른 사용자가 고칠 수 없을 때만 호출합니다. Orca 패널은 설치본의 고정 경로만 부르고, 소유자와 권한은 따로 검사하지 않습니다. 데이터 폴더가 본인 전용(0700)인 것에 기댑니다. Windows에서는 권한 비트 대신 실행 파일이 `%LOCALAPPDATA%` 아래인지만 봅니다.
 
 ## 알려진 남은 위험
 
@@ -64,6 +64,14 @@ GitHub 저장소의 **Security** 탭에서 [Report a vulnerability](https://gith
 - `CLAUDE_CONFIG_DIR`로 claude 설정을 옮겼다면 그 폴더도 읽기 차단 범위 밖입니다. `kairos pr`의 gh는 worktree에서 실행됩니다.
 - 외부인 여부는 세션을 띄우기 직전에 한 번만 실시간으로 다시 확인합니다. 세션을 띄운 뒤에 달린 외부인 댓글은 세션이 읽을 수 있습니다.
 
+### Linux와 Windows
+
+- Linux와 Windows에서는 세션을 열지 않습니다. 샌드박스가 쓰기 금지 glob과 D-Bus 접근을 막지 못해 이 문서의 세션 기준을 지킬 수 없기 때문입니다. `accept`, 세션 켜기, `kairos-run`이 모두 거절합니다([지원하는 OS](docs/platforms.md#세션을-macos에서만-여는-이유)).
+- Windows에서는 데이터 폴더의 접근 권한(ACL)을 검사하지 않습니다. 대신 `KAIROS_HOME`이 `%LOCALAPPDATA%` 아래일 때만 실행하고, 사용자 프로필 폴더의 기본 권한에 기댑니다. 그 폴더의 권한을 직접 넓혔다면 다른 사용자가 설정과 수집 기록을 읽거나 고칠 수 있습니다.
+- Windows의 `kairos-reveal:` 링크는 다른 프로그램도 열 수 있습니다. kairos는 링크에서 항목 번호만 읽어 패널을 엽니다.
+- Linux의 알림은 누르는 동작이 없습니다. 알림 본문은 macOS와 같은 고정 문구와 건수입니다.
+- Windows의 Claude Code 플러그인 MCP 서버는 실행 파일의 소유자와 권한을 검사하지 않고, `%LOCALAPPDATA%\kairos\current\bin\kairos.exe`만 실행합니다.
+
 ### PR을 올릴 때
 
 - PR 올리기는 세션이 쓴 코드를 원격 브랜치에 올립니다. 대상 저장소의 CI가 그 코드를 저장소 비밀과 함께 실행할 수 있습니다. CI 설정 경로는 막지만 빌드 스크립트(`package.json` 등)는 막지 않습니다. 누르기 전에 세션의 변경을 확인하세요.
@@ -74,6 +82,7 @@ GitHub 저장소의 **Security** 탭에서 [Report a vulnerability](https://gith
 
 - `setup --yes`는 실행 파일 옆의 설치 자료만 씁니다. 대화형 `setup`과 `kairos install`은 현재 폴더의 설치 자료를 쓸 수 있으므로, 다른 사람의 저장소 안에서 실행하지 마세요.
 - kairos는 스스로 코드를 내려받아 실행하지 않습니다. `kairos update`는 명령을 알려 주기만 하고, 실제 다운로드는 사용자가 터미널에서 실행하는 설치 스크립트가 합니다.
+- Windows 설치 스크립트는 사용자 PATH(HKCU)에 설치본의 `bin` 폴더를 더합니다. 설치는 알림의 보낸 이름과 `kairos-reveal:` 링크 처리기를 HKCU에 등록합니다. 관리자 권한은 쓰지 않습니다.
 - 릴리스 패키지의 SHA256 파일은 패키지와 같은 릴리스에서 받습니다. 전송 중에 손상된 파일은 걸러 내지만 릴리스 자체가 바뀐 경우는 막지 못합니다. 패키지와 알림 헬퍼는 ad-hoc 서명이라 올린 사람을 증명하지 않습니다. 믿기 어렵다면 저장소에서 빌드하세요.
 - `kairos uninstall --purge`는 데이터 폴더를 통째로 지웁니다. 링크이거나, 홈 폴더 또는 그 상위 폴더이거나, kairos만 쓰는 이름의 파일(`kairos.db`, `connections.toml`, `install-source`)이 없는 폴더는 거절합니다. 다만 이 표식은 이름만 확인하고, 홈 폴더는 `HOME`으로 판단합니다. `KAIROS_HOME`을 다른 자료와 함께 쓰는 폴더로 지정했다면 그 자료도 지워집니다. `--runtime`은 같은 위치 검사를 거친 뒤 버전 번호 이름의 런타임 폴더만 지웁니다.
 - 조직 프로필을 다른 사람에게서 받을 때는 `kairos config init --org <파일> --sha256 <값>`으로 값을 고정하세요.

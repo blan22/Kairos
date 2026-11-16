@@ -14,8 +14,13 @@ concurrency:
 
 # 액션은 태그가 아니라 커밋 SHA로 고정한다. 태그는 옮겨질 수 있다. 올릴 때는 SHA와 주석의 판을 함께 바꾼다.
 jobs:
+  # macOS와 Linux는 같은 검증(fmt, clippy, 전체 시험)을 돈다. OS마다 다른 동작은 시험이 OS를 보고 고른다.
   rust:
-    runs-on: macos-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 40
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -24,8 +29,47 @@ jobs:
       - run: rustup show
       - run: scripts/verify.sh rust
 
+  # Windows는 lint, 빌드, 실행 확인까지 본다. 시험 하네스가 sh 가짜 실행 파일을 써서 cargo test는 아직 돌리지 않는다.
+  rust-windows:
+    runs-on: windows-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - run: rustup show
+      - run: cargo clippy --locked --workspace --all-targets --all-features --quiet -- -D warnings
+      - run: cargo build --locked --release -p kairos-cli
+      - name: 실행 파일이 뜨는지 본다
+        shell: pwsh
+        run: |
+          # kairos는 %LOCALAPPDATA% 밖의 데이터 폴더를 거절한다.
+          $env:KAIROS_HOME = Join-Path $env:LOCALAPPDATA "kairos-ci-$env:GITHUB_RUN_ID"
+          $version = (& target\release\kairos.exe --version | Out-String).Trim()
+          if ($LASTEXITCODE -ne 0 -or $version -notmatch '^kairos \d') { throw "kairos --version: $version" }
+          & target\release\kairos.exe help | Out-Null
+          if ($LASTEXITCODE -ne 0) { throw 'kairos help' }
+          Write-Host $version
+      - name: PowerShell 스크립트 구문
+        shell: pwsh
+        run: |
+          foreach ($file in Get-ChildItem scripts\*.ps1) {
+            $tokens = $null; $errors = $null
+            [void][System.Management.Automation.Language.Parser]::ParseFile($file.FullName, [ref]$tokens, [ref]$errors)
+            if ($errors) { $errors | ForEach-Object { Write-Error "$($file.Name): $_" }; exit 1 }
+          }
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 24
+      - name: 공용 클라이언트와 VS Code 모델 시험
+        run: node --test packages/kairos-client/src/index.test.ts plugins/vscode/src/model.test.ts
+
   typescript:
-    runs-on: macos-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4

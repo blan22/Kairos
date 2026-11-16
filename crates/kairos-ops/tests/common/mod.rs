@@ -186,3 +186,15 @@ pub fn run_watchdog(home: &Path, now_ms: i64, env: &[(&str, &str)]) -> String {
 pub fn watchdog(home: &Path, now_ms: i64) -> String {
     run_watchdog(home, now_ms, &[])
 }
+
+/// 같은 판정의 Rust 구현(`kairos watchdog`). zsh 판처럼 dry로 돌리고 찍은 줄을 돌려준다.
+pub fn rust_watchdog(home: &Path, now_ms: i64) -> String {
+    let home = KairosHome::at(home);
+    let watchdog = kairos_ops::Watchdog {
+        home: &home,
+        now: now_ms.div_euclid(1000),
+        zone: kairos_core::profile::current().schedule.zone,
+        dry: true,
+    };
+    watchdog.run(&|_: &str| panic!("dry는 알리지 않는다")).unwrap().join("\n")
+}

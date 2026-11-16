@@ -4,14 +4,22 @@
 
 ## [다음 버전]
 
+### 추가
+
+- Linux(x86_64, aarch64)와 Windows(x86_64)를 지원합니다. 수집, 카드, 알림, Orca 패널, Claude Code 플러그인, VS Code 확장이 macOS와 같게 동작합니다. 수집은 Linux에서 systemd 사용자 timer, Windows에서 작업 스케줄러가 돌립니다. OS마다 다른 점은 [지원하는 OS](docs/platforms.md)에 있습니다.
+- Linux와 Windows의 설치 스크립트(`scripts/install-linux.sh`, `scripts/install-release-linux.sh`, `scripts/install.ps1`, `scripts/install-release.ps1`)와 릴리스 패키지를 추가했습니다. `kairos update`는 OS에 맞는 명령을 알려 줍니다.
+- 감시자를 `kairos watchdog` 명령으로도 돌립니다. Linux와 Windows는 이 명령을, macOS는 지금처럼 zsh 감시자를 씁니다.
+- `kairos reveal --link`를 추가했습니다. Windows 알림을 누르면 이 명령이 패널을 엽니다.
+
+### 변경
+
+- 세션은 macOS에서만 엽니다. Linux와 Windows에서는 샌드박스가 보안 기준을 지킬 수 없어 수락과 세션 켜기는 `sessions_unsupported`로 거절하고, `kairos-run`은 이유를 알리고 끝납니다.
+- 문서를 합니다체로 다시 쓰고 구조를 정리했습니다. [핵심 개념](docs/concepts.md), [설정](docs/configuration.md), [세션 샌드박스](docs/session-sandbox.md), [문서 목차](docs/README.md), [기여 안내](CONTRIBUTING.md)를 새로 만들었습니다. 설정 내용은 `docs/install.md`에서 `docs/configuration.md`로, 세션의 내부 동작은 `docs/sessions.md`에서 `docs/session-sandbox.md`로 옮겼습니다.
+
 ### 수정
 
 - `[hosts.orca.repos]`를 적지 않으면 에이전트 제안의 `세션 열고 시작`이 `worktree_failed`로 실패하던 문제를 고쳤습니다. 이제 `orca repo list`에서 원격 주소가 같은 저장소를 찾아 씁니다. 하나로 고르지 못하면 새 코드 `repo_unresolved`와 고칠 설정을 패널에 보여 줍니다. `git` 세션 호스트에서 로컬 클론을 찾지 못한 경우도 같은 코드로 알립니다.
 - `kairos config show`의 플레이북 줄이 Orca 저장소 ID가 없을 때 `미설정` 대신 `원격 주소로 찾음`을 보여 줍니다.
-
-### 변경
-
-- 문서를 합니다체로 다시 쓰고 구조를 정리했습니다. [핵심 개념](docs/concepts.md), [설정](docs/configuration.md), [세션 샌드박스](docs/session-sandbox.md), [문서 목차](docs/README.md), [기여 안내](CONTRIBUTING.md)를 새로 만들었습니다. 설정 내용은 `docs/install.md`에서 `docs/configuration.md`로, 세션의 내부 동작은 `docs/sessions.md`에서 `docs/session-sandbox.md`로 옮겼습니다.
 
 ## [0.4.2] - 2026-11-13
 

@@ -48,7 +48,7 @@ const fn with_usage(name: &'static str, group: Group, summary: &'static str, usa
 }
 
 /// 묶음 안의 순서가 도움말에 나오는 순서다.
-pub const ENTRIES: [Entry; 35] = [
+pub const ENTRIES: [Entry; 36] = [
     entry("next", Group::Daily, "지금 볼 일 하나"),
     entry("list", Group::Daily, "열린 항목"),
     entry("later", Group::Daily, "나중에 다시 본다"),
@@ -74,13 +74,13 @@ pub const ENTRIES: [Entry; 35] = [
     with_usage(
         "install",
         Group::Setup,
-        "실행본을 설치하고 launchd에 등록한다",
+        "실행본을 설치하고 스케줄러(launchd, systemd, 작업 스케줄러)에 등록한다",
         "사용법: kairos install [--dry-run [--preview-dir 폴더]] | --apply | --register [--claude 경로] [--gh 경로] [--root 폴더]",
     ),
     with_usage(
         "uninstall",
         Group::Setup,
-        "launchd 잡을 내린다(--runtime은 실행본까지, --purge는 데이터까지 지운다)",
+        "스케줄러 잡을 내린다(--runtime은 실행본까지, --purge는 데이터까지 지운다)",
         "사용법: kairos uninstall [--dry-run] [--runtime | --purge] [--yes]",
     ),
     with_usage(
@@ -99,6 +99,7 @@ pub const ENTRIES: [Entry; 35] = [
     with_usage("page-info", Group::Internal, "수집 모드: 쪽 정보", "사용법: kairos page-info < JSON"),
     with_usage("ingest", Group::Internal, "수집 모드: 수집 결과를 들인다", "사용법: kairos ingest < JSON"),
     entry("mcp", Group::Internal, "kairos를 MCP 도구로 낸다"),
+    with_usage("watchdog", Group::Internal, "감시자: 수집이 멈췄는지 본다(Linux, Windows)", "사용법: kairos watchdog"),
 ];
 
 pub fn find(name: &str) -> Option<&'static Entry> {

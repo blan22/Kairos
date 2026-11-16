@@ -249,6 +249,10 @@ export function startWorker(orca: OrcaWorkerApi, deps: WorkerDeps): WorkerHandle
   // 패널은 사이드바 아이콘으로도 열리므로 이 명령에 의존하지 않는다.
   orca.commands.register(OPEN_COMMAND, async () => {
     orca.log('open command')
+    if (ORCA_BIN === null) {
+      orca.log('패널 열기 실패: PATH에 orca가 없다')
+      return '패널을 열지 못했습니다. 오른쪽 사이드바의 kairos 아이콘을 누르세요'
+    }
     const outcome = await deps.exec(ORCA_BIN, ['plugin', 'open', PLUGIN_KEY, '--panel', PANEL_ID, '--json'], TIMEOUT_MS.open)
     if (outcome.fault === null && outcome.exitCode === 0) return 'kairos 패널을 열었습니다'
     orca.log(`패널 열기 실패: ${outcome.fault ?? outcome.exitCode}`)

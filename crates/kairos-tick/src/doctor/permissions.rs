@@ -1,5 +1,4 @@
 use std::fs;
-use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 
 use kairos_core::{KairosHome, KairosResult};
@@ -24,12 +23,16 @@ const PRIVATE_FILES: [&str; 16] = [
     "collect.lock",
 ];
 
+/// 세 자리 8진 권한. unix가 아니면 `acl`이다(사용자 프로필의 ACL을 따른다).
 pub(super) fn mode_of(path: &Path) -> KairosResult<String> {
-    Ok(format!("{:03o}", fs::metadata(path)?.permissions().mode() & 0o777))
+    Ok(match kairos_core::platform::mode_of(&fs::metadata(path)?) {
+        Some(mode) => format!("{:03o}", mode & 0o777),
+        None => "acl".to_owned(),
+    })
 }
 
 fn check(path: &Path, expected: &str, problems: &mut Vec<String>) -> KairosResult<()> {
-    if !path.exists() {
+    if !path.exists() || !cfg!(unix) {
         return Ok(());
     }
     let mode = mode_of(path)?;

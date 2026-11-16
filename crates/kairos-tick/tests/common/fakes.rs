@@ -9,6 +9,7 @@ use kairos_core::model::{
     CollectContext, DirectSource, McpCall, McpResponse, McpSource, ParserFailed, QuerySpec, Source, SourceMode,
     SourceName, SourceResult,
 };
+use kairos_core::platform::Os;
 use kairos_core::ports::{Alert, FixedClock, Notifier, PanelOpener};
 use kairos_core::process::{ProcessEnd, ProcessOutput, ProcessRequest, ProcessRunner};
 use kairos_core::{KairosError, KairosHome, KairosResult};
@@ -391,7 +392,7 @@ impl Tick {
 }
 
 pub fn doctor_at(home: &KairosHome, now: &str, sources: Vec<Arc<dyn Source>>) -> Doctor {
-    let config = DoctorConfig { home: home.clone(), user_home: home.file("user"), env: BTreeMap::new() };
+    let config = DoctorConfig { home: home.clone(), user_home: home.file("user"), env: BTreeMap::new(), os: Os::MacOs };
     Doctor::new(config, Arc::new(FixedClock(at(now))), missing_runner(), sources)
 }
 

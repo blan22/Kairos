@@ -1,5 +1,7 @@
 //! 세션 경계 시험(R21~R25). 거부 목록과 환경을 본다.
 //! 번호는 .codex/runs/2026-11-04-stage2.md의 표와 같다. 실제 orca, claude를 부르지 않는다.
+// 가짜 실행 파일(sh)과 unix 권한을 쓰는 시험이다. Windows는 단위 시험과 Windows 백엔드 시험으로 본다.
+#![cfg(unix)]
 #![allow(clippy::unwrap_used)]
 
 #[path = "../../kairos-sessions/tests/common/mod.rs"]
@@ -24,7 +26,9 @@ const RUN_A: &str = RUN;
 fn r21_uninstall_문구는_사실과_맞고_플러그인을_내리는_방법을_알린다() {
     let (dir, _home) = temp_home();
     let options = UninstallOptions {
-        launch_agents_dir: Some(dir.path().join("agents")),
+        service_dir: Some(dir.path().join("agents")),
+        home: None,
+        os: kairos_core::platform::Os::MacOs,
         dry_run: true,
         skip_launchctl: false,
         before_removal: false,

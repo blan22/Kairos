@@ -73,6 +73,8 @@ impl Done {
 /// 임시 데이터 폴더 하나와 그 위의 kairos.
 pub struct Cli {
     dir: TempDir,
+    /// 데이터 폴더(`root`) 밖의 임시 폴더. 데이터 폴더 밖이어야 하는 worktree 같은 자리에 쓴다.
+    outside: TempDir,
     pub root: PathBuf,
     pub env: BTreeMap<String, String>,
 }
@@ -94,7 +96,8 @@ impl Cli {
             ("KAIROS_SECURITY".to_owned(), path("no-such-security")),
         ]);
         write_fixture_config(&root);
-        Self { dir, root, env }
+        let outside = tempfile::tempdir().unwrap();
+        Self { dir, outside, root, env }
     }
 
     pub fn home(&self) -> KairosHome {
@@ -267,6 +270,11 @@ impl Cli {
 
     pub fn dir(&self) -> &Path {
         self.dir.path()
+    }
+
+    /// 데이터 폴더 밖의 임시 폴더. 실제 경로다.
+    pub fn outside(&self) -> PathBuf {
+        fs::canonicalize(self.outside.path()).unwrap()
     }
 }
 

@@ -4,31 +4,57 @@
  * - 셸을 거치지 않고 execFile에 인자 배열만 넘긴다. 인자는 고정 낱말과 정규식을 통과한 항목 ID로만 만든다.
  * - 호출은 큐로 한 번에 하나만 돈다. 호출마다 시간 제한이 있고 넘기면 SIGKILL로 끊는다.
  * - stdout 전체가 JSON 한 덩어리여야 하고 `schema`가 계약 판과 같아야 한다.
- * - 실행 파일은 본인 소유이고 그룹이나 남이 쓸 수 없어야 부른다.
+ * - 실행 파일은 본인 소유이고 그룹이나 남이 쓸 수 없어야 부른다. Windows는 권한 비트가 없어 본인 전용 자리(`%LOCALAPPDATA%`) 아래만 받는다.
+ * - Windows에서 콘솔 창을 띄우지 않는다(`windowsHide`).
  *
  * 계약은 docs/surface-protocol.md에 있다.
  */
 import { execFile, spawn } from 'node:child_process'
 import { statSync } from 'node:fs'
 import { homedir } from 'node:os'
-import { join } from 'node:path'
+import { posix, win32 } from 'node:path'
 import { addArgv, argvFor, isRecord, readReply, type Exec, type ExecOutcome, type Failure, type ItemAction, type Reply, type Surface } from './contract.ts'
 
 export * from './contract.ts'
 
 const MAX_OUTPUT = 4 * 1024 * 1024
 
-/** 기본 데이터 폴더. 환경 변수로 받지 않는다. */
-export const defaultHome = (): string => join(homedir(), 'Library', 'Application Support', 'kairos')
+const pathOf = (platform: NodeJS.Platform) => (platform === 'win32' ? win32 : posix)
+
+/** OS별 기본 데이터 폴더. `kairos_core::platform::Os::default_data_dir`와 같다. 환경 변수로 받지 않는다. */
+export function homeFor(platform: NodeJS.Platform, user: string): string {
+  const path = pathOf(platform)
+  if (platform === 'darwin') return path.join(user, 'Library', 'Application Support', 'kairos')
+  if (platform === 'win32') return path.join(user, 'AppData', 'Local', 'kairos')
+  return path.join(user, '.local', 'share', 'kairos')
+}
 
 /** 설치본의 kairos. `kairos install --apply`가 `current`를 이번 판에 건다. */
-export const defaultBinary = (home: string = defaultHome()): string => join(home, 'current', 'bin', 'kairos')
+export const binaryFor = (platform: NodeJS.Platform, home: string): string =>
+  pathOf(platform).join(home, 'current', 'bin', platform === 'win32' ? 'kairos.exe' : 'kairos')
 
-/** 본인 소유이고 그룹이나 남이 쓸 수 없는 일반 파일이어야 부른다. 아니면 이유 코드다. */
+/** 기본 데이터 폴더. */
+export const defaultHome = (): string => homeFor(process.platform, homedir())
+
+export const defaultBinary = (home: string = defaultHome()): string => binaryFor(process.platform, home)
+
+/** Windows에서 본인 전용 자리(`%USERPROFILE%\AppData\Local`) 아래인가. 대소문자를 가리지 않는다. */
+export function insideLocalAppData(path: string, user: string): boolean {
+  const local = `${win32.join(user, 'AppData', 'Local').toLowerCase()}\\`
+  return win32.resolve(path).toLowerCase().startsWith(local)
+}
+
+/** 본인 소유이고 그룹이나 남이 쓸 수 없는 일반 파일이어야 부른다. 아니면 이유 코드다.
+ *  Windows는 소유자와 권한 비트를 읽지 않는다. 대신 kairos와 같이 `%LOCALAPPDATA%` 아래만 받는다. */
 export function checkBinary(path: string): Failure | null {
   try {
     const stat = statSync(path)
     if (!stat.isFile()) return { code: 'binary_missing', message: 'kairos 실행 파일이 없습니다' }
+    if (process.platform === 'win32') {
+      return insideLocalAppData(path, homedir())
+        ? null
+        : { code: 'binary_unsafe', message: 'kairos 실행 파일이 %LOCALAPPDATA% 밖에 있습니다' }
+    }
     if (typeof process.getuid === 'function' && stat.uid !== process.getuid()) {
       return { code: 'binary_unsafe', message: 'kairos 실행 파일의 소유자가 다릅니다' }
     }
@@ -54,7 +80,7 @@ export const execProgram: Exec = (file, args, timeoutMs) =>
       execFile(
         file,
         [...args],
-        { timeout: timeoutMs, killSignal: 'SIGKILL', maxBuffer: MAX_OUTPUT, cwd: '/', shell: false, encoding: 'utf8' },
+        { timeout: timeoutMs, killSignal: 'SIGKILL', maxBuffer: MAX_OUTPUT, cwd: '/', shell: false, windowsHide: true, encoding: 'utf8' },
         (error, stdout) => resolve(outcomeOf(error, String(stdout))),
       )
     } catch {
@@ -120,7 +146,7 @@ export function createClient(options: ClientOptions): KairosClient {
           setTimeout(start, 30_000)
           return
         }
-        child = spawn(binary, ['watch', '--json'], { cwd: '/', stdio: ['ignore', 'pipe', 'ignore'], shell: false })
+        child = spawn(binary, ['watch', '--json'], { cwd: '/', stdio: ['ignore', 'pipe', 'ignore'], shell: false, windowsHide: true })
         let buffer = ''
         child.stdout?.setEncoding('utf8')
         child.stdout?.on('data', (chunk: string) => {

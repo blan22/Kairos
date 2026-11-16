@@ -8,15 +8,16 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use kairos_agenda::{
-    ControlFile, KairosControl, NOTIFIER_APP_REL, NativeNotifier, NextContext, ORCA_BIN, OrcaPanelOpener, SourceHealth,
-    SourceHealthBook, StateBuilder,
+    ControlFile, DesktopNotifier, KairosControl, NOTIFIER_APP_REL, NativeNotifier, NextContext, ORCA_BIN,
+    OrcaPanelOpener, SourceHealth, SourceHealthBook, StateBuilder,
 };
 use kairos_core::model::Source;
+use kairos_core::platform::Os;
 use kairos_core::ports::{Clock, Notifier, PanelOpener, SystemClock};
 use kairos_core::process::{ProcessRunner, SystemProcessRunner};
 use kairos_core::{Instant, KairosError, KairosHome, KairosResult, home, js};
 use kairos_ledger::OffDateBook;
-use kairos_ops::{ResumeFile, find_binary, find_claude};
+use kairos_ops::{ResumeFile, default_service_dir, find_binary, find_claude, system_tool};
 use kairos_sessions::OrcaClient;
 use kairos_source_github::GithubConfig;
 use kairos_store::Database;
@@ -55,6 +56,42 @@ fn doctor_notifier_bin(env: &BTreeMap<String, String>, layout: Option<&InstallLa
         None => layout?.binary_asset_root()?.join(NOTIFIER_APP_REL),
     };
     Path::is_file(&bin).then(|| bin.to_string_lossy().into_owned())
+}
+
+/// 패널을 여는 orca의 기본 경로. macOS는 앱 번들 안의 고정 경로다. 다른 OS는 설치 위치가 하나가 아니라 PATH에서 찾는다.
+fn default_orca_bin(env: &BTreeMap<String, String>) -> String {
+    match Os::current() {
+        Os::MacOs => ORCA_BIN.to_owned(),
+        Os::Linux | Os::Windows => {
+            find_binary("orca", env.get("PATH").map_or("", String::as_str)).unwrap_or_else(|| "orca".to_owned())
+        }
+    }
+}
+
+/// OS의 알림. macOS는 헬퍼 번들, Linux는 notify-send, Windows는 PowerShell 토스트다. `KAIROS_NOTIFIER`는 셋 모두 그 실행 파일로 바꾼다.
+/// 도구가 없으면 알리지 않는다.
+fn system_notifier(
+    env: &BTreeMap<String, String>,
+    layout: Option<&InstallLayout>,
+    runner: &Arc<dyn ProcessRunner>,
+) -> Option<Arc<dyn Notifier>> {
+    let runner = runner.clone();
+    match Os::current() {
+        Os::MacOs => {
+            notifier_bin(env, layout).map(|bin| Arc::new(NativeNotifier::new(runner, bin)) as Arc<dyn Notifier>)
+        }
+        // 준 값이 없는 파일이면 알리지 않는다. macOS와 같다.
+        Os::Linux => match given(env, "KAIROS_NOTIFIER") {
+            Some(bin) => Path::is_file(Path::new(bin)).then(|| bin.to_owned()),
+            None => find_binary("notify-send", env.get("PATH").map_or("", String::as_str)),
+        }
+        .map(|bin| Arc::new(DesktopNotifier::notify_send(runner, bin)) as Arc<dyn Notifier>),
+        Os::Windows => {
+            let bin = given(env, "KAIROS_NOTIFIER")
+                .map_or_else(|| system_tool(r"WindowsPowerShell\v1.0\powershell.exe"), str::to_owned);
+            Path::is_file(Path::new(&bin)).then(|| Arc::new(DesktopNotifier::toast(runner, bin)) as Arc<dyn Notifier>)
+        }
+    }
 }
 
 /// 프로세스 환경. 자식 환경이 문자열이라 UTF-8이 아닌 값은 넘어가지 않는다.
@@ -114,18 +151,24 @@ impl AppContext {
         let runner: Arc<dyn ProcessRunner> = Arc::new(SystemProcessRunner);
         let clock: Arc<dyn Clock> = Arc::new(SystemClock);
         let layout = InstallLayout::current();
-        let notifier = notifier_bin(&env, layout.as_ref());
+        let notifier = system_notifier(&env, layout.as_ref(), &runner);
+        let orca_bin = default_orca_bin(&env);
         let mut context = Self::new(KairosHome::from_env(), clock, runner.clone(), env).with_console(Console::system());
         // doctor가 상태를 묻는 헬퍼는 실행 파일 쪽 설치 자료에서만 고른다. 지금 폴더는 남의 저장소일 수 있다.
         context.notifier_bin = doctor_notifier_bin(&context.env, layout.as_ref());
-        if let Some(bin) = notifier {
-            context = context.with_notifier(Arc::new(NativeNotifier::new(runner.clone(), bin)));
+        if let Some(notifier) = notifier {
+            context = context.with_notifier(notifier);
         }
         // 알림 뒤의 패널 열기는 Orca를 켰을 때만이다. 다른 호스트는 reveal.json과 next --json으로 스스로 연다.
         if kairos_core::profile::current().hosts.is_enabled("orca") {
-            context = context.with_panel(Arc::new(OrcaPanelOpener::new(runner)));
+            context = context.with_panel(Arc::new(OrcaPanelOpener::with_bin(runner, orca_bin)));
         }
         Self { layout, ..context }
+    }
+
+    /// 조립할 때 고른 알림. 없으면 알리지 않는다.
+    pub fn notifier(&self) -> Option<Arc<dyn Notifier>> {
+        self.notifier.clone()
     }
 
     #[must_use]
@@ -239,7 +282,7 @@ impl AppContext {
     /// 패널을 여는 orca. `KAIROS_ORCA`가 있으면 그 값, 없으면 틱과 같은 고정 경로다.
     /// 알림을 눌러 불릴 때는 PATH가 비어 있어서 PATH를 찾지 않는다.
     pub fn panel_orca_bin(&self) -> String {
-        given(&self.env, "KAIROS_ORCA").unwrap_or(ORCA_BIN).to_owned()
+        given(&self.env, "KAIROS_ORCA").map_or_else(|| default_orca_bin(&self.env), str::to_owned)
     }
 
     /// Orca를 앞으로 끌어오는 open.
@@ -272,9 +315,20 @@ impl AppContext {
     }
 
     /// 세션 토큰의 키체인. 시험은 `KAIROS_SECURITY`로 가짜를 준다.
+    /// macOS는 security, Linux는 secret-tool이다. Windows는 세션을 열지 않아 키체인이 없다.
     pub fn keychain(&self) -> kairos_sessions::Keychain {
-        let bin = given(&self.env, "KAIROS_SECURITY").unwrap_or(kairos_sessions::SECURITY_BIN);
-        kairos_sessions::Keychain::new(self.runner.clone(), bin)
+        let runner = self.runner.clone();
+        match Os::current() {
+            Os::MacOs => kairos_sessions::Keychain::new(
+                runner,
+                given(&self.env, "KAIROS_SECURITY").unwrap_or(kairos_sessions::SECURITY_BIN),
+            ),
+            Os::Linux => kairos_sessions::Keychain::secret_tool(
+                runner,
+                given(&self.env, "KAIROS_SECURITY").unwrap_or(kairos_sessions::SECRET_TOOL_BIN),
+            ),
+            Os::Windows => kairos_sessions::Keychain::unavailable(runner),
+        }
     }
 
     pub fn open_bin(&self) -> String {
@@ -285,8 +339,12 @@ impl AppContext {
     pub fn claude_bin(&self) -> Option<String> {
         let given = self.env.get("KAIROS_CLAUDE").map(|value| js::trim(value)).filter(|value| !value.is_empty());
         given.map(str::to_owned).or_else(|| {
-            let agents = self.user_home.join("Library").join("LaunchAgents");
-            find_claude(self.env.get("PATH").map_or("", String::as_str), &agents)
+            // 설치가 스케줄러 파일에 적어 둔 claude도 찾는다.
+            let services = match Os::current() {
+                Os::MacOs => self.user_home.join("Library").join("LaunchAgents"),
+                os => default_service_dir(os, &self.home),
+            };
+            find_claude(self.env.get("PATH").map_or("", String::as_str), &services)
         })
     }
 
@@ -308,7 +366,12 @@ impl AppContext {
     }
 
     pub fn doctor(&self) -> Doctor {
-        let config = DoctorConfig { home: self.home.clone(), user_home: self.user_home.clone(), env: self.env.clone() };
+        let config = DoctorConfig {
+            home: self.home.clone(),
+            user_home: self.user_home.clone(),
+            env: self.env.clone(),
+            os: kairos_core::platform::Os::current(),
+        };
         Doctor::new(config, self.clock.clone(), self.runner.clone(), self.sources.sources().to_vec())
             .with_notifier(self.notifier_bin.clone())
     }

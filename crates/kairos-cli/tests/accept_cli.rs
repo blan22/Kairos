@@ -1,4 +1,7 @@
 //! 시험 7건. 나머지는 kairos-sessions에 있다
+// 가짜 실행 파일(sh)과 unix 권한을 쓰는 시험이다. Windows는 단위 시험과 Windows 백엔드 시험으로 본다.
+// 세션은 macOS에서만 연다(`Os::supports_sessions`). 다른 OS의 거절은 session_e2e가 본다.
+#![cfg(target_os = "macos")]
 #![allow(clippy::unwrap_used)]
 
 mod common;

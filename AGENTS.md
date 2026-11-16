@@ -25,8 +25,8 @@ kairos는 회사 일정과 할 일을 모아 Orca, Claude Code, VS Code에 보�
 | `profiles/` | 조직 프로필을 두는 곳. `*.toml`은 git이 무시한다 |
 | `examples/` | 합성 값으로 만든 설정 예시(`org.toml`은 테스트 프로필과 같다) |
 | `docs/` | 사용자 문서와 호스트 계약 |
-| `ops/` | launchd 템플릿, 감시자(zsh), 알림 헬퍼(Swift) |
-| `scripts/` | `verify.sh`, `check-personal-data.sh`, 하네스 테스트, 설치(`install.sh`, `install-release.sh`), 릴리스 패키징(`package.sh`) |
+| `ops/` | launchd 템플릿, 감시자(zsh), 알림 헬퍼(Swift), systemd 템플릿(`systemd/`), 작업 스케줄러 템플릿(`windows/`) |
+| `scripts/` | `verify.sh`, `check-personal-data.sh`, 하네스 테스트, 설치(macOS `install.sh`, `install-release.sh`, Linux `install-linux.sh`, `install-release-linux.sh`, Windows `install.ps1`, `install-release.ps1`), 릴리스 패키징(`package.sh`, `package-linux.sh`, `package.ps1`) |
 
 ## 검증
 

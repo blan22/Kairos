@@ -1,0 +1,14 @@
+# kairos install이 만든 파일이다. 손으로 고치지 않는다. 다시 만들려면 kairos install --register.
+[Unit]
+Description=kairos watchdog
+
+[Service]
+Type=oneshot
+ExecStart="{{KAIROS_BIN}}" watchdog
+Environment="PATH=/usr/bin:/bin"
+Environment="LANG=C.UTF-8"
+Environment="KAIROS_HOME={{KAIROS_HOME}}"
+UMask=0077
+StandardOutput=append:{{LOG_DIR}}/watchdog.log
+StandardError=append:{{LOG_DIR}}/watchdog.log
+TimeoutStartSec=2min

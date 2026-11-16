@@ -1,5 +1,7 @@
 //! 시험. 프로세스 없이 같은 동작을 라이브러리로 본다
 //! 응답 틀과 종료 코드, state.json은 kairos-cli의 몫이다.
+// 가짜 실행 파일(sh)과 unix 권한을 쓰는 시험이다. Windows는 단위 시험과 Windows 백엔드 시험으로 본다.
+#![cfg(unix)]
 #![allow(clippy::unwrap_used)]
 
 mod common;

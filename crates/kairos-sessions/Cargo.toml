@@ -14,12 +14,13 @@ kairos-core.workspace = true
 kairos-ledger = { path = "../kairos-ledger" }
 kairos-source-github = { path = "../kairos-source-github" }
 kairos-store.workspace = true
-libc.workspace = true
 regex.workspace = true
 serde.workspace = true
 serde_json.workspace = true
-signal-hook.workspace = true
 uuid.workspace = true
+
+[target.'cfg(unix)'.dependencies]
+signal-hook.workspace = true
 
 [dev-dependencies]
 kairos-core = { workspace = true, features = ["test-profile"] }

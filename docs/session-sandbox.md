@@ -2,6 +2,8 @@
 
 세션을 어떻게 띄우고 어떻게 가두는지 설명하는 설계 문서입니다. 세션을 켜고 쓰는 방법은 [에이전트 세션](sessions.md)에, 지켜야 하는 보안 기준은 [SECURITY.md](../SECURITY.md)에 있습니다. 세션 코드는 `crates/kairos-sessions`에 있습니다.
 
+이 문서는 macOS의 샌드박스를 설명합니다. Linux와 Windows에서는 `kairos_core::platform::Os::supports_sessions`가 거짓이라 수락, 세션 켜기, `kairos-run`이 모두 거절합니다. Linux용 차단 목록(`SessionProfile::for_os`)은 샌드박스가 기준을 지킬 수 있게 되면 쓰려고 남겨 둔 것입니다. 다시 열 조건은 [지원하는 OS](platforms.md#세션을-macos에서만-여는-이유)에 있습니다.
+
 ## 수락 순서
 
 `kairos accept`는 `BEGIN IMMEDIATE` 트랜잭션으로 run을 `claimed`로 기록하고 항목을 `accepted`로 바꿉니다. 경쟁에서 진 쪽은 기존 run을 받습니다. 그다음 Orca를 아래 순서로 호출합니다. 도중에 사용자가 끝내기나 취소를 누르면 그 결과를 돌려주고 멈춥니다.

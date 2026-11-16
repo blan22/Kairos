@@ -3,8 +3,9 @@
 use std::collections::BTreeMap;
 use std::fs;
 use std::io::Write;
-use std::os::unix::fs::OpenOptionsExt;
 use std::path::Path;
+
+use kairos_core::platform::CreateMode;
 
 use crate::raw::{RawBinding, RawConnections, RawIdentity, RawUser, SCHEMA};
 use crate::{CONNECTIONS_FILE, ConfigError, ORG_FILE, USER_FILE, files, from_text};
@@ -86,7 +87,7 @@ impl Connections {
         let failed = |_| ConfigError::file(CONNECTIONS_FILE, "config_write_failed");
         let temporary = root.join(format!(".{CONNECTIONS_FILE}.{}.tmp", std::process::id()));
         let mut file =
-            fs::OpenOptions::new().write(true).create_new(true).mode(0o600).open(&temporary).map_err(failed)?;
+            fs::OpenOptions::new().write(true).create_new(true).create_mode(0o600).open(&temporary).map_err(failed)?;
         let written = file.write_all(content.as_bytes()).and_then(|()| file.sync_all());
         if written.is_err() {
             let _ = fs::remove_file(&temporary);

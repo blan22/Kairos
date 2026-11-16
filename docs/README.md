@@ -8,6 +8,7 @@
 |---|---|
 | [핵심 개념](concepts.md) | 항목, 등급, 표시 게이트, 세션 같은 낱말의 뜻 |
 | [설치](install.md) | 설치, 업데이트, 제거 |
+| [지원하는 OS](platforms.md) | macOS, Linux, Windows에서 다른 점과 세션을 macOS에서만 여는 이유 |
 | [설정](configuration.md) | `kairos setup`, 조직 프로필, 설정 파일, 근무 일정 |
 | [항목과 알림](items.md) | 항목이 열리고 닫히는 방식, 예산, Mac 알림 |
 | [에이전트 세션](sessions.md) | 세션 켜기, 맡길 수 있는 일, PR 올리기 |

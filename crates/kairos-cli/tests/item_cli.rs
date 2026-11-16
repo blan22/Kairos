@@ -1,5 +1,7 @@
 //! 항목 명령의 프로세스 시험.
 //! 같은 파일의 수집과 doctor 시험은 kairos-tick, 알림 시험은 kairos-agenda가 맡는다.
+// 가짜 실행 파일(sh)과 unix 권한을 쓰는 시험이다. Windows는 단위 시험과 Windows 백엔드 시험으로 본다.
+#![cfg(unix)]
 #![allow(clippy::unwrap_used)]
 
 mod common;
@@ -208,6 +210,8 @@ fn 모르는_옵션도_json_오류로_답한다() {
     assert_eq!((done.status, &body["ok"], &body["error"]["code"]), (2, &json!(false), &json!("usage")));
 }
 
+/// 세션을 여는 흐름이다. 세션은 macOS에서만 연다.
+#[cfg(target_os = "macos")]
 #[test]
 fn 플레이북_대상이_아닌_항목의_accept는_아무것도_바꾸지_않는다() {
     let cli = cli_with_item();

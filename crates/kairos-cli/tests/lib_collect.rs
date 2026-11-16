@@ -1,6 +1,8 @@
 //! `kairos collect`의 틱은 실제 알림 경로라서 바이너리로 돌리지 않는다. 알림 헬퍼와 패널 명령은 PATH로 막지 못한다.
 //! 여기서는 같은 명령을 `AppContext`로 돌리되 알림과 패널, 프로세스 실행기를 대역으로 준다.
 //! 대역 실행기는 알림과 패널 명령이 오면 시험을 깨뜨린다.
+// 가짜 실행 파일(sh)과 unix 권한을 쓰는 시험이다. Windows는 단위 시험과 Windows 백엔드 시험으로 본다.
+#![cfg(unix)]
 #![allow(clippy::unwrap_used)]
 
 use std::collections::BTreeMap;

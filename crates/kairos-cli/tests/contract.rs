@@ -1,4 +1,6 @@
 //! 명령 틀의 약속. 인자 분기를 프로세스로 고정한다.
+// 가짜 실행 파일(sh)과 unix 권한을 쓰는 시험이다. Windows는 단위 시험과 Windows 백엔드 시험으로 본다.
+#![cfg(unix)]
 #![allow(clippy::unwrap_used)]
 
 mod common;
@@ -190,6 +192,8 @@ fn pause의_분은_js_number를_따른다() {
     assert_eq!((huge.status, huge.err.as_str()), (1, "kairos pause 실패: unexpected\n"));
 }
 
+/// 세션을 여는 흐름이다. 세션은 macOS에서만 연다.
+#[cfg(target_os = "macos")]
 #[test]
 fn 세션_밖_문구와_빈_환경값() {
     let cli = Cli::new();

@@ -1,15 +1,18 @@
-use std::fs::{self, DirBuilder, Permissions};
-use std::os::unix::fs::{DirBuilderExt, PermissionsExt};
+use std::collections::BTreeMap;
+use std::fs::{self, DirBuilder};
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
+use std::time::Duration;
 
 use kairos_core::home::DIR_MODE;
+use kairos_core::platform::{self, CreateMode, Os, set_mode};
+use kairos_core::process::{ProcessRequest, ProcessRunner};
 use kairos_core::{KairosError, KairosResult};
 
 use super::plan::InstallPlan;
 use crate::fs_util::remove_if_present;
 
 const EXECUTABLE_MODE: u32 = 0o755;
-const BINARIES: [&str; 2] = ["kairos", "kairos-run"];
 const SAME_ROOT: &str = "install_same_root";
 /// `ops` 안의 알림 헬퍼 폴더. 소스, 빌드 찌꺼기와 함께 있어 번들만 가져간다.
 const NOTIFIER_DIR: &str = "notifier";
@@ -23,17 +26,16 @@ pub(super) fn current_binary_dir() -> KairosResult<PathBuf> {
 
 /// 실행 파일을 임시 이름으로 복사한 뒤 rename한다. launchd가 3분마다 이 경로를 띄우므로 복사 중인 파일이 실행되면 안 된다.
 fn place_binary(source: &Path, target: &Path) -> KairosResult<()> {
-    let executable = Permissions::from_mode(EXECUTABLE_MODE);
     // 설치본의 kairos로 다시 설치하면 원본과 대상이 같다. 복사하면 파일이 비워진다.
     if fs::canonicalize(target).is_ok_and(|real| fs::canonicalize(source).is_ok_and(|origin| origin == real)) {
-        fs::set_permissions(target, executable)?;
+        set_mode(target, EXECUTABLE_MODE)?;
         return Ok(());
     }
     let mut temporary = target.as_os_str().to_owned();
     temporary.push(format!(".{}.tmp", std::process::id()));
     let temporary = PathBuf::from(temporary);
     let placed = fs::copy(source, &temporary)
-        .and_then(|_| fs::set_permissions(&temporary, executable))
+        .and_then(|_| set_mode(&temporary, EXECUTABLE_MODE))
         .and_then(|()| fs::rename(&temporary, target));
     if placed.is_err() {
         let _ = remove_if_present(&temporary);
@@ -144,10 +146,28 @@ fn copy_ops(source: &Path, target: &Path) -> KairosResult<()> {
     Ok(())
 }
 
+/// 실행본의 `bin`에 놓는 실행 파일. Windows는 작업 스케줄러가 띄우는 창 없는 런처가 더 있다.
+pub(super) fn binaries(os: Os) -> Vec<String> {
+    let mut names = vec![os.exe("kairos"), os.exe("kairos-run")];
+    if os == Os::Windows {
+        names.push(os.exe("kairos-launch"));
+    }
+    names
+}
+
+/// zsh 감시자에 실행 권한을 준다. macOS만 있다.
+fn mark_watchdog(plan: &InstallPlan) -> KairosResult<()> {
+    if let Some(watchdog) = &plan.watchdog {
+        set_mode(watchdog, EXECUTABLE_MODE)?;
+    }
+    Ok(())
+}
+
 /// 실행본에 필요한 것만 놓는다. 소스, 시험, 개발 도구, 데이터는 가져가지 않는다.
 pub(super) fn copy_runtime(plan: &InstallPlan, root: &Path, binary_dir: &Path) -> KairosResult<()> {
+    let names = binaries(plan.os);
     // 실행본을 건드리기 전에 확인한다. kairos-run이 빠지면 세션이 열릴 때에야 드러난다.
-    if BINARIES.iter().any(|name| !binary_dir.join(name).is_file()) {
+    if names.iter().any(|name| !binary_dir.join(name).is_file()) {
         return Err(KairosError::new("install_binary_missing"));
     }
     // 설치본의 kairos로 다시 설치하면(같은 판의 kairos setup) 원본과 대상이 같다. 놓을 것이 이미 제자리에 있으므로 복사하지 않는다.
@@ -156,13 +176,12 @@ pub(super) fn copy_runtime(plan: &InstallPlan, root: &Path, binary_dir: &Path) -
         if !same_place(binary_dir, &plan.runtime_dir.join("bin")) {
             return Err(KairosError::new(SAME_ROOT));
         }
-        fs::set_permissions(&plan.watchdog, Permissions::from_mode(EXECUTABLE_MODE))?;
-        return Ok(());
+        return mark_watchdog(plan);
     }
-    DirBuilder::new().recursive(true).mode(DIR_MODE).create(&plan.runtime_dir)?;
+    DirBuilder::new().recursive(true).create_mode(DIR_MODE).create(&plan.runtime_dir)?;
     let bin_dir = plan.runtime_dir.join("bin");
     fs::create_dir_all(&bin_dir)?;
-    for name in BINARIES {
+    for name in &names {
         place_binary(&binary_dir.join(name), &bin_dir.join(name))?;
     }
     if root.join("ops").exists() {
@@ -171,19 +190,50 @@ pub(super) fn copy_runtime(plan: &InstallPlan, root: &Path, binary_dir: &Path) -
     if root.join("plugins").exists() {
         copy_tree(&root.join("plugins"), &plan.runtime_dir.join("plugins"))?;
     }
-    fs::set_permissions(&plan.watchdog, Permissions::from_mode(EXECUTABLE_MODE))?;
-    Ok(())
+    mark_watchdog(plan)
 }
 
+const JUNCTION_TIMEOUT: Duration = Duration::from_secs(20);
+/// 경로는 환경으로 넘긴다. 명령 줄에 넣으면 PowerShell이 경로의 `$`와 따옴표를 해석한다.
+const JUNCTION_SCRIPT: &str =
+    "New-Item -ItemType Junction -Path $env:KAIROS_JUNCTION_LINK -Target $env:KAIROS_JUNCTION_TARGET | Out-Null";
+
 /// `<홈>/current`를 이번 판의 폴더로 바꿔 건다. 호스트 어댑터는 판 번호 없이 `current/bin/kairos`를 부른다.
-/// 같은 폴더에 임시 링크를 만든 뒤 rename한다. 읽는 쪽은 옛 판이나 새 판만 본다.
-pub(super) fn link_current(home: &Path, version: &str) -> KairosResult<()> {
+/// unix는 같은 폴더에 임시 링크를 만든 뒤 rename한다. 읽는 쪽은 옛 판이나 새 판만 본다.
+/// Windows는 심볼릭 링크에 개발자 모드나 관리자 권한이 필요해 권한 없이 되는 디렉터리 정션을 쓴다.
+/// 폴더는 있는 폴더 위로 rename되지 않으므로 옛 정션을 지운 뒤 끼운다. 그 사이에 부른 호스트는 한 번 실패하고 다음에 다시 부른다.
+pub(super) fn link_current(os: Os, home: &Path, version: &str, runner: &Arc<dyn ProcessRunner>) -> KairosResult<()> {
     let link = home.join("current");
     let temporary = home.join(format!(".current.{}.tmp", std::process::id()));
-    let _ = fs::remove_file(&temporary);
-    std::os::unix::fs::symlink(version, &temporary)?;
-    if let Err(error) = fs::rename(&temporary, &link) {
+    if os != Os::Windows {
         let _ = fs::remove_file(&temporary);
+        platform::symlink_dir(Path::new(version), &temporary)?;
+        if let Err(error) = fs::rename(&temporary, &link) {
+            let _ = fs::remove_file(&temporary);
+            return Err(error.into());
+        }
+        return Ok(());
+    }
+    let _ = fs::remove_dir(&temporary);
+    let mut env: BTreeMap<String, String> = std::env::vars().collect();
+    env.insert("KAIROS_JUNCTION_LINK".to_owned(), temporary.to_string_lossy().into_owned());
+    env.insert("KAIROS_JUNCTION_TARGET".to_owned(), home.join(version).to_string_lossy().into_owned());
+    // 다른 Windows 도구처럼 PATH가 아니라 %SystemRoot% 아래의 PowerShell을 부른다.
+    let request = ProcessRequest::new(
+        super::tasks::system_tool(r"WindowsPowerShell\v1.0\powershell.exe"),
+        ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", JUNCTION_SCRIPT],
+        JUNCTION_TIMEOUT,
+    )
+    .env(env);
+    if !runner.run(&request).success() {
+        let _ = fs::remove_dir(&temporary);
+        return Err(KairosError::new("install_current_link_failed"));
+    }
+    if fs::symlink_metadata(&link).is_ok() {
+        fs::remove_dir(&link).or_else(|_| fs::remove_file(&link))?;
+    }
+    if let Err(error) = fs::rename(&temporary, &link) {
+        let _ = fs::remove_dir(&temporary);
         return Err(error.into());
     }
     Ok(())
@@ -200,7 +250,9 @@ mod tests {
         fs::write(&path, "binary").unwrap();
         place_binary(&path, &path).unwrap();
         assert_eq!(fs::read_to_string(&path).unwrap(), "binary");
-        assert_eq!(fs::metadata(&path).unwrap().permissions().mode() & 0o777, EXECUTABLE_MODE);
+        if cfg!(unix) {
+            assert_eq!(platform::mode_of(&fs::metadata(&path).unwrap()), Some(EXECUTABLE_MODE));
+        }
     }
 
     #[test]

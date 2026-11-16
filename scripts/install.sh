@@ -64,7 +64,7 @@ if (( update )); then
 fi
 
 step "1/4 도구 확인"
-[[ $(uname -s) == Darwin && $(uname -m) == arm64 ]] || fail "Apple Silicon Mac에서만 설치합니다"
+[[ $(uname -s) == Darwin && $(uname -m) == arm64 ]] || fail "Apple Silicon Mac에서만 설치합니다. Linux는 scripts/install-linux.sh, Windows는 scripts/install.ps1을 쓰세요"
 # 하나씩 멈추면 설치하고 다시 돌리기를 되풀이한다. 빠진 것을 모아 한 번에 알린다.
 missing=()
 if (( ! prebuilt )); then

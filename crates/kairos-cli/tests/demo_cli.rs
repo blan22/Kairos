@@ -1,4 +1,6 @@
 //! `kairos demo`. 계정 없이 보는 합성 데이터 폴더. 외부 실행 파일은 모두 없는 경로를 가리킨다.
+// 가짜 실행 파일(sh)과 unix 권한을 쓰는 시험이다. Windows는 단위 시험과 Windows 백엔드 시험으로 본다.
+#![cfg(unix)]
 #![allow(clippy::unwrap_used)]
 
 mod common;

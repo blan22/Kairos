@@ -10,6 +10,7 @@ pub mod instant;
 pub mod js;
 pub mod local_date;
 pub mod model;
+pub mod platform;
 pub mod ports;
 pub mod process;
 pub mod profile;

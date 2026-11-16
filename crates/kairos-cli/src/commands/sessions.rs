@@ -1,5 +1,6 @@
 use kairos_agenda::{DisplayGate, KairosControl, SessionApproval, SessionLock};
 use kairos_core::KairosResult;
+use kairos_core::platform::Os;
 use kairos_core::ports::FixedClock;
 use kairos_sessions::{OrcaClient, RunSynchronizer, SessionAdmission, SessionLauncher, SessionRefusal};
 use kairos_store::Database;
@@ -77,6 +78,9 @@ impl Command for Accept {
         let cancel = parsed.flag("cancel");
         if !cancel && inside_session(context, parsed.text("from")) {
             return Ok(reply.fail("session_caller", "세션 안에서는 수락할 수 없습니다. 패널에서 누르세요", 1));
+        }
+        if !cancel && !Os::current().supports_sessions() {
+            return Ok(reply.fail("sessions_unsupported", kairos_sessions::SESSIONS_UNSUPPORTED, 1));
         }
         let database = context.open_db()?;
         let orca = context.orca();
@@ -224,6 +228,9 @@ impl Command for Sessions {
         }
         if mode == Some("on") && context.env_set("CLAUDECODE") {
             return Ok(reply.fail("session_caller", "세션 안에서는 켤 수 없습니다", 1));
+        }
+        if mode == Some("on") && !Os::current().supports_sessions() {
+            return Ok(reply.fail("sessions_unsupported", kairos_sessions::SESSIONS_UNSUPPORTED, 1));
         }
         let approval = SessionApproval::new(context.home());
         if let Some(mode) = mode {

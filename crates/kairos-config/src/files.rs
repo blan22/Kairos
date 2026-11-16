@@ -1,9 +1,10 @@
 //! 설정 파일 읽기. 설정은 T1 판정과 세션 자격을 바꾸므로 남이 바꿀 수 있는 파일은 읽지 않는다.
 
-use std::fs::{self, File, Metadata};
+use std::fs::{self, Metadata, OpenOptions};
 use std::io::{self, Read};
-use std::os::unix::fs::MetadataExt;
 use std::path::Path;
+
+use kairos_core::platform::{self, NoFollow};
 
 use crate::ConfigError;
 
@@ -22,20 +23,20 @@ pub(crate) fn read_owned(root: &Path, name: &'static str) -> Result<Option<Strin
         }
         Err(_) => return Err(ConfigError::file(name, "config_unreadable")),
     };
-    let owner = fs::metadata(root).map_err(|_| ConfigError::file(name, "config_unreadable"))?.uid();
+    let owner = platform::owner_of(&fs::metadata(root).map_err(|_| ConfigError::file(name, "config_unreadable"))?);
     let unsafe_file = |metadata: &Metadata| {
-        !metadata.is_file()
-            || metadata.mode() & 0o022 != 0
-            || metadata.uid() != owner
-            || metadata.nlink() != 1
-            || metadata.len() > MAX_BYTES
+        !metadata.is_file() || platform::foreign_or_shared(metadata, owner, 0o022) || metadata.len() > MAX_BYTES
     };
     if linked.file_type().is_symlink() || unsafe_file(&linked) {
         return Err(ConfigError::file(name, "config_unsafe"));
     }
-    let file = File::open(&path).map_err(|_| ConfigError::file(name, "config_unreadable"))?;
+    let file = OpenOptions::new()
+        .read(true)
+        .no_follow()
+        .open(&path)
+        .map_err(|_| ConfigError::file(name, "config_unreadable"))?;
     let opened = file.metadata().map_err(|_| ConfigError::file(name, "config_unreadable"))?;
-    if opened.dev() != linked.dev() || opened.ino() != linked.ino() || unsafe_file(&opened) {
+    if opened.file_type().is_symlink() || !platform::same_file(&opened, &linked) || unsafe_file(&opened) {
         return Err(ConfigError::file(name, "config_unsafe"));
     }
     let mut content = String::new();

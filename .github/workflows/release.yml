@@ -1,7 +1,10 @@
 name: release
 
 # v0.3.0 같은 태그를 올리면 릴리스 묶음을 만들어 GitHub 릴리스에 붙인다.
-# 묶음은 scripts/install-release.sh가 받는다. 묶는 일은 scripts/package.sh가 한다(로컬에서도 같은 명령이다).
+# macOS 묶음은 scripts/install-release.sh, Linux는 install-release-linux.sh, Windows는 install-release.ps1이 받는다.
+# 묶는 일은 scripts/package.sh, package-linux.sh, package.ps1이 한다(로컬에서도 같은 명령이다).
+# macOS 작업이 초안 릴리스를 만들고, Linux와 Windows 작업이 묶음을 더한 뒤 마지막 작업이 공개한다.
+# 초안인 동안 latest/download는 앞 판을 가리킨다. 묶음 하나라도 빠지면 공개하지 않는다.
 on:
   push:
     tags: ['v*']
@@ -39,4 +42,58 @@ jobs:
           gh release create "$GITHUB_REF_NAME" \
             target/dist/kairos-aarch64-apple-darwin.tar.gz \
             target/dist/kairos-aarch64-apple-darwin.tar.gz.sha256 \
-            --title "kairos $GITHUB_REF_NAME" --generate-notes --verify-tag
+            --title "kairos $GITHUB_REF_NAME" --generate-notes --verify-tag --draft
+
+  # glibc가 낮은 러너에서 빌드한다. 묶음은 glibc 2.35 이상(Ubuntu 22.04, Debian 12 등)에서 돈다.
+  linux:
+    needs: release
+    strategy:
+      matrix:
+        include:
+          - runner: ubuntu-22.04
+            arch: x86_64
+          - runner: ubuntu-22.04-arm
+            arch: aarch64
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - run: rustup show
+      - run: scripts/package-linux.sh
+      - name: 릴리스에 더한다
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ASSET: kairos-${{ matrix.arch }}-unknown-linux-gnu.tar.gz
+        run: gh release upload "$GITHUB_REF_NAME" "target/dist/$ASSET" "target/dist/$ASSET.sha256"
+
+  windows:
+    needs: release
+    runs-on: windows-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - run: rustup show
+      - shell: pwsh
+        run: scripts\package.ps1
+      - name: 릴리스에 더한다
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release upload $env:GITHUB_REF_NAME target\dist\kairos-x86_64-pc-windows-msvc.zip target\dist\kairos-x86_64-pc-windows-msvc.zip.sha256
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+  publish:
+    needs: [linux, windows]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: 초안을 공개한다
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: gh release edit "$GITHUB_REF_NAME" --draft=false

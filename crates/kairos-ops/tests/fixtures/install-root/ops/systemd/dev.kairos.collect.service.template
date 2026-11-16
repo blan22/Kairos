@@ -1,0 +1,17 @@
+# kairos install이 만든 파일이다. 손으로 고치지 않는다. 다시 만들려면 kairos install --register.
+[Unit]
+Description=kairos collect tick
+
+[Service]
+Type=oneshot
+ExecStart="{{KAIROS_BIN}}" collect
+Environment="PATH={{PATH}}"
+Environment="LANG=C.UTF-8"
+Environment="KAIROS_HOME={{KAIROS_HOME}}"
+Environment="KAIROS_CLAUDE={{CLAUDE}}"
+Environment="KAIROS_GH={{GH}}"
+Environment="KAIROS_PLUGIN_DIR={{PLUGIN_DIR}}"
+UMask=0077
+StandardOutput=append:{{LOG_DIR}}/collect.log
+StandardError=append:{{LOG_DIR}}/collect.log
+TimeoutStartSec=15min

@@ -52,6 +52,32 @@ impl GitHostError {
     }
 }
 
+/// 있는 조상까지 링크를 풀고 나머지 이름을 붙인다. 아직 없는 worktree 폴더도 실제 자리로 비교한다.
+/// 풀 수 없는 모양(`..`로 끝나는 경로)은 그대로 둔다.
+fn resolved(path: &Path) -> PathBuf {
+    let mut existing = path;
+    let mut rest = Vec::new();
+    loop {
+        if let Ok(real) = std::fs::canonicalize(existing) {
+            return rest.iter().rev().fold(real, |acc, name| acc.join(name));
+        }
+        match (existing.parent(), existing.file_name()) {
+            (Some(parent), Some(name)) => {
+                rest.push(name.to_owned());
+                existing = parent;
+            }
+            _ => return path.to_path_buf(),
+        }
+    }
+}
+
+/// worktree 폴더가 데이터 폴더 안인가. 적힌 경로와 실제 경로를 모두 본다.
+/// macOS의 `/var`와 `/private/var`처럼 링크로 다른 이름을 주어도 같은 폴더면 안으로 본다.
+fn inside(root: &Path, data_folder: &Path) -> bool {
+    let (real_root, real_data) = (resolved(root), resolved(data_folder));
+    [root, real_root.as_path()].iter().any(|path| path.starts_with(data_folder) || path.starts_with(&real_data))
+}
+
 #[derive(Clone)]
 pub struct GitWorkspaces {
     runner: Arc<dyn ProcessRunner>,
@@ -95,7 +121,7 @@ impl GitWorkspaces {
             return Err(GitHostError::NoClone);
         }
         let root = Self::root_for(clone);
-        if root.starts_with(&self.data_folder) {
+        if inside(&root, &self.data_folder) {
             return Err(GitHostError::InsideDataFolder);
         }
         std::fs::create_dir_all(&root).map_err(|_| GitHostError::WorktreeFailed)?;
@@ -128,4 +154,22 @@ pub fn git_selector(path: &Path) -> String {
 
 pub fn is_git_selector(selector: Option<&str>) -> bool {
     selector.is_some_and(|selector| selector.starts_with(GIT_SELECTOR_PREFIX))
+}
+
+#[cfg(test)]
+#[cfg(unix)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn 링크로_다른_이름을_주어도_데이터_폴더_안이면_안으로_본다() {
+        let dir = tempfile::tempdir().unwrap();
+        let data = dir.path().join("data");
+        std::fs::create_dir_all(&data).unwrap();
+        let alias = dir.path().join("alias");
+        std::os::unix::fs::symlink(&data, &alias).unwrap();
+        assert!(inside(&alias.join("worktrees/new"), &data), "없는 하위 폴더도 실제 자리로 본다");
+        assert!(inside(&data.join("w"), &alias));
+        assert!(!inside(&dir.path().join("elsewhere/w"), &data));
+    }
 }

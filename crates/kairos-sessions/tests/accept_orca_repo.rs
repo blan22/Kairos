@@ -1,5 +1,7 @@
 //! `[hosts.orca.repos]`가 없을 때 작업 저장소의 Orca ID를 `repo list`로 찾는다.
 //! 프로필은 프로세스에 하나라서 이 파일은 Orca ID가 빠진 합성 프로필을 따로 정한다.
+// 가짜 실행 파일(sh)과 unix 권한을 쓰는 시험이다. Windows는 단위 시험과 Windows 백엔드 시험으로 본다.
+#![cfg(unix)]
 #![allow(clippy::unwrap_used)]
 
 mod common;
