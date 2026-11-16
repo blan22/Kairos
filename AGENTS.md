@@ -16,7 +16,7 @@ kairos는 회사 일정과 할 일을 모아 Orca, Claude Code, VS Code에 보�
 
 | 경로 | 내용 |
 |---|---|
-| `crates/` | Rust 워크스페이스. 의존은 cli → tick, ops, sessions → agenda → ledger → policy → core 방향으로만 흐른다 |
+| `crates/` | Rust 워크스페이스. 의존은 위에서 아래로만 흐른다(cli → tick, sessions / tick → ops, agenda, 소스 / agenda → ledger, config / ledger → policy, store / … → core). 그림은 `docs/architecture.md`에 있다 |
 | `crates/kairos-core` | 값 객체, 모델, 포트, 프로필(`profile`), 커넥터 읽기 동작 목록(`connector`) |
 | `crates/kairos-config` | 설정 파일 읽기와 검증, 세션 지문 |
 | `packages/kairos-client` | 호스트 공용 TS(`contract.ts`는 순수 로직, `index.ts`는 Node 실행부) |
@@ -39,7 +39,7 @@ cargo test -p <크레이트> [--test <파일>] <이름>   # 테스트 하나
 
 - 근무 시간(평일 10:00~19:30 KST)에는 운영 수집 틱이 3분마다 돈다. 무거운 빌드와 전체 테스트는 꼭 필요할 때만, 범위를 좁혀서 돌린다.
 - 실패나 경고가 원래부터 있던 것이라고 가정하지 않는다. 고친 뒤 같은 범위를 다시 돌린다.
-- 테스트는 실제 Orca, gh, claude, 키체인, 알림 헬퍼, 운영 데이터 폴더를 쓰지 않는다. 가짜 실행 파일(`KAIROS_ORCA`, `KAIROS_GH`, `KAIROS_CLAUDE`, `KAIROS_GIT`, `KAIROS_SECURITY`, `KAIROS_NOTIFIER`, `KAIROS_OPEN`)과 임시 `KAIROS_HOME`을 쓴다.
+- 테스트는 실제 Orca, gh, claude, 키체인, 알림 헬퍼, 운영 데이터 폴더를 쓰지 않는다. 가짜 실행 파일(`KAIROS_ORCA`, `KAIROS_GH`, `KAIROS_CLAUDE`, `KAIROS_GIT`, `KAIROS_SECURITY`, `KAIROS_NOTIFIER`, `KAIROS_OPEN`, `KAIROS_LSREGISTER`)과 임시 `KAIROS_HOME`을 쓴다.
 
 ## 항상 할 것
 

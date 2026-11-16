@@ -43,7 +43,7 @@ Orca 패널 테스트는 `plugins/orca-panel`에서 `orca plugin test .`로 돌�
 | 알림 | 틱을 돌리는 테스트는 라이브러리로 실행하고 기록용 알림기를 주입합니다. 프로세스 테스트는 `KAIROS_NOTIFIER`와 `KAIROS_OPEN`을 임시 폴더 안의 경로로 돌립니다 |
 | reveal | `KAIROS_ORCA`와 `KAIROS_OPEN`에 가짜 실행 파일을 줘서 실제 Orca를 앞으로 가져오지 않습니다 |
 | 수락 | 가짜 `ProcessRunner`를 주입하거나 `KAIROS_ORCA`에 가짜 실행 파일을 줍니다 |
-| `kairos-run` | `KAIROS_GH`에도 가짜 gh를 주고 합성 세션 토큰을 씁니다 |
+| `kairos-run` | `KAIROS_GH`에 가짜 gh를 줘서 세션 직전의 작성자 확인과 세션 입력 읽기에 답하게 합니다 |
 
 픽스처는 합성 데이터만 씁니다.
 

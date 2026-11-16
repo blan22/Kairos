@@ -54,12 +54,14 @@ Notion이 메일을 보내지 않은 일은 kairos도 알 수 없습니다.
 - 다음 페이지 값은 `kairos page-info`가 같은 경로 검사를 거쳐 읽은 뒤 훅에 돌려줍니다.
 - 남은 파일은 `doctor`의 `큰 응답 임시 파일` 줄과 problems, 감시자 경보로 알립니다.
 
-## Mac이 잠들었을 때
+## 컴퓨터가 잠들었을 때
 
-Mac이 잠든 동안의 틱은 고장으로 보지 않습니다.
+컴퓨터가 잠든 동안의 틱은 고장으로 보지 않습니다.
 
-- 하트비트 공백이 30초 이상이거나 `pmset -g stats`의 잠자기 횟수가 틱 사이에 늘었다면, 그 틱의 `timeout` 행만 `error_code`를 `sleep_interrupted`로 바꿉니다. `outcome`과 cursor는 그대로 둡니다.
+- 하트비트 공백이 30초 이상이거나 잠자기 횟수가 틱 사이에 늘었다면, 그 틱의 `timeout` 행만 `error_code`를 `sleep_interrupted`로 바꿉니다. `outcome`과 cursor는 그대로 둡니다.
 - 이 틱은 수집 요약의 실패 건수와 `doctor` 문제에서 빠지고, 소스 줄에 코드만 나옵니다.
 - 깨어난 시각은 `resumed.at`에 초 단위로 남습니다. 상태 판정과 감시자가 이 시각을 하한으로 씁니다.
 - 감시자는 자기 실행 간격이 7분 30초를 넘으면 깨어난 것으로 보고 같은 파일에 기록합니다.
 - 깨어난 뒤 허용 지연이 지나도 수집이 없으면 그대로 경고합니다.
+
+잠자기 횟수는 macOS에서 `pmset -g stats`로, Linux에서 `/sys/power/suspend_stats/success`로 읽습니다. Windows는 횟수를 읽지 않고 하트비트 공백으로만 판단합니다.

@@ -14,10 +14,10 @@
 
 kairos는 Calendar, GitHub, Slack, Gmail, Notion에서 나에게 온 일을 모아 급한 순서로 정리합니다. 그리고 지금 봐야 할 일 하나를 골라 Orca 패널, Claude Code, VS Code에 보여 줍니다. 고른 일은 샌드박스에 가둔 claude 세션에 맡길 수도 있습니다.
 
-- **읽기만 합니다.** 외부 서비스에 글을 쓰지 않고, 세션도 push나 PR, 코멘트를 할 수 없습니다. PR은 사용자가 버튼을 누를 때만 세션 밖에서 올라갑니다.
+- **읽기만 합니다.** 외부 서비스에 글을 쓰지 않고, 세션도 push나 PR, 코멘트를 할 수 없습니다. PR은 사용자가 확인 코드를 입력하거나 버튼을 누를 때만 세션 밖에서 올라갑니다.
 - **내용을 저장하지 않습니다.** 본문, 댓글, 메일 제목은 저장하지 않고, 알림에는 고정 문구와 건수만 나옵니다.
 - **흐름을 끊지 않습니다.** 포커스 중이나 점심시간, 근무 시간 밖에 온 일은 쌓아 두었다가 한 번에 알립니다. 긴급 알림만 포커스 중에도 옵니다. 급하지 않은 일은 정해진 시각에 모아서 보여 줍니다.
-- **설치가 가볍습니다.** Rust 실행 파일 두 개(`kairos`, `kairos-run`)로 동작해 별도 런타임이 필요 없습니다. 호스트가 실행하는 부분(Orca 패널, 수집 훅, VS Code 확장)만 TypeScript입니다.
+- **설치가 가볍습니다.** Rust 실행 파일 두 개(`kairos`, `kairos-run`)로 동작해 별도 런타임이 필요 없습니다. Windows에는 창 없이 수집을 띄우는 `kairos-launch`가 더 들어갑니다. 호스트가 실행하는 부분(Orca 패널, 수집 훅, VS Code 확장)만 TypeScript입니다.
 
 > [!NOTE]
 > 한 사람이 매일 쓰는 도구를 공개한 것입니다. 설정, 호스트 계약, DB 스키마는 버전마다 바뀔 수 있고, 바뀌면 `docs/`에 마이그레이션 절차를 적습니다.
@@ -69,7 +69,7 @@ scripts/install.sh
 
 설치 스크립트는 빠진 도구를 한 번에 모아 알려 줍니다. 실행 파일과 알림 헬퍼를 준비하고 `~/.local/bin/kairos` 링크를 만든 뒤 `kairos setup`으로 넘어갑니다. setup은 조직 프로필, 켤 서비스, 계정 연결, 설치, Orca 패널을 차례로 묻습니다. 알림 권한은 다른 Mac 앱처럼 macOS 권한 창에서 허용하면 됩니다.
 
-업그레이드도 같은 명령으로 합니다. `kairos update`가 설치 방식에 맞는 명령을 알려 줍니다. 질문 없이 설치하는 방법, PATH와 자동 완성은 [설치](docs/install.md)에, setup과 설정 파일은 [설정](docs/configuration.md)에 있습니다. 막히면 [문제 해결](docs/troubleshooting.md)을 보세요.
+새 버전은 `kairos update --apply`로 올립니다. 질문 없이 설치하는 방법, PATH와 자동 완성은 [설치](docs/install.md)에, setup과 설정 파일은 [설정](docs/configuration.md)에 있습니다. 막히면 [문제 해결](docs/troubleshooting.md)을 보세요.
 
 ### Linux와 Windows
 
@@ -100,7 +100,7 @@ kairos later <ID>      # 나중에 다시 보기(--when hour|tomorrow로 때를 
 kairos done <ID>       # 끝냄
 kairos doctor          # 수집과 설정 상태 점검
 kairos sources         # 연동 서비스 켜고 끄기
-kairos notify test     # Mac 알림이 오는지 테스트(권한은 kairos notify setup)
+kairos notify test     # 알림이 오는지 테스트(macOS 권한은 kairos notify setup)
 kairos update --apply  # 새 버전으로 올리기(kairos update는 확인만)
 kairos help            # 전체 명령과 한 줄 설명
 ```
@@ -116,14 +116,14 @@ kairos help            # 전체 명령과 한 줄 설명
 | 수집 기록, 항목, 실행 기록 | `~/Library/Application Support/kairos`(`KAIROS_HOME`). 폴더 0700, 파일 0600. Linux와 Windows의 자리는 [지원하는 OS](docs/platforms.md#파일이-놓이는-곳)에 있습니다 |
 | 설정(`org.toml`, `config.toml`, `connections.toml`) | 같은 폴더. 본인 소유이고 다른 사용자가 쓸 수 없을 때만 읽습니다 |
 | 세션 입력(이슈 본문과 댓글) | `~/Library/Caches/kairos/session-briefs/<run>`. run마다 0700 폴더와 0600 파일이고, 세션이 끝나면 지웁니다 |
-| launchd 작업 | `~/Library/LaunchAgents/dev.kairos.*.plist` |
+| 예약 작업 | `~/Library/LaunchAgents/dev.kairos.*.plist`. Linux와 Windows의 자리도 같은 문서에 있습니다 |
 
 - 수집은 Claude Code의 MCP 연결(Calendar, Slack, Gmail)과 gh로 읽습니다. 호출할 수 있는 동작은 `crates/kairos-core/src/connector.rs`의 읽기 목록에 있는 것뿐입니다.
 - 저장하는 것은 식별자, 시각, 등급, 앞부분 120자(링크와 주소는 가립니다)입니다. 외부 분석 도구나 원격 전송은 없습니다.
 - 사람과 조직마다 다른 값은 모두 설정 파일에 둡니다. 코드와 저장소에는 없습니다.
 - 데이터 폴더는 git 작업 트리 밖에 있어야 합니다. 안에 있으면 kairos가 실행을 거부합니다. 개인 데이터가 저장소에 커밋되는 일을 막기 위해서입니다.
-- Mac 알림에는 고정 문구와 건수만 나옵니다. 잠금 화면에 표시할지는 macOS 알림 설정에서 정합니다.
-- `kairos uninstall`은 launchd 작업을 해제합니다. `--runtime`은 런타임과 `kairos` 명령까지, `--purge`는 데이터 폴더와 키체인에 남은 예전 세션 토큰까지 지웁니다. 지울 대상을 먼저 보여 주고 확인을 받습니다. Orca 패널은 언로드하는 명령을 알려 줍니다.
+- 알림에는 고정 문구와 건수만 나옵니다. 잠금 화면에 표시할지는 OS의 알림 설정에서 정합니다.
+- `kairos uninstall`은 예약 작업을 해제합니다. `--runtime`은 런타임과 `kairos` 명령까지, `--purge`는 데이터 폴더와 키체인에 남은 예전 세션 토큰까지 지웁니다. 지울 대상을 먼저 보여 주고 확인을 받습니다. Orca 패널은 언로드하는 명령을 알려 줍니다.
 
 > [!IMPORTANT]
 > Orca 패널은 `trusted-worker` 플러그인입니다. 패널은 kairos 실행 파일을 셸 없이 호출하기만 하지만, Orca의 권한 목록이 파일 접근을 막아 주는 샌드박스는 아닙니다.

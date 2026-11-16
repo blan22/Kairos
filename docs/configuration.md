@@ -14,9 +14,9 @@ setup은 다섯 가지를 차례로 묻습니다.
 2. 켤 서비스
 3. 계정 연결. `--google`, `--slack`, `--name`으로 넘긴 값은 묻지 않고 기록합니다.
 4. 설치. `y`라고 답할 때만 합니다. 설정만 바꾸려면 `--no-install`로 건너뛰세요.
-5. Orca 패널
+5. 알림 권한과 Orca 패널
 
-알림 권한은 터미널에서 묻지 않고 macOS 권한 창으로 받습니다. 여러 번 실행해도 괜찮습니다. Enter를 누르면 현재 값을 그대로 둡니다. `--yes`를 주면 조직 프로필도 묻지 않고 가져옵니다.
+알림 권한은 터미널에서 묻지 않고 macOS 권한 창으로 받습니다. 여러 번 실행해도 괜찮습니다. Enter를 누르면 현재 값을 그대로 둡니다. `--yes`를 주면 조직 프로필도 묻지 않고 가져옵니다. `--org`가 없으면 설치 자료의 `profiles/`에 프로필이 하나뿐일 때만 가져오고, 여럿이면 `--org`로 고르라고 알립니다.
 
 ### 설치 단계
 
@@ -28,11 +28,13 @@ setup은 다섯 가지를 차례로 묻습니다.
 - 설치하지 못하면 되돌립니다.
 - 하루 동안 기록만 하고 싶다면 `kairos display auto`를 실행하세요.
 
-표시가 켜져 있으면 첫 수집에서 알릴 일을 바로 Mac 알림으로 보냅니다. 처음 설치할 때는 알림 권한을 허용하기 전에 첫 수집이 돌 수도 있습니다. 그때 알리지 못한 일은 권한을 허용한 뒤의 틱이 다시 알립니다.
+표시가 켜져 있으면 첫 수집에서 알릴 일을 바로 알림으로 보냅니다. 처음 설치할 때는 알림 권한을 허용하기 전에 첫 수집이 돌 수도 있습니다. 그때 알리지 못한 일은 권한을 허용한 뒤의 틱이 다시 알립니다.
 
-마지막 두 단계(알림 권한, Orca 패널)는 설치본(`<데이터 폴더>/current`)이 있을 때만 진행합니다. 개발 트리의 번들과 패널 폴더는 권한과 승인을 따로 받기 때문에, 설치본을 기준으로 합니다.
+마지막 단계(알림 권한과 Orca 패널)는 설치본(`<데이터 폴더>/current`)이 있을 때만 진행합니다. 개발 트리의 번들과 패널 폴더는 권한과 승인을 따로 받기 때문에, 설치본을 기준으로 합니다.
 
 ### Mac 알림 권한
+
+Linux와 Windows에는 앱별 알림 권한이 없어서 이 단계에서 묻지 않습니다. 알림이 오는지는 `kairos notify test`로 확인하세요. 아래는 macOS의 동작입니다.
 
 다른 Mac 앱과 같습니다. macOS 권한 창에서 허용하면 확인 알림이 하나 오고, 그때부터 알림이 옵니다.
 
@@ -58,7 +60,7 @@ setup은 세션을 켜지 않습니다. [차단 테스트](sessions.md#세션-�
 
 - 받은 파일은 `profiles/`에 두거나(git이 무시합니다) `--org <파일> --sha256 <값>`으로 넘기세요.
 - 형식은 합성 값으로 만든 [`examples/org.toml`](../examples/org.toml)을 참고하세요.
-- 조직 프로필 없이도 쓸 수 있습니다. 다만 조직 값이 필요한 판정(신뢰 도메인, 배포 캘린더, 플레이북)은 꺼집니다.
+- 조직 프로필 없이도 쓸 수 있습니다. 다만 조직 값이 필요한 기능(GitHub 소스, 배포와 연차 캘린더, 신뢰 도메인, 플레이북)은 꺼집니다.
 
 ## 서비스 켜고 끄기
 
@@ -97,15 +99,15 @@ kairos install --apply && kairos install --register
 | 파일 | 쓰는 주체 | 내용 |
 |---|---|---|
 | `org.toml` | 조직 관리자가 배포(`profiles/`) | GitHub 조직, 신뢰 도메인, 그룹 캘린더, 배포 태그, Notion 워크스페이스, 플레이북 대상 |
-| `config.toml` | 사용자 | 시간대(IANA), 근무 요일, 근무 시간, 점심, 묶음 시각, 수집 시간, 고정으로 끈 소스, 호스트, 세션 호스트, MCP로 열 동작, Orca 저장소 ID, git 클론 경로 |
+| `config.toml` | 사용자 | 시간대(IANA), 근무 요일, 근무 시간, 점심, 묶음 시각, 수집 시간, 고정으로 끈 소스, 호스트, 세션 호스트, MCP로 열 동작, Orca 저장소 ID, git 클론 경로, 개인 플레이북 대상, 새 버전 확인 |
 | `connections.toml` | `kairos connect`, `sources`, `setup`만 | 본인 식별자, MCP 바인딩(서버와 도구 이름), 끈 소스 |
 
 - 설정 파일은 본인 소유이고 그룹이나 다른 사용자가 쓸 수 없을 때만 읽습니다.
 - 설정이 깨져 있으면 `config`, `connect`, `sources`, `setup`, `uninstall`, `update`, `completions`, `help`를 뺀 나머지 명령은 멈춥니다.
-- 세션 자격에 영향을 주는 값이 바뀌면 세션이 다시 잠기고 `doctor`가 알려 줍니다(`session-approval`).
+- 세션 자격에 영향을 주는 값이 바뀌면 세션이 다시 잠기고 `doctor`의 `세션` 줄이 알려 줍니다.
 - MCP 바인딩을 바꿨다면 `kairos install --apply`를 다시 실행하세요. 그래야 수집 훅의 허용 목록(`hooks/allowed.ts`)에 반영됩니다.
 
-값을 바꾼 뒤에는 `kairos config validate`로 확인하고, `kairos config show --origin`으로 각 값이 어느 파일에서 왔는지 볼 수 있습니다.
+값을 바꾼 뒤에는 `kairos config validate`로 확인하고, `kairos config show --origin`으로 주요 값이 어느 파일에서 왔는지 볼 수 있습니다. 세션 호스트와 `[hosts.git]`의 값은 이 출력에 나오지 않으니 `config.toml`을 직접 확인하세요.
 
 ### config.toml
 
@@ -150,7 +152,7 @@ schema = 1
 
 ## 근무 일정과 방해 금지
 
-`[schedule]`로 카드와 알림을 받을 시간을 정합니다. 근무 요일(`days`)과 근무 시간(`work`) 밖에는 카드와 Mac 알림을 내지 않습니다.
+`[schedule]`로 카드와 알림을 받을 시간을 정합니다. 근무 요일(`days`)과 근무 시간(`work`) 밖에는 카드와 알림을 내지 않습니다.
 
 | 키 | 기본값 | 뜻 |
 |---|---|---|
@@ -186,6 +188,33 @@ lunch = []
 | `git` | `[hosts.git.repos]`에 지정한 로컬 클론에 `kairos/<이름>` 브랜치로 worktree를 만들고, 세션을 띄울 명령을 돌려줍니다 |
 
 `git`일 때 VS Code 확장은 받은 명령을 터미널에서 실행하고, Claude Code는 명령을 보여 줍니다.
+
+```toml
+[sessions]
+host = "git"
+
+[hosts.git]
+# worktree를 만들 폴더(절대 경로). 적지 않으면 클론 옆의 `<클론 이름>-kairos` 폴더를 씁니다.
+# worktree_root = "/Users/me/worktrees"
+
+[hosts.git.repos]
+"contoso/atlas" = "/Users/me/src/atlas"
+```
+
+## 개인 플레이북 대상
+
+세션에 맡길 저장소는 조직 프로필의 `[[playbooks]]`가 정합니다. 조직 프로필에 없는 저장소를 더하려면 `config.toml`에 같은 형식으로 적습니다. 조직 프로필의 대상에 더해지고, 바꾸면 세션 지문이 바뀌어 세션이 다시 잠깁니다.
+
+```toml
+[[playbooks]]
+owner = "contoso"
+repos = ["atlas-tools"]
+workspace_repo = "contoso/atlas-tools"
+base_branch = "origin/main"
+```
+
+- `repos`의 이슈를 `workspace_repo`에서 작업하고, `base_branch`를 기준으로 비교합니다.
+- 이슈를 연 사람이 [신뢰 등급](concepts.md#신뢰-등급) T0나 T1이어야 하는 조건은 같습니다.
 
 ## MCP로 열 동작
 

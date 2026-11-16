@@ -48,14 +48,16 @@
 - `kairos pause` 중에는 알림을 내지 않고, `kairos focus` 중에는 쌓아 둡니다.
 - macOS 집중 모드가 켜져 있으면 알림 센터에만 쌓입니다.
 
+위 1~3단계는 macOS의 절차입니다. Linux와 Windows는 앱별 권한 창이 없어서 `kairos notify setup`이 알림 도구가 있는지만 확인합니다. `notifier_missing`이 나오면 Linux는 `notify-send`(libnotify)를 설치하고, Windows는 PowerShell을 쓸 수 있는지 확인하세요. 그다음 `kairos notify test`로 확인합니다.
+
 버전을 올린 뒤 권한을 다시 묻는 것은 알림 헬퍼가 ad-hoc으로 서명되어 있기 때문입니다. 다시 허용하면 됩니다.
 
 ## 카드나 항목이 보이지 않습니다
 
 - 표시가 닫혀 있는 동안(auto의 첫 근무일, `kairos display off`)에는 기록만 합니다. `kairos list --would-show`는 표시됐을 항목을, `kairos list --items`는 열린 항목을 보여 줍니다.
-- 상태 줄에 `수집 기록 없음`이 나오면 수집이 아직 돌지 않은 것입니다. `kairos doctor`의 소스 줄과 launchd 작업을 확인하세요. 작업이 없으면 `kairos setup`을 다시 실행해 설치하세요.
+- 상태 줄에 `수집 기록 없음`이 나오면 수집이 아직 돌지 않은 것입니다. `kairos doctor`의 소스 줄과 예약 작업을 확인하세요. 작업이 없으면 `kairos setup`을 다시 실행해 설치하세요.
 - 서비스가 `설정 필요` 상태라면 `kairos sources`가 부족한 값과 채우는 명령을 알려 줍니다.
-- Mac이 잠든 동안의 틱은 고장이 아닙니다(`sleep_interrupted`).
+- 컴퓨터가 잠든 동안의 틱은 고장이 아닙니다(`sleep_interrupted`).
 
 ## 설정
 
@@ -65,8 +67,8 @@
 
 ## 세션
 
-- `doctor`에 `session-approval`이 나오면 세션 자격에 영향을 주는 설정이 바뀌어 세션이 잠긴 것입니다. 차단 테스트를 확인한 뒤 `kairos sessions on`을 다시 실행하세요([에이전트 세션](sessions.md#세션-켜기)).
-- `세션 열고 시작`이 `repo_unresolved`로 실패하면 kairos가 Orca에서 작업할 저장소를 하나로 고르지 못한 것입니다. 같은 원격의 클론을 Orca에 여러 개 등록했고 폴더 이름도 저장소 이름과 다를 때 생깁니다. `orca repo list --json`에서 쓸 저장소의 `id`를 골라 `config.toml`의 `[hosts.orca.repos]`에 적으세요([설정](configuration.md)).
+- `doctor`에 `세션: 잠김. 설정이 바뀌어 차단 시험을 다시 본 뒤 kairos sessions on`이 나오면 세션 자격에 영향을 주는 설정이 바뀌어 세션이 잠긴 것입니다. 차단 테스트를 확인한 뒤 `kairos sessions on`을 다시 실행하세요([에이전트 세션](sessions.md#세션-켜기)).
+- `세션 열고 시작`이 `repo_unresolved`로 실패하면 kairos가 Orca에서 작업할 저장소를 하나로 고르지 못한 것입니다. 같은 원격의 클론을 Orca에 여러 개 등록했고 폴더 이름도 저장소 이름과 다를 때, 또는 원격 주소가 같은 저장소가 Orca에 하나도 없을 때 생깁니다. Orca에 저장소를 추가하거나, `orca repo list --json`에서 쓸 저장소의 `id`를 골라 `config.toml`의 `[hosts.orca.repos]`에 적으세요([설정](configuration.md)). 세션 호스트가 `git`이면 `[hosts.git.repos]`에 로컬 클론 경로를 적으세요([세션 호스트](configuration.md#세션-호스트)).
 - `kairos-run`이 `이슈의 글을 모두 확인하지 못해 세션을 열지 않았습니다`로 끝나면 `gh auth status`로 gh 로그인을 확인하세요. 세션을 띄우기 직전에 사용자의 gh로 글을 읽습니다([세션이 읽는 내용](sessions.md#세션이-읽는-내용)). 세션용 토큰은 더 이상 필요하지 않습니다.
 - 세션이 끝났는데 PR이 올라가지 않았다면 세션 터미널의 마지막 줄에 까닭이 있습니다. 물음에 화면의 확인 코드 말고 다른 것을 입력했어도 올라가지 않습니다. 고친 뒤 패널의 `PR 올리기`를 누르세요([PR 올리기](sessions.md#pr-올리기)).
 

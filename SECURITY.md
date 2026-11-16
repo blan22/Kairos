@@ -28,7 +28,7 @@ GitHub 저장소의 **Security** 탭에서 [Report a vulnerability](https://gith
 - 읽는 세션(`pr_review`, `reply_draft`)은 작업 공간의 git 영역에 쓰지 못합니다. 연결된 worktree라면 공용 `.git` 전체가 여기에 해당합니다.
 - 현재 폴더에 `.git`이 있는데 작업 공간을 확인하지 못하면 어떤 세션도 뜨지 않습니다.
 - 고치는 세션은 세션을 띄운 뒤에 생긴 다른 run의 관리 폴더에서도 `commondir`, `gitdir`, `config.worktree`를 쓰지 못합니다.
-- 세션 자격에 영향을 주는 설정(조직, 신뢰 도메인, 본인 식별자, 플레이북 대상, 호스트, MCP로 연 동작)이 바뀌면 세션 잠금이 다시 걸립니다(`session-approval`).
+- 세션 자격에 영향을 주는 설정(조직, 신뢰 도메인과 캘린더, 본인 식별자, 플레이북 대상, 호스트, 세션 호스트와 git 저장소 설정, MCP로 연 동작)이 바뀌면 세션 잠금이 다시 걸립니다(`session-approval`).
 - kairos 세션 안(`KAIROS_SESSION`)에서는 수락과 PR 올리기를 거절합니다. Claude Code에서 수락하려면 `hosts.enabled`에 `claude-code`가 있어야 합니다.
 
 세션을 가두는 방법은 [세션 샌드박스](docs/session-sandbox.md)에 자세히 있습니다.

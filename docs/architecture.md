@@ -13,6 +13,7 @@ flowchart TD
   tick --> ops[kairos-ops]
   tick --> agenda[kairos-agenda]
   sessions --> agenda
+  sessions --> sources
   agenda --> ledger[kairos-ledger]
   agenda --> config[kairos-config]
   ledger --> policy[kairos-policy]
@@ -28,8 +29,8 @@ flowchart TD
 |---|---|
 | `kairos-cli` | 실행 파일이자 전체를 조립하는 곳. 명령은 `Command`를 구현하고 `registry()`에 한 줄을 추가해 등록합니다 |
 | `kairos-tick` | 틱 실행 조율. `TickRunner`, 잠금, 수집 모드, `SourceRegistry`, `Doctor` |
-| `kairos-ops` | 큰 응답 파일, 잠자기 판정, 유지보수, 설치 |
-| `kairos-sessions` | Orca 연동, run 수명 주기, 세션 프로필 |
+| `kairos-ops` | 큰 응답 파일, 잠자기 판정, 유지보수, 설치, 업데이트, 감시자(`watchdog`) |
+| `kairos-sessions` | Orca 연동, git 세션 호스트, run 수명 주기, 세션 프로필, 세션 입력 조립, PR 올리기 |
 | `kairos-agenda` | 항목 엔진, 표시 게이트, 카드, 알림 |
 | `kairos-ledger` | 수집 기록. 저장, 멱등 처리, watermark, baseline, 종료 판정 |
 | `kairos-policy` | 등급, 종료, 배포 연결, 근무 시간. IO가 없습니다 |
@@ -45,7 +46,7 @@ flowchart TD
 | `packages/kairos-client` | 호스트 공용 TypeScript 클라이언트 |
 | `plugins/orca-panel`, `plugins/claude-code`, `plugins/vscode` | 호스트 어댑터 |
 | `plugins/collector` | 수집 모드 훅 |
-| `ops/` | launchd 템플릿, 감시자, 알림 헬퍼 |
+| `ops/` | launchd 템플릿, 감시자(zsh), 알림 헬퍼(Swift), systemd 템플릿(`systemd/`), 작업 스케줄러 템플릿(`windows/`) |
 | `profiles/` | 조직 프로필을 두는 곳(git 무시) |
 | `examples/` | 합성 값으로 만든 설정 예시 |
 | `storybook/` | 플러그인 UI 미리보기 |
