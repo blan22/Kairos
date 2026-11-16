@@ -2,7 +2,7 @@
 
 사용자에게 보이는 변화를 버전별로 적습니다. 형식은 [Keep a Changelog](https://keepachangelog.com/ko/1.1.0/)를 참고합니다. 마이그레이션 절차가 필요한 버전은 `docs/`의 해당 문서를 가리킵니다.
 
-## [다음 버전]
+## [0.5.0] - 2026-11-16
 
 ### 추가
 
@@ -108,7 +108,7 @@
 - `scripts/install.sh`가 `~/.local/bin`이 PATH에 없으면 `~/.zshrc`에 한 줄을 추가할지 묻습니다(`--yes`면 묻지 않고 추가합니다).
 - `kairos uninstall`이 끝날 때 남은 것을 지우는 옵션을 안내합니다.
 
-[다음 버전]: https://github.com/blan22/Kairos/compare/v0.4.2...HEAD
+[0.5.0]: https://github.com/blan22/Kairos/compare/v0.4.2...v0.5.0
 [0.4.2]: https://github.com/blan22/Kairos/compare/v0.4.1...v0.4.2
 [0.4.1]: https://github.com/blan22/Kairos/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/blan22/Kairos/compare/v0.3.0...v0.4.0
