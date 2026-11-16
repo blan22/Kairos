@@ -263,6 +263,7 @@ pub struct Tick {
     probe: Quiet,
     sleep: Option<Arc<dyn SleepProbe>>,
     items: Option<Arc<dyn ItemRefresher>>,
+    releases: Option<Arc<dyn kairos_ops::ReleaseProbe>>,
     claude_bin: Option<String>,
     plugin_dir: Option<String>,
     user_home: PathBuf,
@@ -282,6 +283,7 @@ pub fn tick(home: &KairosHome, now: &str, sources: Vec<Arc<dyn Source>>) -> Tick
         probe: Quiet::default(),
         sleep: None,
         items: None,
+        releases: None,
         claude_bin: None,
         plugin_dir: None,
         user_home: home.file("user"),
@@ -343,6 +345,11 @@ impl Tick {
         self
     }
 
+    pub fn releases(mut self, releases: Arc<dyn kairos_ops::ReleaseProbe>) -> Self {
+        self.releases = Some(releases);
+        self
+    }
+
     pub fn limit(mut self, ms: i64) -> Self {
         self.limit_ms = Some(ms);
         self
@@ -374,6 +381,9 @@ impl Tick {
         }
         if let Some(items) = self.items {
             runner = runner.with_item_refresher(items);
+        }
+        if let Some(releases) = self.releases {
+            runner = runner.with_release_probe(releases);
         }
         runner
     }

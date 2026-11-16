@@ -97,6 +97,15 @@ pub(crate) struct RawUser {
     pub mcp: RawMcpServe,
     #[serde(default)]
     pub sessions: RawSessions,
+    #[serde(default)]
+    pub updates: RawUpdates,
+}
+
+#[derive(Clone, Debug, Default, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct RawUpdates {
+    /// 새 판을 하루 한 번 확인한다. 기본은 참이다.
+    pub check: Option<bool>,
 }
 
 #[derive(Clone, Debug, Default, Deserialize)]

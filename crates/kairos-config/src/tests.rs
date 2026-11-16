@@ -238,3 +238,17 @@ fn 근무_요일은_이름만_받고_비거나_겹치면_거부한다() {
     let user = "schema = 1\n[schedule]\nlunch = [\"12:00\"]\n";
     assert_eq!(load_from_texts(None, Some(user), None).unwrap_err().code, "config_invalid_range");
 }
+
+#[test]
+fn 새_판_확인은_기본으로_켜져_있고_사용자_설정으로_끈다() {
+    let loaded = load_from_texts(None, None, None).unwrap();
+    assert!(!loaded.profile.update_check_off);
+    let off = load_from_texts(None, Some("schema = 1\n[updates]\ncheck = false\n"), None).unwrap();
+    assert!(off.profile.update_check_off);
+    assert_eq!(off.origins.get("updates.check").copied(), Some(Layer::User));
+    let on = load_from_texts(None, Some("schema = 1\n[updates]\ncheck = true\n"), None).unwrap();
+    assert!(!on.profile.update_check_off);
+    for bad in ["[updates]\ncheck = \"no\"\n", "[updates]\nauto = true\n"] {
+        assert!(load_from_texts(None, Some(&format!("schema = 1\n{bad}")), None).is_err(), "{bad}");
+    }
+}

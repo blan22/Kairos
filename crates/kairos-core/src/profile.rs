@@ -275,6 +275,8 @@ pub struct Profile {
     pub mcp_actions: Vec<String>,
     pub session_host: SessionHost,
     pub git: GitHost,
+    /// 새 판 확인을 끈다(`[updates] check = false`). 기본은 하루 한 번 확인한다.
+    pub update_check_off: bool,
 }
 
 impl Profile {
@@ -318,6 +320,7 @@ impl Profile {
             mcp_actions: Vec::new(),
             session_host: SessionHost::Orca,
             git: GitHost::default(),
+            update_check_off: false,
         }
     }
 }

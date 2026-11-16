@@ -10,9 +10,14 @@
 - Linux와 Windows의 설치 스크립트(`scripts/install-linux.sh`, `scripts/install-release-linux.sh`, `scripts/install.ps1`, `scripts/install-release.ps1`)와 릴리스 패키지를 추가했습니다. `kairos update`는 OS에 맞는 명령을 알려 줍니다.
 - 감시자를 `kairos watchdog` 명령으로도 돌립니다. Linux와 Windows는 이 명령을, macOS는 지금처럼 zsh 감시자를 씁니다.
 - `kairos reveal --link`를 추가했습니다. Windows 알림을 누르면 이 명령이 패널을 엽니다.
+- 새 버전 알림을 추가했습니다. 수집이 하루에 한 번 `gh`로 최신 릴리스의 버전 번호를 확인하고, 새 버전이 나오면 버전마다 한 번 알림을 보내고 Orca 패널 위쪽에 안내 띠를 보여 줍니다. 터미널에서 실행한 명령 뒤에도 안내 한 줄이 나옵니다. `config.toml`의 `[updates] check = false`로 끕니다.
+- `kairos update --apply`로 새 버전을 설치합니다. 릴리스 패키지는 SHA256과 빌드 증명(`gh attestation verify`)을 확인한 뒤 설치하고, 조직과 계정은 다시 묻지 않고 알림 권한과 Orca 패널만 묻습니다. 저장소에서 빌드했다면 `scripts/install.sh --update`를 실행합니다. `kairos update --check`는 지금 바로 확인합니다. 자세한 내용은 [설치](docs/install.md#업데이트)에 있습니다.
+- 릴리스 워크플로가 패키지마다 빌드 증명을 남깁니다.
+- 호스트 계약의 `next`와 `hello`에 `update` 필드를 추가했습니다(계약 버전은 그대로입니다).
 
 ### 변경
 
+- kairos가 코드를 내려받는 경우가 생겼습니다. 사용자가 일반 터미널에서 `kairos update --apply`를 실행했을 때만이고, 빌드 증명을 통과한 패키지만 설치합니다. [보안 기준](SECURITY.md)을 고쳤습니다.
 - 세션은 macOS에서만 엽니다. Linux와 Windows에서는 샌드박스가 보안 기준을 지킬 수 없어 수락과 세션 켜기는 `sessions_unsupported`로 거절하고, `kairos-run`은 이유를 알리고 끝납니다.
 - 문서를 합니다체로 다시 쓰고 구조를 정리했습니다. [핵심 개념](docs/concepts.md), [설정](docs/configuration.md), [세션 샌드박스](docs/session-sandbox.md), [문서 목차](docs/README.md), [기여 안내](CONTRIBUTING.md)를 새로 만들었습니다. 설정 내용은 `docs/install.md`에서 `docs/configuration.md`로, 세션의 내부 동작은 `docs/sessions.md`에서 `docs/session-sandbox.md`로 옮겼습니다.
 

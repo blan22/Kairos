@@ -9,7 +9,8 @@ use kairos_core::process::ProcessRunner;
 use kairos_core::{Instant, KairosResult, OffDates};
 use kairos_ledger::{IngestOptions, Ledger};
 use kairos_ops::{
-    Maintenance, ResumeFile, SLEEP_INTERRUPTED, SleepDetector, StallWatch, ToolResults, ToolResultsSweep, slept_during,
+    Maintenance, ReleaseProbe, ResumeFile, SLEEP_INTERRUPTED, SleepDetector, StallWatch, ToolResults, ToolResultsSweep,
+    UpdateFile, Version, slept_during,
 };
 use kairos_policy::{tick_end_minutes, tick_start_minutes};
 use kairos_store::Database;
@@ -46,6 +47,8 @@ pub struct TickRunner {
     claude: Arc<dyn ClaudeProbe>,
     sleep: Option<Arc<dyn SleepProbe>>,
     items: Arc<dyn ItemRefresher>,
+    /// 새 판 확인. 없으면 확인하지 않는다. 조립 지점만 gh 탐침을 넘긴다.
+    releases: Option<Arc<dyn ReleaseProbe>>,
 }
 
 /// 잠금 안에서만 쓰는 값.
@@ -78,7 +81,14 @@ impl TickRunner {
             claude: Arc::new(claude),
             sleep: None,
             items: Arc::new(EngineItems),
+            releases: None,
         }
+    }
+
+    #[must_use]
+    pub fn with_release_probe(mut self, releases: Arc<dyn ReleaseProbe>) -> Self {
+        self.releases = Some(releases);
+        self
     }
 
     #[must_use]
@@ -300,7 +310,26 @@ impl TickRunner {
         self.finish(tick, report, gate, &sources, (opened, ok_sources), woke_at)
     }
 
-    /// 기록 뒤의 단계. 항목, 알림, 패널, 인증, 정비, 정리, 감시 파일, state.json 순서다.
+    /// 하루 한 번 새 판을 확인하고 판마다 한 번 알린다. 실패해도 틱은 끝까지 돈다. 알린 판을 돌려준다.
+    /// 확인을 끈 설정(`[updates] check = false`)이면 묻지도 알리지도 않는다.
+    fn check_update(
+        &self,
+        settler: &Settler<'_>,
+        gate: &mut HeldGate<'_>,
+        notifier: Option<&dyn Notifier>,
+    ) -> Option<String> {
+        let probe = self.releases.as_deref().filter(|_| !kairos_core::profile::current().update_check_off)?;
+        let file = UpdateFile::new(&self.config.home);
+        let record = gate.outside(|| caught(|| file.refresh(settler.now, probe))).and_then(Result::ok)?;
+        let latest = record.unannounced(Version::current())?;
+        if !settler.alert_update(notifier, latest) {
+            return None;
+        }
+        file.mark_notified(latest).ok()?;
+        Some(latest.to_string())
+    }
+
+    /// 기록 뒤의 단계. 항목, 알림, 패널, 인증, 새 판, 정비, 정리, 감시 파일, state.json 순서다.
     fn finish(
         &self,
         tick: &Locked<'_>,
@@ -329,6 +358,7 @@ impl TickRunner {
         }
 
         gate.outside(|| AuthFile::new(home).refresh(now, self.claude.as_ref()))?;
+        report.update_notified = self.check_update(&settler, gate, notifier);
         Maintenance::new(database.connection(), home).run_daily(now, false)?;
         // 잠금 안에서 해야 진행 중인 수집의 파일을 지우지 않는다. 남은 건수를 감시자에게 넘기려고 watch보다 먼저 한다.
         self.sweep_into(report);

@@ -101,7 +101,7 @@ kairos done <ID>       # 끝냄
 kairos doctor          # 수집과 설정 상태 점검
 kairos sources         # 연동 서비스 켜고 끄기
 kairos notify test     # Mac 알림이 오는지 테스트(권한은 kairos notify setup)
-kairos update          # 현재 버전과 업데이트 명령
+kairos update --apply  # 새 버전으로 올리기(kairos update는 확인만)
 kairos help            # 전체 명령과 한 줄 설명
 ```
 

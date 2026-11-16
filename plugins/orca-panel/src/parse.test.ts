@@ -365,3 +365,10 @@ test('가장 큰 열린 일 ID를 읽고 없거나 틀리면 null이다', () => 
   assert.equal(parseNext(nextJson({ newest: 42 }))?.newest, 42)
   for (const newest of [undefined, null, -1, 1.5, '42']) assert.equal(parseNext(nextJson({ newest }))?.newest, null, String(newest))
 })
+
+test('새 판 소식은 숫자 판 번호 두 개일 때만 읽는다', () => {
+  assert.deepEqual(parseNext(nextJson({ update: { current: '0.4.2', latest: '0.5.0' } }))?.update, { current: '0.4.2', latest: '0.5.0' })
+  for (const update of [undefined, null, 'x', { latest: '0.5.0' }, { current: '0.4.2', latest: 'v0.5.0' }, { current: '0.4.2', latest: '0.5.0\u001b[31m' }, { current: 1, latest: '0.5.0' }]) {
+    assert.equal(parseNext(nextJson({ update }))?.update, null, JSON.stringify(update))
+  }
+})

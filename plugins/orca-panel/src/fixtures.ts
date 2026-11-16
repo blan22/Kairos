@@ -282,6 +282,11 @@ export function sourceRows(healthy: boolean = false): Json[] {
   ]
 }
 
+/** 새 판 소식. 판 번호는 합성이다. */
+export function updateNotice(latest: string = '9.1.0', current: string = '9.0.2'): Json {
+  return { current, latest }
+}
+
 export function nextJson(overrides: Json = {}): Json {
   return {
     schema: 1,

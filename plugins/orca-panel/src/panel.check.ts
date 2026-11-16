@@ -29,6 +29,7 @@ import {
   snapshotOf,
   sourceRows,
   startable,
+  updateNotice,
   why,
   workdayRows,
 } from './fixtures.ts'
@@ -65,6 +66,9 @@ export default defineCheck({
   gateDisplayOff: answers(snapshotOf(nextJson({ display: { ...recordingGate, reason: 'display_off', startsAt: null } }), listJson([], { hidden: 2 }))),
   gateNoCollection: answers(snapshotOf(nextJson({ display: { ...recordingGate, reason: 'no_collection', startsAt: null } }), listJson())),
   empty: answers(snapshotOf(nextJson(), listJson())),
+  // 새 판 띠는 목록 위와 게이트가 닫힌 화면 모두에 보인다.
+  updateAvailable: answers(snapshotOf(nextJson({ update: updateNotice(), counts: counts({ P1: 2 }) }), listJson(shortList))),
+  updateWhileRecording: answers(snapshotOf(nextJson({ update: updateNotice(), display: recordingGate, card: null, hold: { reason: 'recording', message: '기록 중입니다', until: null } }), listJson([], { hidden: 1 }))),
   card: answers(snapshotOf(nextJson({ card: card([startable(1)]), counts: counts({ P1: 2 }) }), listJson([startable(1), item(3)]))),
   offerCard: answers(snapshotOf(nextJson({ card: card([startable(1, { reason: 'review_owed', reasonLabel: '리뷰 요청', playbook: 'pr_review' })]), counts: counts({ P1: 2 }) }), listJson([startable(1), startable(2, { tier: 'P2' })]))),
   offerRows: answers(snapshotOf(nextJson({ counts: counts({ P1: 2, P2: 2 }) }), listJson([startable(1), startable(2, { tier: 'P2', playbook: 'reply_draft' }), item(3), item(4, { tier: 'P2' })]))),

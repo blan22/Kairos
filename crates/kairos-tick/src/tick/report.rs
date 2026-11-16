@@ -81,6 +81,9 @@ pub struct CollectReport {
     pub failed_p1: usize,
     /// 이번 틱이 Mac 잠자기에 끊겼다. 그 틱의 timeout은 고장이 아니다.
     pub slept: bool,
+    /// 이번 틱에 알린 새 판. 알리지 않았으면 키가 없다.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub update_notified: Option<String>,
 }
 
 impl CollectReport {
@@ -102,6 +105,7 @@ impl CollectReport {
             dropped_p1: 0,
             failed_p1: 0,
             slept: false,
+            update_notified: None,
         }
     }
 

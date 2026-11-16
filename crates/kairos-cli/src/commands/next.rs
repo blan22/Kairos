@@ -48,6 +48,8 @@ impl Command for Next {
             Explainer::new(database.connection()).fill(&mut card.items)?;
         }
         response.newest = ItemRepo::new(database.connection()).newest_open_id()?;
+        // 새 판 소식. 게이트와 무관하게 낸다. 패널이 띠로 보여 준다.
+        response.update = context.update_notice();
         drop(database);
         // 알림을 눌러 연 항목. 10분이 지난 요청은 싣지 않는다.
         response.reveal = RevealFile::new(context.home()).recent(response.at);

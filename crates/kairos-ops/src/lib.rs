@@ -4,6 +4,7 @@
 //! - `StallWatch`, `SleepDetector`, `ResumeFile`, `TickClockRepo` 잠자기와 고장을 나눈다.
 //! - `Maintenance`, `MaintenanceRepo` 보존 정리, 백업, 하루 한 번의 정비
 //! - `Installer` 실행본 배치와 스케줄러(launchd, systemd, 작업 스케줄러) 등록
+//! - `UpdateFile`, `GhReleaseProbe` 새 판 확인(판 번호만 읽는다)
 
 mod fs_util;
 mod install;
@@ -12,6 +13,7 @@ mod posix;
 mod sleep;
 mod tick_clock;
 mod tool_results;
+mod update;
 mod watchdog;
 
 pub use install::collector_allowlist;
@@ -34,5 +36,10 @@ pub use tick_clock::TickClockRepo;
 pub use tool_results::{
     MAX_RECOVERED_BYTES, RecoveredResponses, ToolResults, ToolResultsSweep, collect_cwd, collector_project_dir,
     project_slug,
+};
+pub use update::{
+    BundleFetcher, GhReleaseProbe, RELEASE_REPO, RELEASE_WORKFLOW, ReleaseProbe, UPDATE_APPLY_COMMAND,
+    UPDATE_CHECK_INTERVAL_MS, UPDATE_FILE, UPDATE_RETRY_INTERVAL_MS, UPDATE_TITLE, UpdateFile, UpdateRecord, Version,
+    asset_name, gh_env, update_body,
 };
 pub use watchdog::{Watchdog, WatchdogNotify};

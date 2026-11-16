@@ -21,7 +21,10 @@ mod shared;
 mod sources;
 mod surface;
 mod tools;
+mod update;
 mod watchdog;
+
+pub use update::hint as update_hint;
 
 use crate::command::CommandRegistry;
 
@@ -62,6 +65,6 @@ pub fn registry() -> CommandRegistry {
         .with(install::Install)
         .with(install::Uninstall)
         .with(demo::Demo)
-        .with(tools::Update)
+        .with(update::Update)
         .with(tools::Completions)
 }

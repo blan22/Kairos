@@ -89,7 +89,7 @@ pub const ENTRIES: [Entry; 36] = [
         "수집을 한 번 돌리거나 멈춘 수집을 푼다",
         "사용법: kairos collect [--force] | --resume | --skip-slack-until <Message_ts 또는 ISO 시각> | --reread-notion",
     ),
-    entry("update", Group::Setup, "지금 판과 업데이트하는 명령을 알려 준다"),
+    entry("update", Group::Setup, "새 판을 확인하고 올린다(--check, --apply)"),
     entry("completions", Group::Setup, "셸 자동 완성 스크립트를 낸다(zsh, bash)"),
     entry("demo", Group::Setup, "계정 없이 합성 데이터로 본다"),
     entry("hello", Group::Internal, "호스트가 시작할 때 계약 판과 구성을 읽는다"),

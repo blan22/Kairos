@@ -41,7 +41,7 @@ import {
   type PanelContext,
 } from 'orca'
 import { ADD_TITLE_LIMIT, MARKS_KEY, PANEL_ACTION_TIMEOUT_MS, PANEL_SNAPSHOT_TIMEOUT_MS } from './config.ts'
-import type { ActionId, ActionOutcome, CardView, Failure, GateView, ItemActionId, ItemRow, ListView, NextView, OfferWhy, PanelAction, ReadyView, RevealView, Snapshot, SourceView, WhyView } from './protocol.ts'
+import type { ActionId, ActionOutcome, CardView, Failure, GateView, ItemActionId, ItemRow, ListView, NextView, OfferWhy, PanelAction, ReadyView, RevealView, Snapshot, SourceView, UpdateView, WhyView } from './protocol.ts'
 import {
   canStart,
   commitMarks,
@@ -288,6 +288,8 @@ const OPENING = '세션을 여는 중입니다'
 const REVEAL_WORD = '알림에서 연 일'
 /** 누른 알림의 일이 모두 사라졌을 때의 안내. 띠가 없으니 위로 띄운다. */
 const REVEAL_SPOT: Spot = { where: 'reveal', group: NOW_GROUP, rowId: null }
+/** 새 판을 올리는 명령. kairos의 `UPDATE_APPLY_COMMAND`와 같다. */
+const UPDATE_COMMAND = 'kairos update --apply'
 const START_WORD = '세션 열고 시작'
 /** 제안 상자의 제목. 묶음 이름(에이전트 제안)을 되풀이하지 않고 상자 안의 글이 무엇인지 말한다. */
 const SCOPE_WORD = '에이전트에게 맡길 범위'
@@ -328,6 +330,8 @@ const provider = atom<ProviderId>('all')
 const marks = atom<Marks>(MARKS_KEY, EMPTY_MARKS, { persist: 'storage' })
 /** 마지막으로 적용한 알림의 시각. 패널을 다시 열어도 kairos는 10분 동안 같은 값을 주므로 남겨 둔다. */
 const revealSeen = atom<number>('revealAt', 0, { persist: 'plugin', version: 1 })
+/** 사용자가 닫은 새 판. 같은 판은 다시 띄우지 않고, 더 새 판이 나오면 다시 띄운다. */
+const updateClosed = atom<string>('updateClosed', '', { persist: 'plugin', version: 1 })
 
 let context: PanelContext | null = null
 /** 같은 틱의 두 번째 누름을 그리기 전에 막는다. */
@@ -1765,6 +1769,20 @@ function floatingNotice(value: Notice) {
   )
 }
 
+/** 새 판 띠. 판 번호와 고정 명령만 그린다. 패널은 설치하지 않는다. 사용자가 터미널에서 명령을 실행한다. */
+function updateBar(update: UpdateView) {
+  return (
+    <Box key="update" background="card" border radius="md" paddingX="sm" paddingY="sm" direction="column" gap="xs">
+      <Box direction="row" justify="between" align="center" gap="sm">
+        <Text size="sm">{`kairos ${update.latest}이 나왔습니다`}<Text size="xs" muted>{` · 지금 ${update.current}`}</Text></Text>
+        <IconButton icon="close" label="새 판 안내 닫기" tooltip="닫기" size="xs" variant="ghost" onPress={() => set(updateClosed, update.latest)} />
+      </Box>
+      <Text size="xs" muted>터미널에서 실행하면 설정과 데이터는 그대로 두고 올립니다</Text>
+      <Code>{UPDATE_COMMAND}</Code>
+    </Box>
+  )
+}
+
 function healthLine(health: string) {
   const tail = health === SESSION_WARNING ? '세션 표시가 늦을 수 있습니다' : '이 출처의 새 일은 늦게 보일 수 있습니다'
   return (
@@ -2187,6 +2205,9 @@ export default function Panel() {
   const headNote = mark !== null && !headShown(mark.group) ? mark.text : null
 
   const health = gateOpen ? next.health : null
+  // 새 판은 게이트와 무관하게 보인다. 닫은 판은 다시 띄우지 않는다.
+  const update = next?.update ?? null
+  const shownUpdate = update !== null && update.latest !== read(updateClosed) ? update : null
   const hasTrust = trouble !== null || floating !== null || health !== null
   const offers = [...listedRows(state, 'all'), ...(fullCard?.items ?? [])].filter(canStart).length
   const unsure = trouble !== null || state.nextStale || state.listStale || list === null
@@ -2252,6 +2273,7 @@ export default function Panel() {
           {health === null ? null : healthLine(health)}
         </Stack>
       ) : null}
+      {shownUpdate === null ? null : updateBar(shownUpdate)}
       {gateOpen && isFocused(next) ? focusBar(next) : null}
       {alertsZone(shownAlerts, alerts.length, list, gateOpen)}
       {shownReveal === null || lifted.length === 0 ? null : revealZone(shownReveal, lifted, news, at)}
