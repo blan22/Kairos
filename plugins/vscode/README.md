@@ -23,12 +23,12 @@ VS Code의 활동 막대에 kairos 보기를 두고, 남은 일을 보여 주는
 
 | 설정 | 효과 |
 |---|---|
-| `[hosts] enabled`에 `vscode` | 알림을 눌렀을 때 Orca를 호출하지 않습니다 |
+| `[hosts] enabled`에서 `orca`를 뺌 | 알림을 눌렀을 때 Orca를 호출하지 않습니다 |
 | `[sessions] host = "git"` | kairos가 만든 worktree에서 `kairos-run`을 VS Code 터미널로 띄웁니다 |
 
 ## 동작
 
-확장은 kairos를 `packages/kairos-client`로만 호출합니다. 실행 파일은 `~/Library/Application Support/kairos/current/bin/kairos`이고, 본인 소유이며 다른 사용자가 고칠 수 없을 때만 호출합니다.
+확장은 kairos를 `packages/kairos-client`로만 호출합니다. 실행 파일은 설치본의 `current/bin/kairos`입니다. 자리는 macOS가 `~/Library/Application Support/kairos`, Linux가 `~/.local/share/kairos`, Windows가 `%LOCALAPPDATA%\kairos`입니다. macOS와 Linux에서는 본인 소유이며 다른 사용자가 고칠 수 없을 때만 호출합니다. Windows에서는 정해진 자리의 `kairos.exe`만 호출합니다.
 
 화면은 `kairos watch --json`의 신호와 60초 폴링으로 다시 그립니다. 알림을 누르면(`reveal.json`) 해당 항목으로 이동합니다.
 

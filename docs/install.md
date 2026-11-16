@@ -82,7 +82,7 @@ x86_64와 aarch64를 지원합니다. 릴리스 패키지는 glibc 2.35 이상(U
 | systemd 사용자 세션 | 항상. 수집을 systemd 사용자 timer로 돌립니다 |
 | 로그인한 gh(`gh auth login`) | 항상 |
 | `notify-send`(libnotify) | 알림을 받을 때 |
-| Orca | Orca 패널을 쓸 때. PATH의 `orca`를 부릅니다 |
+| Orca | Orca 패널을 쓸 때. PATH에서 찾는 규칙은 [지원하는 OS](platforms.md#linux)에 있습니다 |
 | Rust(rustup), C 컴파일러 | 저장소에서 빌드할 때 |
 
 릴리스 패키지로 설치합니다.
@@ -110,7 +110,7 @@ Windows 10, 11(x86_64)을 지원합니다. Windows에서는 [세션](sessions.md
 | 필요한 것 | 언제 |
 |---|---|
 | 로그인한 gh(`winget install --id GitHub.cli` 뒤 `gh auth login`) | 항상 |
-| Orca | Orca 패널을 쓸 때. PATH의 `orca`를 부릅니다 |
+| Orca | Orca 패널을 쓸 때. PATH의 `orca.exe`만 씁니다([지원하는 OS](platforms.md#windows)) |
 | Rust(rustup), Visual Studio Build Tools의 C++ 도구 | 저장소에서 빌드할 때 |
 
 릴리스 패키지로 설치합니다. PowerShell에서 실행하세요.
@@ -203,12 +203,12 @@ Linux는 `scripts/install-linux.sh --update`, Windows는 `scripts\install.ps1 --
 kairos uninstall --dry-run --purge   # 지울 대상만 확인합니다
 kairos uninstall                     # 예약 작업(launchd, systemd, 작업 스케줄러)만 해제합니다
 kairos uninstall --runtime           # 런타임과 ~/.local/bin/kairos까지 지웁니다. 수집 기록과 설정은 남습니다
-kairos uninstall --purge             # 데이터 폴더 전체와 키체인의 세션 토큰까지 지웁니다
+kairos uninstall --purge             # 데이터 폴더 전체와 키체인에 남은 예전 세션 토큰까지 지웁니다
 ```
 
 `--runtime`과 `--purge`는 지울 대상을 먼저 보여 주고, `y`라고 답할 때만 지웁니다. 어떤 경우에 거절하는지는 [명령](commands.md#uninstall)에 있습니다.
 
-Orca 패널은 언로드하는 명령(`orca plugin dev unload <경로>`)만 알려 줍니다. `~/.zshrc`에 추가한 PATH 줄과 저장소 폴더는 직접 지우세요.
+Orca 패널은 언로드하는 명령(`orca plugin dev unload <경로>`)만 알려 줍니다. `~/.zshrc`에 추가한 PATH 줄과 저장소 폴더는 직접 지우세요. Windows에서는 사용자 PATH에 더한 `%LOCALAPPDATA%\kairos\current\bin`도 직접 지우세요.
 
 ## 공개 전 버전에서 업그레이드
 

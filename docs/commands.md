@@ -42,8 +42,8 @@ kairos off [YYYY-MM-DD] [--clear]
 kairos setup [--org <파일> [--sha256 <값>]] [--yes] [--no-install] [--google <주소>] [--slack <ID>] [--name <이름>]
 kairos doctor
 kairos sources [on|off <소스>...] [--json]
-kairos connect [github | google <주소> | slack <ID> | name <이름> | mcp <소스> <서버> [동작=도구]...]
-kairos config validate | show [--origin] | path | init [--org <파일> [--sha256 <값>]] [--force]
+kairos connect [github | google <주소> | slack <ID> | name <이름> | mcp <calendar|gmail|slack> (<서버> [동작=도구]... | --reset)] [--json]
+kairos config validate [--json] | show [--origin] [--json] | path | init [--org <파일> [--sha256 <값>]] [--force]
 kairos install [--dry-run [--preview-dir 폴더]] | --apply | --register [--claude 경로] [--gh 경로] [--root 폴더]
 kairos uninstall [--dry-run] [--runtime | --purge] [--yes]
 kairos collect [--force] | --resume | --skip-slack-until <Message_ts 또는 ISO 시각> | --reread-notion
@@ -58,11 +58,14 @@ kairos --version
 
 ```
 kairos hello [--json]
-kairos watch --json
+kairos watch --json [--interval <ms>]
+kairos reveal <항목 ID>... [--json] | --link kairos-reveal:items=<ID,...>
 kairos mcp serve
+kairos watchdog
+kairos plan-tick | page-info < JSON | ingest < JSON
 ```
 
-`kairos help`는 명령을 용도별로 묶어 한 줄 설명과 함께 보여 줍니다. 호스트와 수집이 호출하는 명령(`hello`, `watch`, `reveal`, `plan-tick`, `page-info`, `ingest`, `mcp`)은 `--all`을 줄 때만 나옵니다. 옵션을 잘못 주면 오류 코드 아래에 사용법이 함께 나오고, 잘못 입력한 명령에는 비슷한 이름을 제안합니다.
+`kairos help`는 명령을 용도별로 묶어 한 줄 설명과 함께 보여 줍니다. 호스트와 수집이 호출하는 명령(`hello`, `watch`, `reveal`, `plan-tick`, `page-info`, `ingest`, `mcp`, `watchdog`)은 `--all`을 줄 때만 나옵니다. `watchdog`은 Linux와 Windows의 감시자가 5분마다 부르는 명령입니다. 옵션을 잘못 주면 오류 코드 아래에 사용법이 함께 나오고, 잘못 입력한 명령에는 비슷한 이름을 제안합니다.
 
 호스트가 쓰는 명령과 JSON 응답은 [호스트 계약](surface-protocol.md)에 있습니다.
 
@@ -73,6 +76,7 @@ kairos mcp serve
 - `--seen`은 '지금 볼 일' 카드의 노출과 예산, 세션 소식 확인을 함께 기록합니다.
 - `--seen-ready`는 세션 소식 확인만 기록합니다. 카드 노출과 예산은 건드리지 않습니다. 카드를 그리지 않는 화면이 씁니다.
 - 둘을 함께 주면 `--seen`을 따릅니다. 출력은 어느 쪽이든 같습니다.
+- `--ack`는 이미 본 묶음 카드와 근무일을 넘겨 온 카드를 확인한 것으로 기록합니다. Orca 패널이 씁니다.
 
 ## later
 
@@ -90,7 +94,8 @@ kairos mcp serve
 
 - `notify setup`은 macOS 알림 권한 창을 띄웁니다. 터미널에서는 묻지 않습니다. 이미 권한이 있으면 아무것도 띄우지 않습니다. 전에 거절했다면 macOS가 권한 창을 다시 띄우지 않으므로 시스템 설정의 알림 화면을 엽니다.
 - `notify test`는 고정 문구로 된 테스트 알림 하나를 보냅니다.
-- 둘 다 설치본의 헬퍼를 쓰고, 세션 안에서는 동작하지 않습니다.
+- macOS에서는 둘 다 설치본의 헬퍼를 쓰고, 세션 안에서는 동작하지 않습니다.
+- Linux와 Windows에는 앱별 권한이 없습니다. `notify setup`은 알림 도구(`notify-send`, PowerShell)가 있는지만 확인하고, 없으면 `notifier_missing`으로 실패합니다. `notify test`는 `notify-send`나 토스트로 같은 테스트 알림을 보냅니다.
 - `notify off`는 P1 알림만 끕니다. 자세한 동작은 [항목과 알림](items.md#p1-알림)에 있습니다.
 
 ## doctor
@@ -101,7 +106,7 @@ kairos mcp serve
 
 | 옵션 | 지우는 범위 |
 |---|---|
-| 없음 | launchd 작업만 해제합니다 |
+| 없음 | 예약 작업(launchd, systemd, 작업 스케줄러)만 해제합니다 |
 | `--runtime` | 런타임(`<데이터 폴더>/<버전>`, `current`, `~/.local/bin/kairos` 링크)까지. 수집 기록과 설정은 남깁니다 |
 | `--purge` | 데이터 폴더 전체와 키체인에 남은 예전 세션 토큰까지 |
 | `--dry-run` | 지울 대상을 보여 주기만 합니다 |
@@ -112,7 +117,7 @@ kairos mcp serve
 - 런타임으로 인정하는 것은 데이터 폴더 바로 아래에 있고, 이름이 버전 번호이며, `bin/kairos`와 `bin/kairos-run`이 들어 있는 폴더뿐입니다.
 - `--purge`는 kairos만 쓰는 이름의 파일(`kairos.db`, `connections.toml`, `install-source`)이 하나도 없으면 거절합니다.
 - `~/.local/bin/kairos`는 이 데이터 폴더를 가리키는 링크일 때만 지웁니다.
-- launchd 작업을 해제하지 못했으면 지우지 않고 멈춥니다. 남은 작업이 지워진 경로를 계속 가리키기 때문입니다.
+- 예약 작업을 해제하지 못했으면 지우지 않고 멈춥니다. 남은 작업이 지워진 경로를 계속 가리키기 때문입니다.
 
 그 밖의 동작은 다음과 같습니다.
 
@@ -130,7 +135,7 @@ kairos mcp serve
 - `--apply`는 새 버전을 설치합니다. 설정과 데이터는 그대로 둡니다. 자세한 순서는 [설치](install.md#업데이트)에 있습니다.
   - 일반 터미널에서만 동작합니다. 세션, Orca 터미널, Claude Code 안에서는 거절합니다.
   - 릴리스 패키지로 설치했다면 새 버전의 패키지를 받아 SHA256과 빌드 증명을 확인한 뒤 설치합니다. 하나라도 맞지 않으면 설치하지 않습니다.
-  - 저장소에서 빌드했다면 `<저장소>/scripts/install.sh --update`를 실행합니다. 스크립트의 종료 코드를 그대로 돌려줍니다.
+  - 저장소에서 빌드했다면 `<저장소>/scripts/install.sh --update`(Linux는 `install-linux.sh --update`, Windows는 `install.ps1 --update`)를 실행합니다. 스크립트의 종료 코드를 그대로 돌려줍니다.
 - 설치 방식은 설치 스크립트가 데이터 폴더의 `install-source`에 기록해 둡니다(`release` 또는 `source:<저장소 경로>`).
 - `--json`은 `update.version`, `update.method`(`source`, `release`, `unknown`), `update.command`를 출력합니다. 확인 기록이 있으면 `update.latest`, `update.available`, `update.checkedAt`이 추가됩니다. 값이 없으면 키 자체가 빠집니다. `--apply`는 `--json`을 받지 않습니다.
 - `command`는 사람이 터미널에 붙여 넣는 셸 문자열입니다. 호스트는 이 값을 실행하지 않습니다.
@@ -159,7 +164,7 @@ eval "$(kairos completions bash)"
 - 페이지 상한이나 틱 마감으로 잘린 Slack 질의는 다음 틱이 마지막으로 읽은 건의 1초 전부터 자동으로 이어 읽습니다(`page_cap`). 같은 초에 페이지 예산보다 많은 메시지가 몰려 이어 읽어도 진행하지 못할 때만 `page_cap_stalled` 공백으로 알립니다. 이때도 `--skip-slack-until`로 건너뛸 수 있습니다.
 - `--reread-notion`은 Notion 파서를 고친 뒤에 씁니다. 형식을 알 수 없는 채로(`notion_unknown`) 저장한 메일과 격리한 메일을 다음 틱부터 다시 읽습니다.
 - `plan-tick`, `page-info`, `ingest`는 수집 모드가 호출하는 내부 명령입니다.
-- `kairos collect`를 직접 실행하려면 `KAIROS_CLAUDE`와 `KAIROS_PLUGIN_DIR`이 있어야 MCP 소스를 읽습니다. launchd plist에는 둘 다 들어 있습니다.
+- `kairos collect`를 직접 실행하려면 `KAIROS_CLAUDE`와 `KAIROS_PLUGIN_DIR`이 있어야 MCP 소스를 읽습니다. 예약 작업에는 둘 다 들어 있습니다.
 
 ## demo
 

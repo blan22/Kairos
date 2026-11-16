@@ -10,7 +10,7 @@
 | [설치](install.md) | 설치, 업데이트, 제거 |
 | [지원하는 OS](platforms.md) | macOS, Linux, Windows에서 다른 점과 세션을 macOS에서만 여는 이유 |
 | [설정](configuration.md) | `kairos setup`, 조직 프로필, 설정 파일, 근무 일정 |
-| [항목과 알림](items.md) | 항목이 열리고 닫히는 방식, 예산, Mac 알림 |
+| [항목과 알림](items.md) | 항목이 열리고 닫히는 방식, 예산, 알림 |
 | [에이전트 세션](sessions.md) | 세션 켜기, 맡길 수 있는 일, PR 올리기 |
 | [문제 해결](troubleshooting.md) | 자주 막히는 곳과 해결 명령 |
 
@@ -41,6 +41,6 @@
 | [Orca 패널](../plugins/orca-panel/README.md) | Orca 사이드바 패널과 상태 표시줄 |
 | [Claude Code 플러그인](../plugins/claude-code/README.md) | 슬래시 명령과 MCP 서버 |
 | [VS Code 확장](../plugins/vscode/README.md) | 활동 막대의 kairos 보기 |
-| [KairosNotifier](../ops/notifier/README.md) | Mac 알림 헬퍼 |
+| [KairosNotifier](../ops/notifier/README.md) | macOS 알림 헬퍼 |
 | [스토리북](../storybook/README.md) | 플러그인 UI 미리보기 |
 | [조직 프로필](../profiles/README.md) | 관리자에게 받은 `org.toml`을 두는 곳 |

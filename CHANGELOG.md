@@ -2,6 +2,12 @@
 
 사용자에게 보이는 변화를 버전별로 적습니다. 형식은 [Keep a Changelog](https://keepachangelog.com/ko/1.1.0/)를 참고합니다. 마이그레이션 절차가 필요한 버전은 `docs/`의 해당 문서를 가리킵니다.
 
+## 다음 버전
+
+### 변경
+
+- 문서를 0.6.0 동작에 맞췄습니다. Linux와 Windows에도 맞는 알림과 예약 작업 설명, 개인 플레이북 대상(`config.toml`의 `[[playbooks]]`)과 `[hosts.git] worktree_root`, 호스트 계약의 오류 응답과 빠진 명령(`next --ack`, `focus`, `display auto`, `watchdog`)을 더했습니다.
+
 ## [0.6.0] - 2026-11-16
 
 ### 변경

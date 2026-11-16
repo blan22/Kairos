@@ -38,7 +38,7 @@ Orca를 호출할 때는 다음 규칙을 지킵니다.
 
 ## claude 실행 옵션
 
-claude는 `--session-id <uuid>`, `--permission-mode auto`, `--strict-mcp-config`, `--settings`, `--tools`, `--disallowedTools`로 뜹니다. 프로필에 따라 다른 값은 다음과 같습니다.
+claude는 `--session-id <uuid>`, `-n <제목>`, `--permission-mode auto`, `--strict-mcp-config`, `--settings`, `--tools`, `--disallowedTools`, `--add-dir <세션 입력 폴더>`로 뜹니다. 프로필에 따라 다른 값은 다음과 같습니다.
 
 | | 읽는 프로필 | 고치는 프로필 |
 |---|---|---|
