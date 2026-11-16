@@ -4,7 +4,7 @@
 
 # kairos
 
-**흩어진 회사 일을 모아, 지금 볼 일 하나를 골라 주는 도구(macOS, Linux, Windows)**
+**흩어진 태스크를 한 곳으로 모아주는 도구(macOS, Linux, Windows)**
 
 [![CI](https://github.com/blan22/Kairos/actions/workflows/ci.yml/badge.svg)](https://github.com/blan22/Kairos/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/blan22/Kairos)](https://github.com/blan22/Kairos/releases)
