@@ -202,11 +202,12 @@ impl Uninstall {
         remove_data(home, user_home)?;
         console.print(&format!("지움 {}", shown(home)));
         match context.keychain().delete() {
-            Ok(true) => console.print("지움 키체인의 세션 토큰"),
+            Ok(true) => console.print("지움 키체인의 예전 세션 토큰"),
             Ok(false) => {}
             Err(_) => {
-                console
-                    .print("키체인의 세션 토큰을 지우지 못했습니다. 키체인 접근에서 kairos-session-token을 지우세요");
+                console.print(
+                    "키체인의 예전 세션 토큰을 지우지 못했습니다. 키체인 접근에서 kairos-session-token을 지우세요",
+                );
                 return Ok(true);
             }
         }

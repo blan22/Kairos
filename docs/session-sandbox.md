@@ -26,13 +26,13 @@ Orca를 호출할 때는 다음 규칙을 지킵니다.
 
 ### 외부인 재확인
 
-세션을 띄우기 직전에 gh GraphQL로 그 이슈나 PR의 본문, 댓글, 리뷰, 리뷰 스레드 글의 작성자를 끝까지 읽습니다.
+세션을 띄우기 직전에 사용자의 gh 로그인으로 GraphQL을 불러 그 이슈나 PR의 본문, 댓글, 리뷰, 리뷰 스레드 글과 작성자를 끝까지 읽습니다. 같은 질의로 받은 글이 세션 입력이 되므로, 확인한 뒤에 달린 글이 세션에 들어가지 않습니다.
 
 | 결과 | 처리 |
 |---|---|
 | T0, T1이 아닌 사람의 글이 있음 | `outsider_writing`으로 실패 |
 | 전부 읽었다고 확인할 수 없음(gh 실패, 시간 초과, 개수 불일치, 등급을 정할 수 없는 작성자) | `live_unverified`로 실패 |
-| 통과 | URL을 고정 프롬프트에 넣고 세션을 띄움 |
+| 통과 | 읽은 글을 세션 입력 파일로 쓰고, URL과 그 파일의 경로만 고정 프롬프트에 넣어 세션을 띄움. PR이면 diff도 받음 |
 
 실패하면 run을 실패로 내리고 항목을 되돌립니다. 봇이 쓴 글은 세지 않습니다.
 
@@ -65,19 +65,22 @@ push, pull, remote, config, commit-tree, update-ref, gh 쓰기는 두 프로필 
 
 이 동작은 가짜 claude로만 테스트했습니다. 차단 테스트 때 세션 안에서 `printenv`로 확인하세요.
 
-### 세션 토큰 전달
+### 자격 증명과 세션 입력
 
-읽기 전용 토큰은 두 곳으로 전달합니다. 자식 환경의 `GH_TOKEN`과 `--settings` 파일의 env입니다. 설정 파일은 `<KAIROS_HOME>/session-settings/<run>.json`(0700 폴더 안의 0600 파일)이고, 세션이 끝나면 지웁니다.
+세션에는 GitHub 자격 증명을 넘기지 않습니다. `GH_TOKEN`을 포함한 `CLEARED_ENV`를 모두 `env -u`로 지우고 `--settings`에서도 빈 값으로 고정합니다. 설정 파일은 `<KAIROS_HOME>/session-settings/<run>.json`(0700 폴더 안의 0600 파일)이고, 세션이 끝나면 지웁니다.
 
-- `~/.claude/settings.json`의 env에 다른 `GH_TOKEN`이 있어도 `--settings`가 읽기 전용 토큰으로 다시 고정합니다.
-- 다른 사용자가 ps로 인자를 볼 수 있으므로 토큰은 인자에 넣지 않습니다.
-- 세션의 gh는 `GH_CONFIG_DIR=/var/empty`를 보므로 키체인의 로그인 정보를 찾지 않습니다.
+- `~/.claude/settings.json`의 env에 `GH_TOKEN`이 있어도 `--settings`가 빈 값으로 다시 덮습니다.
+- 세션의 gh는 `GH_CONFIG_DIR=/var/empty`를 보므로 키체인의 로그인 정보를 찾지 않습니다. 네트워크도 없어서 어떤 자격 증명을 얻어도 GitHub에 닿지 못합니다.
+- 이슈나 PR의 글은 `~/Library/Caches/kairos/session-briefs/<run>/brief.md`로 넘깁니다. run마다 새로 만든 0700 폴더 안의 0600 파일이고, 이미 있는 폴더나 링크인 위 폴더에는 쓰지 않습니다. 세션이 끝나면 지웁니다.
+- 세션은 `--add-dir`로 이 run 폴더를 엽니다. 본문은 인자와 프롬프트에 넣지 않고 세션이 Read 도구로 읽게 해서, 지시가 아니라 데이터로 다루게 합니다.
+- 세션 입력 폴더 전체(`session-briefs`)는 샌드박스 denyWrite와 denyRead, Edit 거부에 들어 있습니다. 세션은 자기 입력을 Read로만 읽고, 다른 run의 입력은 작업 공간 밖이라 읽지 못합니다.
+- 봇의 글은 작성자 판정에서 세지 않으므로 봇의 글이라고 표시합니다. 울타리 밖 제목 줄의 이름과 경로에서는 제어 문자와 백틱을 지웁니다.
 
 ## 샌드박스
 
 `--settings`는 다음을 함께 넘깁니다.
 
-- **Bash 샌드박스.** 쓰기는 작업 공간만 허용합니다. 연결된 worktree라면 아래에서 설명할 공용 `.git`의 막지 않은 부분도 허용합니다. 네트워크는 `api.github.com`만 허용하고, 샌드박스 밖 재실행은 금지합니다.
+- **Bash 샌드박스.** 쓰기는 작업 공간만 허용합니다. 연결된 worktree라면 아래에서 설명할 공용 `.git`의 막지 않은 부분도 허용합니다. 허용하는 네트워크 호스트는 없고(`allowedDomains`가 비어 있고 `strictAllowlist`가 켜져 있습니다), GitHub 호스트는 사용자 설정이 열어도 막습니다. 샌드박스 밖 재실행은 금지합니다.
 - **git 자격 증명 끄기.**
 - **`permissions.blockReadsOutsideWorkingDirectories`.**
 - **고치는 프로필의 `permissions.blockWritesOutsideWorkingDirectories`.** claude 2.1.314 이상에서 Edit, Write의 작업 공간 밖 쓰기도 막습니다. 이 설정을 모르는 버전에서도 차단이 유지되도록, 홈 폴더의 제어 경로(`~/.claude`, `~/Library/LaunchAgents`, `~/.local/bin`, git 설정, `~/.ssh`)와 셸 시작 파일은 Edit 거부로 한 번 더 막습니다.
@@ -129,11 +132,11 @@ APFS는 유니코드도 접어서 비교합니다. `ſ`는 s로, 켈빈 기호 K
 
 ## 세션 프롬프트
 
-세션 프롬프트는 이 제약을 먼저 알려 줍니다. 외부 쓰기가 없고, 네트워크는 `api.github.com`뿐이라 패키지를 설치할 수 없으며, 인터프리터와 셸 접두어는 거부된다는 내용입니다. 막히면 우회하지 말고 멈춰서 남은 일을 적게 합니다.
+세션 프롬프트는 이 제약을 먼저 알려 줍니다. 외부 쓰기가 없고, 네트워크가 없어 gh와 패키지 설치가 실패하며, 인터프리터와 셸 접두어는 거부된다는 내용입니다. 고치는 세션에는 끝나면 kairos가 커밋을 올린다는 것도 알려 줍니다. 막히면 우회하지 말고 멈춰서 남은 일을 적게 합니다.
 
 ## PR 올리기의 안전장치
 
-`kairos pr`은 확인한 커밋 SHA를 그대로 올리고, 저장소 훅과 replace ref를 끕니다(`core.hooksPath=/dev/null`, `--no-replace-objects`). 올리기 전에 검사하는 조건 전체는 [SECURITY.md](../SECURITY.md#pr-올리기)에 있습니다.
+세션이 끝난 뒤의 올리기와 `kairos pr`은 같은 코드를 씁니다. 세션이 끝난 뒤에는 방금 정상으로 끝나 `ended`가 된 그 run만 검사하고, 커밋과 바뀐 파일 목록을 보여 준 뒤 사용자가 일회용 확인 코드를 입력해야 올립니다. 비교와 push는 데이터 폴더의 검사용 저장소(`pr-check/<worktree 이름>`)에서 `--git-dir`을 밝혀 부르므로 `safe.bareRepository=explicit`에서도 동작하고, 끝나면 지웁니다. 자동 경로의 PATH는 `/usr/bin:/bin:/usr/sbin:/sbin`과 세션 전에 정한 gh의 폴더뿐입니다. 세션 터미널의 PATH를 물려받으므로 작업 공간과 git 폴더, 세션 입력 폴더 아래의 PATH 항목을 빼고, gh는 세션을 띄우기 전에 그 폴더 밖에서 정해 둡니다. 확인한 커밋 SHA를 그대로 올리고, 저장소 훅과 replace ref를 끕니다(`core.hooksPath=/dev/null`, `--no-replace-objects`). 올리기 전에 검사하는 조건 전체는 [SECURITY.md](../SECURITY.md#pr-올리기)에 있습니다.
 
 ## 보안 기준을 바꿀 때
 

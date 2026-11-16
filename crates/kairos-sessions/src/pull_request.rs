@@ -1,4 +1,4 @@
-//! 고치는 세션이 커밋한 일을 draft PR로 올린다. 사용자가 세션 카드의 'PR 올리기'를 눌렀을 때만 부른다.
+//! 고치는 세션이 커밋한 일을 draft PR로 올린다. 사용자가 세션 카드의 'PR 올리기'를 누르거나, 세션이 끝난 뒤 kairos-run의 물음에 답했을 때만 올린다.
 //!
 //! 세션은 샌드박스 안에서 로컬 커밋까지만 한다. push와 PR 생성은 세션 밖의 kairos가 사용자의 git, gh 로그인으로 한다.
 //! 세션은 PR을 제안만 한다. 커밋 제목이 PR 제목, 커밋 목록이 PR 본문이 된다. 올리는 결정은 사용자가 한다.
@@ -9,8 +9,11 @@
 //! - 공용 .git은 같은 클론의 다른 세션도 쓸 수 있다. 저장소 설정이 명령이나 원격 주소를 바꾸면 git을 더 부르지 않는다(`config_safe`).
 //! - kairos-run이 이 run으로 띄운 세션만 올린다. 이어받은 세션은 다른 플레이북으로 떴을 수 있다.
 //! - PR은 언제나 draft다. 이미 열린 PR이 있으면 push만 하고 그 주소를 돌려준다.
+//! - 비교와 push는 데이터 폴더 아래의 검사용 저장소에서 한다. 공용 .git의 객체는 세션이 남긴 프로세스가 바꿀 수 있지만,
+//!   검사용 저장소로 받을 때 git이 해시를 다시 계산하므로 확인한 SHA의 내용이 그대로 남는다.
 
 use std::collections::BTreeMap;
+use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, LazyLock};
 use std::time::Duration;
@@ -34,6 +37,10 @@ const GIT_TIMEOUT: Duration = Duration::from_secs(8);
 const PUSH_TIMEOUT: Duration = Duration::from_secs(45);
 const GH_TIMEOUT: Duration = Duration::from_secs(20);
 const MAX_OUTPUT: usize = 256 * 1024;
+/// 데이터 폴더 아래의 검사용 저장소 자리. 세션은 데이터 폴더에 쓰지 못한다.
+const CHECK_DIR: &str = "pr-check";
+const CHECK_BASE: &str = "refs/kairos/base/check";
+const CHECK_HEAD: &str = "refs/kairos/head/check";
 const TITLE_MAX_CHARS: usize = 200;
 const BODY_MAX_CHARS: usize = 20_000;
 /// 본문에 싣는 커밋 수. 넘으면 줄여 적는다.
@@ -254,6 +261,15 @@ fn clip(text: &str, max: usize) -> String {
     text.chars().filter(|char| !char.is_control() || *char == '\n').take(max).collect()
 }
 
+/// `roots` 아래가 아닌 PATH 항목만 남긴다. 경로는 구성 요소 단위로 비교한다(`/w`는 `/wx`를 덮지 않는다).
+fn path_outside(path: &str, roots: &[PathBuf]) -> String {
+    path.split(':')
+        .filter(|entry| entry.starts_with('/'))
+        .filter(|entry| !roots.iter().any(|root| Path::new(entry).starts_with(root)))
+        .collect::<Vec<_>>()
+        .join(":")
+}
+
 /// git과 gh를 부르는 쪽. 경로와 환경은 조립 지점이 정한다.
 pub struct PullRequestPublisher<'a> {
     database: &'a Database,
@@ -299,6 +315,30 @@ impl<'a> PullRequestPublisher<'a> {
         }
     }
 
+    /// 세션이 쓸 수 있던 폴더 아래의 PATH 항목을 뺀다. 세션 뒤의 자동 올리기는 세션 터미널의 PATH를 물려받는다.
+    /// 셸 설정이 worktree 안의 폴더를 PATH에 넣었다면 세션이 심은 ssh, 자격 증명 도우미를 git이 사용자 자격으로 부를 수 있다.
+    #[must_use]
+    pub fn without_path_under(mut self, roots: &[PathBuf]) -> Self {
+        if let Some(path) = self.env.get_mut("PATH") {
+            *path = path_outside(path, roots);
+        }
+        self
+    }
+
+    /// PATH를 통째로 바꾼다. 세션 뒤의 자동 경로는 터미널의 PATH 대신 고정 경로를 쓴다.
+    #[must_use]
+    pub fn with_path(mut self, path: &str) -> Self {
+        self.env.insert("PATH".to_owned(), path_outside(path, &[]));
+        self
+    }
+
+    /// 세션을 띄우기 전에 정한 gh. 세션이 끝난 뒤 PATH에서 다시 찾지 않는다. 절대 경로가 아니면 올리지 않는다.
+    #[must_use]
+    pub fn with_gh(mut self, gh: &str) -> Self {
+        gh.clone_into(&mut self.gh_bin);
+        self
+    }
+
     fn git(&self, worktree: &Path, args: &[&str], timeout: Duration) -> (ProcessEnd, String) {
         // 세션은 저장소 설정을 쓰지 못한다(SessionWorkspace의 denyWrite). 그래도 설정이 고르는 실행 경로는 한 번 더 끈다.
         // 남은 키는 `config_safe`가 먼저 본다. replace ref는 log, diff가 다른 커밋을 보게 하므로 끈다.
@@ -326,6 +366,13 @@ impl<'a> PullRequestPublisher<'a> {
             ProcessRequest::new(self.git_bin.clone(), argv, timeout).env(self.env.clone()).max_output(MAX_OUTPUT);
         let output = self.runner.run(&request);
         (output.end, output.stdout)
+    }
+
+    /// 검사용 저장소의 git. `safe.bareRepository=explicit`에서도 열리게 git 폴더를 밝혀 준다.
+    fn check_git(&self, check: &CheckRepo, args: &[&str], timeout: Duration) -> (ProcessEnd, String) {
+        let mut argv = vec!["--git-dir=."];
+        argv.extend_from_slice(args);
+        self.git(&check.0, &argv, timeout)
     }
 
     fn gh(&self, worktree: &Path, args: &[&str]) -> (ProcessEnd, String) {
@@ -356,10 +403,10 @@ impl<'a> PullRequestPublisher<'a> {
     }
 
     /// 기준 브랜치 뒤의 커밋(오래된 것부터). 제목과 본문이다.
-    fn commits(&self, worktree: &Path, base: &str, sha: &str) -> Option<Vec<(String, String)>> {
+    fn commits(&self, check: &CheckRepo, base: &str, sha: &str) -> Option<Vec<(String, String)>> {
         let range = format!("{base}..{sha}");
         let (end, out) =
-            self.git(worktree, &["log", "--reverse", "--no-merges", "--format=%s%x1f%b%x1e", &range], GIT_TIMEOUT);
+            self.check_git(check, &["log", "--reverse", "--no-merges", "--format=%s%x1f%b%x1e", &range], GIT_TIMEOUT);
         if end != ProcessEnd::Exited(0) {
             return None;
         }
@@ -384,6 +431,7 @@ impl<'a> PullRequestPublisher<'a> {
         (end == ProcessEnd::Exited(0)).then(|| pr_url(&out, repo)).flatten()
     }
 
+    /// 패널의 PR 올리기. 항목의 마지막 run을 올린다. 누른 것이 사용자의 확인이다.
     pub fn publish(&self, id: i64) -> KairosResult<PrOutcome> {
         let Some(item) = ItemRepo::new(self.database.connection()).get(id)? else {
             return Ok(PrOutcome::of(id, PrStatus::NotFound, "항목 없음"));
@@ -391,53 +439,91 @@ impl<'a> PullRequestPublisher<'a> {
         let Some(run) = self.run_of(id, &item.object_key)? else {
             return Ok(PrOutcome::of(id, PrStatus::NoSession, "이 항목에 세션이 없습니다"));
         };
+        Ok(match self.prepare_on(id, &item.object_key, run)? {
+            Ok(prepared) => self.push(prepared),
+            Err(outcome) => outcome,
+        })
+    }
+
+    /// 세션이 끝난 뒤의 자동 올리기 준비. 방금 끝난 그 run만 본다. 같은 항목의 다른 run은 고르지 않는다.
+    /// 검사까지 마친 결과를 돌려주고 올리지는 않는다. 사용자가 커밋을 보고 확인하면 `push`를 부른다.
+    pub fn prepare_run(&self, run_id: &str) -> KairosResult<Result<PreparedPr, PrOutcome>> {
+        let Some(run) = RunRepo::new(self.database.connection()).get(run_id)? else {
+            return Ok(Err(PrOutcome::of(0, PrStatus::NoSession, "세션 기록이 없습니다")));
+        };
+        let Some(item) = ItemRepo::new(self.database.connection()).get(run.item_id)? else {
+            return Ok(Err(PrOutcome::of(run.item_id, PrStatus::NotFound, "항목 없음")));
+        };
+        self.prepare_on(run.item_id, &item.object_key, run)
+    }
+
+    /// 세션이 쓸 수 없는 검사용 저장소. 데이터 폴더 아래이고 run마다 새로 만든다. 남은 것이 있으면 지운다.
+    fn check_repo(&self, run_id: &str) -> Option<CheckRepo> {
+        let parent = self.data_folder.join(CHECK_DIR);
+        fs::create_dir_all(&parent).ok()?;
+        set_private(&parent);
+        let path = parent.join(crate::launch::worktree_name(run_id));
+        match fs::symlink_metadata(&path) {
+            Ok(metadata) if metadata.is_dir() => fs::remove_dir_all(&path).ok()?,
+            Ok(_) => fs::remove_file(&path).ok()?,
+            Err(_) => {}
+        }
+        let (end, _) = self.git(&self.data_folder, &["init", "--bare", "--quiet", path.to_str()?], GIT_TIMEOUT);
+        (end == ProcessEnd::Exited(0)).then_some(CheckRepo(path))
+    }
+
+    fn prepare_on(&self, id: i64, object_key: &str, run: Run) -> KairosResult<Result<PreparedPr, PrOutcome>> {
         if run.playbook != Playbook::QaIssue {
-            return Ok(PrOutcome::of(id, PrStatus::NotFixSession, "코드를 고치는 세션이 아니라 올릴 커밋이 없습니다"));
+            return Ok(Err(PrOutcome::of(
+                id,
+                PrStatus::NotFixSession,
+                "코드를 고치는 세션이 아니라 올릴 커밋이 없습니다",
+            )));
         }
         // 일하는 세션은 확인과 push 사이에 브랜치를 바꿀 수 있다. 끝난 세션만 올린다.
         if run.state.is_active() {
-            return Ok(PrOutcome::of(
+            return Ok(Err(PrOutcome::of(
                 id,
                 PrStatus::SessionRunning,
                 "세션이 아직 열려 있습니다. 세션을 끝낸 뒤 올리세요",
-            ));
+            )));
         }
         // 이어받은 세션은 다른 플레이북(읽는 세션)으로 떴을 수 있다. 그 worktree는 고치는 세션의 막기를 받지 않았다.
         // kairos-run이 이 run으로 띄운 세션(session_started_at)만 올린다.
         if run.adopted || run.session_started_at.is_none() {
-            return Ok(PrOutcome::of(
+            return Ok(Err(PrOutcome::of(
                 id,
                 PrStatus::AdoptedSession,
                 "kairos가 고치는 세션으로 띄운 기록이 아니라 올리지 않습니다. 직접 확인한 뒤 올리세요",
-            ));
+            )));
         }
         if !self.gh_bin.starts_with('/') {
-            return Ok(PrOutcome::of(id, PrStatus::CreateFailed, "gh를 찾지 못했습니다"));
+            return Ok(Err(PrOutcome::of(id, PrStatus::CreateFailed, "gh를 찾지 못했습니다")));
         }
-        let object = ObjectRepo::new(self.database.connection()).get(&item.object_key)?;
+        let object = ObjectRepo::new(self.database.connection()).get(object_key)?;
         let url = object.and_then(|object| object.permalink).filter(|url| issue_url_matches(url)).unwrap_or_default();
         let profile = profile::current();
         let Some(target): Option<&PlaybookTarget> = profile.playbooks.target_for_url(&url) else {
-            return Ok(PrOutcome::of(id, PrStatus::NotEligible, "플레이북 대상 저장소가 아닙니다"));
+            return Ok(Err(PrOutcome::of(id, PrStatus::NotEligible, "플레이북 대상 저장소가 아닙니다")));
         };
         let Some(selector) = run.worktree_identity.as_deref() else {
-            return Ok(PrOutcome::of(id, PrStatus::NoSession, "세션의 worktree를 모릅니다"));
+            return Ok(Err(PrOutcome::of(id, PrStatus::NoSession, "세션의 worktree를 모릅니다")));
         };
         let Some(worktree) = self.worktree_path(selector) else {
-            return Ok(PrOutcome::of(id, PrStatus::NoWorktree, "세션의 worktree 폴더를 찾지 못했습니다"));
+            return Ok(Err(PrOutcome::of(id, PrStatus::NoWorktree, "세션의 worktree 폴더를 찾지 못했습니다")));
         };
         // 공용 .git은 같은 저장소의 다른 세션도 쓸 수 있다. 설정이 고르는 명령과 원격 주소를 먼저 본다.
         let (end, config) = self.git(&worktree, &["config", "--list", "--show-scope", "-z"], GIT_TIMEOUT);
         if end != ProcessEnd::Exited(0) || !config_safe(&config, &target.workspace_repo) {
             let message = "저장소 설정이 원격 주소나 git이 부르는 명령을 바꿉니다. 직접 확인한 뒤 올리세요";
-            return Ok(PrOutcome::of(id, PrStatus::UnsafeRepoConfig, message));
+            return Ok(Err(PrOutcome::of(id, PrStatus::UnsafeRepoConfig, message)));
         }
         let branch = branch_of_run(&run.id);
         // 확인한 커밋을 그대로 올린다. 뒤에서 HEAD를 다시 읽지 않는다.
         let (end, sha) = self.git(&worktree, &["rev-parse", "--verify", "HEAD^{commit}"], GIT_TIMEOUT);
         let sha = sha.trim().to_owned();
         if end != ProcessEnd::Exited(0) || !SHA.is_match(&sha) {
-            return Ok(PrOutcome::of(id, PrStatus::NoCommits, "커밋을 읽지 못했습니다"));
+            return Ok(Err(PrOutcome::of(id, PrStatus::NoCommits, "커밋을 읽지 못했습니다")));
         }
         let with_branch = |mut outcome: PrOutcome| {
             outcome.branch = Some(branch.clone());
@@ -466,38 +552,102 @@ impl<'a> PullRequestPublisher<'a> {
         if fetched != ProcessEnd::Exited(0) || end != ProcessEnd::Exited(0) || !SHA.is_match(&base) || !agreed {
             let message =
                 "기준 브랜치를 원격에서 받지 못했거나 받은 값이 원격과 다릅니다. 네트워크와 git 자격 증명을 확인하세요";
-            return Ok(with_branch(PrOutcome::of(id, PrStatus::BaseUnavailable, message)));
+            return Ok(Err(with_branch(PrOutcome::of(id, PrStatus::BaseUnavailable, message))));
         }
-        let commits = self.commits(&worktree, &base, &sha).unwrap_or_default();
+        // 공용 .git은 세션이 쓸 수 있다. 세션이 남긴 프로세스가 비교하는 순간 객체를 바꾸면 검사를 속일 수 있다.
+        // 커밋과 기준을 세션이 쓸 수 없는 저장소로 받는다. 받을 때 git이 객체마다 해시를 다시 계산하므로
+        // 받은 SHA가 확인한 값과 같으면 내용도 같다. 비교와 push는 그 저장소에서 한다.
+        let changing = "세션 쪽에서 커밋이 바뀌고 있어 올리지 않습니다. 세션 터미널을 모두 닫은 뒤 다시 올리세요";
+        let Some(check) = self.check_repo(&run.id) else {
+            return Ok(Err(with_branch(PrOutcome::of(id, PrStatus::PushFailed, "검사용 저장소를 만들지 못했습니다"))));
+        };
+        let source = worktree.to_str().unwrap_or_default();
+        let refspec_base = format!("+{base_ref}:{CHECK_BASE}");
+        let refspec_head = format!("+HEAD:{CHECK_HEAD}");
+        let (copied, _) = self.check_git(
+            &check,
+            &[
+                "-c",
+                "transfer.fsckObjects=true",
+                "fetch",
+                "--quiet",
+                "--no-tags",
+                "--no-write-fetch-head",
+                source,
+                &refspec_base,
+                &refspec_head,
+            ],
+            PUSH_TIMEOUT,
+        );
+        let read = |name: &str| {
+            let (end, out) =
+                self.check_git(&check, &["rev-parse", "--verify", &format!("{name}^{{commit}}")], GIT_TIMEOUT);
+            (end == ProcessEnd::Exited(0)).then(|| out.trim().to_owned())
+        };
+        if copied != ProcessEnd::Exited(0)
+            || read(CHECK_BASE).as_deref() != Some(base.as_str())
+            || read(CHECK_HEAD).as_deref() != Some(sha.as_str())
+        {
+            return Ok(Err(with_branch(PrOutcome::of(id, PrStatus::PushFailed, changing))));
+        }
+        let commits = self.commits(&check, &base, &sha).unwrap_or_default();
         let Some(draft) = PrDraft::from_commits(&commits, &url) else {
-            return Ok(with_branch(PrOutcome::of(id, PrStatus::NoCommits, "올릴 커밋이 없습니다")));
+            return Ok(Err(with_branch(PrOutcome::of(id, PrStatus::NoCommits, "올릴 커밋이 없습니다"))));
         };
         // 두 트리를 바로 비교한다. merge-base와 비교하면 세션이 오래된 커밋 위에 쌓아 비교 기준을 옮길 수 있다.
         let (end, changed) =
-            self.git(&worktree, &["diff", "--name-only", "-z", "--no-renames", &base, &sha], GIT_TIMEOUT);
-        if end != ProcessEnd::Exited(0) || changed.split('\0').filter(|path| !path.is_empty()).any(blocked_path) {
+            self.check_git(&check, &["diff", "--name-only", "-z", "--no-renames", &base, &sha], GIT_TIMEOUT);
+        let changed: Vec<String> = changed.split('\0').filter(|path| !path.is_empty()).map(str::to_owned).collect();
+        if end != ProcessEnd::Exited(0) || changed.iter().any(|path| blocked_path(path)) {
             let message = "CI나 리뷰 설정(.github 등)을 바꾼 커밋이라 올리지 않습니다. 직접 확인한 뒤 올리세요";
-            return Ok(with_branch(PrOutcome::of(id, PrStatus::BlockedPaths, message)));
+            return Ok(Err(with_branch(PrOutcome::of(id, PrStatus::BlockedPaths, message))));
         }
+        let Some(push_url) = push_url(&config) else {
+            let message = "저장소 설정이 원격 주소나 git이 부르는 명령을 바꿉니다. 직접 확인한 뒤 올리세요";
+            return Ok(Err(PrOutcome::of(id, PrStatus::UnsafeRepoConfig, message)));
+        };
         let (_, status) = self.git(&worktree, &["status", "--porcelain", "--untracked-files=no"], GIT_TIMEOUT);
-        let uncommitted = !status.trim().is_empty();
+        Ok(Ok(PreparedPr {
+            id,
+            check,
+            worktree,
+            sha,
+            branch,
+            push_url,
+            repo: target.workspace_repo.clone(),
+            base_branch: remote_base.to_owned(),
+            subjects: commits.into_iter().map(|(subject, _)| subject).collect(),
+            changed,
+            confirmation: confirmation_code(),
+            draft,
+            uncommitted: !status.trim().is_empty(),
+        }))
+    }
+
+    /// 검사한 저장소에서 확인한 SHA를 push하고 draft PR을 연다. 열린 PR이 있으면 push만 한다.
+    pub fn push(&self, prepared: PreparedPr) -> PrOutcome {
+        let PreparedPr { id, check, worktree, sha, branch, push_url, repo, base_branch, draft, uncommitted, .. } =
+            prepared;
+        let with_branch = |mut outcome: PrOutcome| {
+            outcome.branch = Some(branch.clone());
+            outcome
+        };
         let refspec = format!("{sha}:refs/heads/{branch}");
-        let (pushed, _) = self.git(&worktree, &["push", "--quiet", "origin", &refspec], PUSH_TIMEOUT);
+        let (pushed, _) = self.check_git(&check, &["push", "--quiet", &push_url, &refspec], PUSH_TIMEOUT);
+        drop(check);
         if pushed != ProcessEnd::Exited(0) {
             let message = "push하지 못했습니다. git 자격 증명과 원격 권한을 확인하세요";
-            return Ok(with_branch(PrOutcome::of(id, PrStatus::PushFailed, message)));
+            return with_branch(PrOutcome::of(id, PrStatus::PushFailed, message));
         }
-        let repo = target.workspace_repo.as_str();
         let done = |status, message: &str, url: String| {
             let mut outcome = with_branch(PrOutcome::of(id, status, message));
             outcome.url = Some(url);
             outcome.uncommitted = uncommitted;
             outcome
         };
-        if let Some(existing) = self.existing_pr(&worktree, repo, &branch) {
-            return Ok(done(PrStatus::Updated, "열린 PR에 push했습니다", existing));
+        if let Some(existing) = self.existing_pr(&worktree, &repo, &branch) {
+            return done(PrStatus::Updated, "열린 PR에 push했습니다", existing);
         }
-        let base = target.base_branch.strip_prefix("origin/").unwrap_or(&target.base_branch);
         let (created, out) = self.gh(
             &worktree,
             &[
@@ -505,9 +655,9 @@ impl<'a> PullRequestPublisher<'a> {
                 "create",
                 "--draft",
                 "--repo",
-                repo,
+                &repo,
                 "--base",
-                base,
+                &base_branch,
                 "--head",
                 &branch,
                 "--title",
@@ -516,15 +666,120 @@ impl<'a> PullRequestPublisher<'a> {
                 &draft.body,
             ],
         );
-        match (created, pr_url(&out, repo)) {
-            (ProcessEnd::Exited(0), Some(url)) => Ok(done(PrStatus::Created, "draft PR을 만들었습니다", url)),
-            _ => Ok(with_branch(PrOutcome::of(
-                id,
-                PrStatus::CreateFailed,
-                "PR을 만들지 못했습니다. gh 로그인을 확인하세요",
-            ))),
+        match (created, pr_url(&out, &repo)) {
+            (ProcessEnd::Exited(0), Some(url)) => done(PrStatus::Created, "draft PR을 만들었습니다", url),
+            _ => {
+                with_branch(PrOutcome::of(id, PrStatus::CreateFailed, "PR을 만들지 못했습니다. gh 로그인을 확인하세요"))
+            }
         }
     }
+}
+
+/// 검사를 마치고 올리기만 남은 PR. 버리면 검사용 저장소를 지운다.
+pub struct PreparedPr {
+    id: i64,
+    check: CheckRepo,
+    worktree: PathBuf,
+    sha: String,
+    branch: String,
+    push_url: String,
+    repo: String,
+    base_branch: String,
+    subjects: Vec<String>,
+    changed: Vec<String>,
+    confirmation: String,
+    draft: PrDraft,
+    uncommitted: bool,
+}
+
+impl PreparedPr {
+    /// 올릴 커밋의 제목. 오래된 것부터다. 세션이 쓴 글이니 화면에 낼 때 걸러야 한다.
+    pub fn subjects(&self) -> &[String] {
+        &self.subjects
+    }
+
+    pub fn branch(&self) -> &str {
+        &self.branch
+    }
+
+    /// 올릴 커밋. 검사용 저장소에서 확인한 SHA다.
+    pub fn sha(&self) -> &str {
+        &self.sha
+    }
+
+    /// base와 비교해 바뀐 파일. 검사용 저장소에서 구했다. 세션이 정한 이름이니 화면에 낼 때 걸러야 한다.
+    pub fn changed(&self) -> &[String] {
+        &self.changed
+    }
+
+    /// 사용자가 입력할 확인 코드. 준비할 때마다 새로 만든다. 세션이 남긴 프로세스는 터미널 출력을 읽지 못하므로 알 수 없다.
+    pub fn confirmation(&self) -> &str {
+        &self.confirmation
+    }
+
+    pub fn id(&self) -> i64 {
+        self.id
+    }
+}
+
+/// 바뀌면 확인할 때 따로 알리는 빌드 설정 파일. CI 경로처럼 막지는 않지만, push하면 CI가 실행할 수 있다.
+const BUILD_NAMES: [&str; 16] = [
+    "package.json",
+    "package-lock.json",
+    "yarn.lock",
+    "pnpm-lock.yaml",
+    ".npmrc",
+    "makefile",
+    "build.gradle",
+    "build.gradle.kts",
+    "settings.gradle",
+    "pom.xml",
+    "cargo.toml",
+    "build.rs",
+    "setup.py",
+    "pyproject.toml",
+    "gemfile",
+    "dockerfile",
+];
+
+/// 빌드 설정 파일인가. 대소문자는 가리지 않는다.
+pub fn build_path(path: &str) -> bool {
+    let name = path.rsplit('/').next().unwrap_or(path).to_ascii_lowercase();
+    BUILD_NAMES.contains(&name.as_str())
+}
+
+/// 네 자리 확인 코드.
+fn confirmation_code() -> String {
+    let bytes = uuid::Uuid::new_v4().into_bytes();
+    format!("{:04}", u32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]) % 10_000)
+}
+
+/// 검사용 저장소. 버리면 지운다.
+struct CheckRepo(PathBuf);
+
+impl Drop for CheckRepo {
+    fn drop(&mut self) {
+        if fs::symlink_metadata(&self.0).is_ok_and(|metadata| metadata.is_dir()) {
+            let _ = fs::remove_dir_all(&self.0);
+        }
+    }
+}
+
+#[cfg(unix)]
+fn set_private(path: &Path) {
+    use std::os::unix::fs::PermissionsExt;
+    let _ = fs::set_permissions(path, fs::Permissions::from_mode(0o700));
+}
+
+#[cfg(not(unix))]
+fn set_private(_path: &Path) {}
+
+/// push할 주소. `config_safe`를 통과한 설정에서 고른다. pushurl이 있으면 그 값이다.
+fn push_url(config: &str) -> Option<String> {
+    let entries = config_entries(config);
+    let find =
+        |name: &str| entries.iter().rev().find(|(_, key, _)| key == name).map(|(_, _, value)| (*value).to_owned());
+    find("remote.origin.pushurl").or_else(|| find("remote.origin.url"))
 }
 
 /// gh가 찍은 PR 주소. 대상 저장소의 PR 주소 모양만 받는다.
@@ -540,6 +795,13 @@ fn pr_url(out: &str, repo: &str) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn 세션이_쓸_수_있던_폴더의_path_항목은_뺀다() {
+        let roots = [PathBuf::from("/synthetic/workspace"), PathBuf::from("/synthetic/clone/.git")];
+        let path = "/usr/bin:/synthetic/workspace/node_modules/.bin:/synthetic/workspace:/synthetic/workspacex/bin:/synthetic/clone/.git/x:/bin";
+        assert_eq!(path_outside(path, &roots), "/usr/bin:/synthetic/workspacex/bin:/bin");
+    }
 
     #[test]
     fn ls_remote에서는_이름이_정확히_같은_ref_하나만_받는다() {
@@ -652,5 +914,25 @@ mod tests {
         assert!(draft.body.ends_with(
             "이슈: https://github.com/o/r/issues/1\n\nkairos 세션이 제안하고 사용자가 올린 draft PR입니다."
         ));
+    }
+}
+
+#[cfg(test)]
+mod prepared_tests {
+    use super::*;
+
+    #[test]
+    fn 빌드_설정_파일을_알아본다() {
+        assert!(build_path("package.json"));
+        assert!(build_path("web/Package.JSON"));
+        assert!(build_path("Dockerfile"));
+        assert!(!build_path("src/package.ts"));
+    }
+
+    #[test]
+    fn 확인_코드는_네_자리_숫자다() {
+        let code = confirmation_code();
+        assert_eq!(code.len(), 4);
+        assert!(code.bytes().all(|byte| byte.is_ascii_digit()));
     }
 }

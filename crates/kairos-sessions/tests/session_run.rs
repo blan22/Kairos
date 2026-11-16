@@ -13,10 +13,10 @@ use kairos_agenda::{ItemState, Playbook, ReadyKind};
 use kairos_core::KairosHome;
 use kairos_core::ports::FixedClock;
 use kairos_sessions::{
-    ClaimRefusal, LiveAuthorCheck, RunState, SESSION_GH_TOKEN_FILE, SessionClaim, SessionCommand, SessionProfile,
+    AfterSession, ClaimRefusal, LiveAuthorCheck, Run, RunState, SessionClaim, SessionCommand, SessionProfile,
     SessionRunner, SessionSpawner, SessionStatus, SessionWorkspace,
 };
-use kairos_source_github::LiveAuthors;
+use kairos_source_github::{LiveAuthors, LiveRead};
 use kairos_store::{Database, params};
 use tempfile::TempDir;
 
@@ -25,7 +25,6 @@ fn accepted_home() -> (TempDir, KairosHome) {
     let db = Database::open(&home).unwrap();
     seed_issue(&db);
     accept(&db, &FakeOrca::new());
-    write_session_token(&home, &format!("{SYNTHETIC_TOKEN}\n"), 0o600);
     (dir, home)
 }
 
@@ -71,6 +70,17 @@ fn run_session_live(
     spawner: &dyn SessionSpawner,
     live: &dyn LiveAuthorCheck,
 ) -> i32 {
+    run_session_after(home, argv, claude, spawner, live, None)
+}
+
+fn run_session_after(
+    home: &KairosHome,
+    argv: &[&str],
+    claude: Option<&str>,
+    spawner: &dyn SessionSpawner,
+    live: &dyn LiveAuthorCheck,
+    after: Option<&dyn AfterSession>,
+) -> i32 {
     let profile = SessionProfile::new(
         Path::new("/synthetic/kairos"),
         Path::new("/synthetic/kairos-home"),
@@ -80,7 +90,10 @@ fn run_session_live(
         SessionWorkspace::discover(Path::new("/synthetic/workspace"), Path::new("/synthetic/home")).unwrap(),
     );
     let clock = FixedClock(at(AT));
-    let runner = SessionRunner::new(home.clone(), claude.map(str::to_owned), &profile, spawner, live, &clock);
+    let mut runner = SessionRunner::new(home.clone(), claude.map(str::to_owned), &profile, spawner, live, &clock);
+    if let Some(after) = after {
+        runner = runner.with_after(after);
+    }
     let argv: Vec<String> = argv.iter().map(|arg| (*arg).to_owned()).collect();
     runner.run(&argv).unwrap()
 }
@@ -210,7 +223,7 @@ fn 세션의_인자는_프로필의_값이고_url은_db에서_읽는다() {
     .with_workspace(
         SessionWorkspace::discover(Path::new("/synthetic/workspace"), Path::new("/synthetic/home")).unwrap(),
     )
-    .command("/synthetic/claude", RUN, Playbook::QaIssue, &issue_url(1), session_token())
+    .command("/synthetic/claude", RUN, Playbook::QaIssue, &issue_url(1), brief())
     .unwrap();
     assert_eq!(spawner.seen.lock().unwrap()[0], expected);
 }
@@ -221,57 +234,93 @@ fn 세션의_프롬프트는_run에_적힌_플레이북을_따른다() {
     inspect(&home, |db| db.connection().execute("UPDATE runs SET playbook = 'pr_review'", []).unwrap());
     let spawner = Recording::new(|| 0);
     run_session(&home, &[RUN], Some("/synthetic/claude"), &spawner);
-    let prompt = SessionProfile::prompt(Playbook::PrReview, &issue_url(1)).unwrap();
-    assert_eq!(spawner.seen.lock().unwrap()[0].args.last(), Some(&prompt));
+    let seen = spawner.seen.lock().unwrap();
+    let brief = seen[0].brief_dir().unwrap().join(kairos_sessions::SESSION_BRIEF_FILE);
+    let prompt = SessionProfile::prompt(Playbook::PrReview, &issue_url(1), &brief).unwrap();
+    assert_eq!(seen[0].args.last(), Some(&prompt));
 }
 
+/// 세션은 GitHub 자격 증명 없이 뜬다. 데이터 폴더에 토큰 파일이 없어도 된다.
 #[test]
-fn 토큰_파일이_있으면_자식_환경과_settings_파일로만_가고_인자에는_없다() {
+fn 세션에는_토큰을_넘기지_않고_재확인한_글을_세션_입력으로_넘긴다() {
     let (_dir, home) = accepted_home();
     let spawner = Recording::new(|| 0);
     assert_eq!(run_session(&home, &[RUN], Some("/synthetic/claude"), &spawner), 0);
     let seen = spawner.seen.lock().unwrap();
-    assert!(seen[0].has_gh_token());
-    assert_eq!(seen[0].child_env().collect::<Vec<_>>(), [("GH_TOKEN", SYNTHETIC_TOKEN)]);
-    assert!(!seen[0].args.iter().any(|arg| arg.contains("SYNTHETIC0123")), "토큰은 인자에 없다");
-    assert!(!format!("{:?}", seen[0]).contains("SYNTHETIC0123"), "Debug로도 새지 않는다");
-    // --settings는 파일 경로이고, 그 파일의 env가 GH_TOKEN을 읽기 전용 토큰으로 고정한다.
-    let index = seen[0].args.iter().position(|arg| arg == "--settings").unwrap();
-    assert_eq!(Path::new(&seen[0].args[index + 1]), seen[0].settings_path().unwrap());
+    assert_eq!(seen[0].brief_content(), Some(SYNTHETIC_BRIEF), "재확인이 준 내용 그대로다");
+    assert!(!seen[0].args.iter().any(|arg| arg.contains("합성 이슈 본문")), "내용은 인자에 없다");
     let settings: serde_json::Value = serde_json::from_str(seen[0].settings_content().unwrap()).unwrap();
-    assert_eq!(settings["env"]["GH_TOKEN"], SYNTHETIC_TOKEN);
+    assert_eq!(settings["env"]["GH_TOKEN"], "");
+    assert_eq!(settings["sandbox"]["network"]["allowedDomains"], serde_json::json!([]));
 }
 
-#[test]
-fn 남이_읽을_수_있는_토큰_파일이면_run을_시작으로_적기_전에_멈춘다() {
-    let (_dir, home) = accepted_home();
-    for mode in [0o644, 0o640, 0o604] {
-        write_session_token(&home, SYNTHETIC_TOKEN, mode);
-        assert_eq!(run_session(&home, &[RUN], Some("/synthetic/claude"), &no_spawn()), 1, "{mode:o}");
-        assert_eq!(inspect(&home, |db| run(db).session_started_at), None, "{mode:o}");
+/// 세션이 끝난 뒤 부른 일을 적는다.
+#[derive(Default)]
+struct Publishes(Mutex<Vec<String>>);
+
+impl AfterSession for Publishes {
+    fn after(&self, _database: &Database, run: &Run) -> Option<String> {
+        self.0.lock().unwrap().push(run.id.clone());
+        Some("kairos-run: 합성 결과".to_owned())
     }
 }
 
-/// 토큰이 없을 때 소유자의 키체인 gh 로그인으로 내려가면 세션이 소유자 권한으로 GitHub에 쓸 수 있다. 시작하지 않는다.
 #[test]
-fn 토큰_파일이_없으면_키체인으로_내려가지_않고_run을_시작으로_적기_전에_멈춘다() {
+fn 정상으로_끝난_고치는_세션만_끝난_뒤에_올린다() {
     let (_dir, home) = accepted_home();
-    std::fs::remove_file(home.file(SESSION_GH_TOKEN_FILE)).unwrap();
-    let before = inspect(&home, |db| run(db).state);
-    assert_eq!(run_session(&home, &[RUN], Some("/synthetic/claude"), &no_spawn()), 1);
-    assert_eq!(inspect(&home, |db| run(db).session_started_at), None);
-    assert_eq!(inspect(&home, |db| run(db).state), before, "run을 선점하지 않는다");
+    let after = Publishes::default();
+    let spawner = Recording::new(|| {
+        assert!(after.0.lock().unwrap().is_empty(), "세션이 도는 동안에는 올리지 않는다");
+        0
+    });
+    let live = FakeLive::insiders();
+    assert_eq!(run_session_after(&home, &[RUN], Some("/c"), &spawner, &live, Some(&after)), 0);
+    assert_eq!(*after.0.lock().unwrap(), [RUN]);
+    assert_eq!(inspect(&home, run).state, RunState::Ended, "올리기 전에 끝으로 적는다");
 }
 
-/// 쓰기 범위를 함께 가진 classic 토큰과 gh 로그인 토큰은 받지 않는다.
 #[test]
-fn fine_grained가_아닌_토큰이면_띄우지_않는다() {
+fn 실패한_세션과_읽는_세션은_자동으로_올리지_않는다() {
     let (_dir, home) = accepted_home();
-    for content in ["ghp_SYNTHETIC0123456789abcdefABCDEF", "gho_SYNTHETIC0123456789abcdefABCDEF"] {
-        write_session_token(&home, content, 0o600);
-        assert_eq!(run_session(&home, &[RUN], Some("/synthetic/claude"), &no_spawn()), 1, "{content}");
-        assert_eq!(inspect(&home, |db| run(db).session_started_at), None, "{content}");
-    }
+    let after = Publishes::default();
+    let live = FakeLive::insiders();
+    assert_eq!(run_session_after(&home, &[RUN], Some("/c"), &Recording::new(|| 1), &live, Some(&after)), 1);
+    assert!(after.0.lock().unwrap().is_empty(), "종료 코드가 0이 아니다");
+
+    let (_dir, home) = accepted_home();
+    inspect(&home, |db| db.connection().execute("UPDATE runs SET playbook = 'pr_review'", []).unwrap());
+    assert_eq!(run_session_after(&home, &[RUN], Some("/c"), &Recording::new(|| 0), &live, Some(&after)), 0);
+    assert!(after.0.lock().unwrap().is_empty(), "읽는 세션은 커밋이 없다");
+}
+
+/// 같은 클론의 다른 고치는 세션은 공용 .git을 바꿀 수 있다. 그 세션이 열려 있으면 자동으로 올리지 않는다.
+#[test]
+fn 다른_고치는_세션이_열려_있으면_자동으로_올리지_않는다() {
+    let (_dir, home) = accepted_home();
+    inspect(&home, |db| {
+        seed_issue_with(db, 2, |_| {});
+        let other = accept_as(db, &FakeOrca::new(), 2, OTHER_RUN);
+        assert_eq!(other.result.status, SessionStatus::Changed);
+    });
+    let after = Publishes::default();
+    let live = FakeLive::insiders();
+    assert_eq!(run_session_after(&home, &[RUN], Some("/c"), &Recording::new(|| 0), &live, Some(&after)), 0);
+    assert!(after.0.lock().unwrap().is_empty());
+}
+
+/// 세션이 도는 동안 사용자가 되돌리면 run은 실패로 내려간다. 그 세션은 정상으로 끝나도 올리지 않는다.
+#[test]
+fn 세션_중에_되돌린_run은_정상으로_끝나도_올리지_않는다() {
+    let (_dir, home) = accepted_home();
+    let after = Publishes::default();
+    let spawner = Recording::new(|| {
+        inspect(&home, |db| cancel(db, 1, 0));
+        0
+    });
+    let live = FakeLive::insiders();
+    assert_eq!(run_session_after(&home, &[RUN], Some("/c"), &spawner, &live, Some(&after)), 0);
+    assert_eq!(inspect(&home, run).state, RunState::Failed);
+    assert!(after.0.lock().unwrap().is_empty());
 }
 
 #[test]
@@ -338,9 +387,9 @@ fn kairos_run_작성자를_알_수_없는_글이면_띄우지_않고_외부_표�
 struct CancelsWhileReading<'a>(&'a KairosHome);
 
 impl LiveAuthorCheck for CancelsWhileReading<'_> {
-    fn live_authors(&self, _url: &str) -> kairos_core::KairosResult<LiveAuthors> {
+    fn live_read(&self, _url: &str) -> kairos_core::KairosResult<LiveRead> {
         inspect(self.0, |db| cancel(db, 1, 0));
-        Ok(LiveAuthors::Insiders)
+        Ok(LiveRead { authors: LiveAuthors::Insiders, brief: brief() })
     }
 }
 

@@ -60,30 +60,16 @@ fn 세션_안에서는_연동을_바꾸지_않는다() {
     assert!(!connections(&cli).contains("홍길동"));
 }
 
+/// 세션은 GitHub 토큰을 쓰지 않는다. 예전 등록 명령은 사용법 오류이고 키체인을 부르지 않는다.
 #[test]
-fn 세션_토큰은_stdin으로_받아_키체인에_넣고_파일을_지운다() {
+fn 세션_토큰은_더_이상_받지_않는다() {
     let mut cli = Cli::new();
     let (security, log) = (cli.root.join("fake-security"), cli.root.join("security.log"));
-    write_script(
-        &security,
-        &format!("#!/bin/sh\nprintf '%s\\n' \"$*\" >> '{log}'\ncat >> '{log}'\n", log = log.display()),
-    );
+    write_script(&security, &format!("#!/bin/sh\nprintf '%s\\n' \"$*\" >> '{log}'\n", log = log.display()));
     cli.set("KAIROS_SECURITY", security.to_str().unwrap());
-    cli.write_session_token();
-    let token = format!("github_pat_{}", "A".repeat(82));
-    let classic = cli.pipe(&["connect", "session-token"], b"ghp_abc\n");
-    assert_eq!(classic.status, 1);
-    let done = cli.pipe(&["connect", "session-token"], format!("{token}\n").as_bytes());
-    assert_eq!(done.status, 0, "{}{}", done.out, done.err);
-    let calls = fs::read_to_string(&log).unwrap();
-    // 토큰은 인자가 아니라 stdin으로 갔다. macOS는 security -i, Linux는 secret-tool store다.
-    let first = match kairos_core::platform::Os::current() {
-        kairos_core::platform::Os::Linux => {
-            "store --label=kairos-session-token service kairos account session-gh-token\ngithub_pat_"
-        }
-        _ => "-i\nadd-generic-password -U -s kairos -a session-gh-token",
-    };
-    assert!(calls.starts_with(first), "{calls}");
-    assert!(!calls.lines().next().unwrap().contains("github_pat_"));
-    assert!(!cli.root.join("session-gh-token").exists());
+    let done = cli.pipe(&["connect", "session-token"], format!("github_pat_{}\n", "A".repeat(82)).as_bytes());
+    assert_eq!(done.status, 2, "{}{}", done.out, done.err);
+    assert!(!log.exists(), "키체인을 부르지 않는다");
+    let status = cli.run(&["connect", "--json"]).body();
+    assert!(status.get("sessionToken").is_none());
 }

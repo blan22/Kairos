@@ -141,9 +141,7 @@ fn session_env(user_env: &Value) -> BTreeMap<String, String> {
     let claude = write_fake_claude(root, root);
     let kairos_home = root.join("kairos-home");
     fs::create_dir(&kairos_home).unwrap();
-    let command =
-        profile_at(&kairos_home).command(&claude, RUN_A, Playbook::QaIssue, &issue_url(1), session_token()).unwrap();
-    assert!(!command.args.iter().any(|arg| arg.contains(SYNTHETIC_TOKEN)), "인자는 다른 사용자도 ps로 읽는다");
+    let command = profile_at(&kairos_home).command(&claude, RUN_A, Playbook::QaIssue, &issue_url(1), brief()).unwrap();
     let written = command.write_settings().unwrap();
     let status = Command::new(&command.file)
         .args(&command.args)
@@ -158,7 +156,6 @@ fn session_env(user_env: &Value) -> BTreeMap<String, String> {
             ("ANTHROPIC_API_KEY", "synthetic-anthropic"),
             ("ORCA_AGENT_HOOK_TOKEN", "synthetic-hook"),
         ])
-        .envs(command.child_env())
         .status()
         .unwrap();
     assert!(status.success());
@@ -173,19 +170,19 @@ fn r24_settings_json의_env로_되살아나는_토큰이_세션_환경에서_비
     for key in ["GITHUB_PERSONAL_ACCESS_TOKEN", "GITHUB_TOKEN", "FIGMA_API_TOKEN", "ANTHROPIC_API_KEY"] {
         assert_eq!(env.get(key).map_or("", String::as_str), "", "{key}");
     }
-    // 시작 환경의 GH_TOKEN은 소유자가 둔 읽기 전용 토큰으로 바뀐다.
-    assert_eq!(env.get("GH_TOKEN").map(String::as_str), Some(SYNTHETIC_TOKEN));
+    // 시작 환경의 GH_TOKEN도 비운다. 세션에 넘기는 GitHub 자격 증명은 없다.
+    assert_eq!(env.get("GH_TOKEN").map_or("", String::as_str), "");
     let hook = env.get("ORCA_AGENT_HOOK_TOKEN").map(String::as_str);
     assert_eq!(hook, Some("synthetic-hook"), "Orca 상태 보고 훅이 쓰는 값은 지우지 않는다");
 }
 
-/// 사용자 settings.json의 env에 소유자의 넓은 권한 토큰이 있어도 세션은 읽기 전용 토큰으로 끝난다.
+/// 사용자 settings.json의 env에 소유자의 넓은 권한 토큰이 있어도 세션에는 들어가지 않는다.
 /// 프로세스 환경만으로는 막지 못한다. settings.json의 env가 시작 뒤에 그 위로 다시 들어온다.
 #[test]
-fn r24_settings_json의_env에_있는_gh_token도_세션에서는_읽기_전용_토큰이다() {
+fn r24_settings_json의_env에_있는_gh_token도_세션에서는_비어_있다() {
     let owner = "github_pat_SYNTHETICOWNERFULLSCOPE0123456789";
     let env = session_env(&json!({ "GH_TOKEN": owner, "GITHUB_TOKEN": owner }));
-    assert_eq!(env.get("GH_TOKEN").map(String::as_str), Some(SYNTHETIC_TOKEN));
+    assert_eq!(env.get("GH_TOKEN").map_or("", String::as_str), "");
     assert_eq!(env.get("GITHUB_TOKEN").map_or("", String::as_str), "");
     assert!(!env.values().any(|value| value == owner));
 }
@@ -194,11 +191,11 @@ fn r24_settings_json의_env에_있는_gh_token도_세션에서는_읽기_전용_
 /// 읽는 세션은 `--setting-sources`를 넘기지 않는다.
 #[test]
 fn r24_고치는_세션만_사용자_설정만_읽고_읽는_세션은_설정_출처를_바꾸지_않는다() {
-    let fix = profile().command("/c", RUN_A, Playbook::QaIssue, &issue_url(1), session_token()).unwrap();
+    let fix = profile().command("/c", RUN_A, Playbook::QaIssue, &issue_url(1), brief()).unwrap();
     let index = fix.args.iter().position(|arg| arg == "--setting-sources").unwrap();
     assert_eq!(fix.args[index + 1], "user");
     assert_eq!(fix.args.iter().filter(|arg| *arg == "--setting-sources").count(), 1);
-    let read = profile().command("/c", RUN_A, Playbook::PrReview, &issue_url(1), session_token()).unwrap();
+    let read = profile().command("/c", RUN_A, Playbook::PrReview, &issue_url(1), brief()).unwrap();
     assert!(!read.args.iter().any(|arg| arg == "--setting-sources"));
 }
 
@@ -329,7 +326,7 @@ fn r25_수정과_외부_도구는_읽는_세션에_없고_거부_목록에도_�
     tools.sort_unstable();
     assert_eq!(tools, ["Bash", "Glob", "Grep", "Read"]);
     let profile = profile();
-    let command = profile.command("/c", RUN_A, Playbook::PrReview, &issue_url(1), session_token()).unwrap();
+    let command = profile.command("/c", RUN_A, Playbook::PrReview, &issue_url(1), brief()).unwrap();
     let index = command.args.iter().position(|arg| arg == "--tools").unwrap();
     assert_eq!(command.args[index + 1], SESSION_TOOLS.join(","));
     let denied = profile.denied_tools(Playbook::PrReview);
@@ -364,14 +361,18 @@ fn r25_설치본_경로로_부른_kairos도_거부_목록에_있다() {
 
 #[test]
 fn 프롬프트의_외부_값은_여전히_url뿐이다() {
-    assert!(SessionProfile::prompt(Playbook::QaIssue, &issue_url(1)).unwrap().contains(&issue_url(1)));
+    assert!(
+        SessionProfile::prompt(Playbook::QaIssue, &issue_url(1), Path::new("/synthetic/brief.md"))
+            .unwrap()
+            .contains(&issue_url(1))
+    );
     assert_eq!(pane_row()["handle"], "term_now");
 }
 
 #[test]
 fn r25_고치는_세션은_edit_write만_더_열리고_웹과_외부_도구는_그대로_막힌다() {
     let profile = profile();
-    let command = profile.command("/c", RUN_A, Playbook::QaIssue, &issue_url(1), session_token()).unwrap();
+    let command = profile.command("/c", RUN_A, Playbook::QaIssue, &issue_url(1), brief()).unwrap();
     let index = command.args.iter().position(|arg| arg == "--tools").unwrap();
     assert_eq!(command.args[index + 1], FIX_TOOLS.join(","));
     let denied = profile.denied_tools(Playbook::QaIssue);

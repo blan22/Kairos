@@ -1,4 +1,4 @@
-//! gh 실행 계층. 읽기 전용 호출만 만든다: auth token, api rate_limit, GET search/issues, graphql query.
+//! gh 실행 계층. 읽기 전용 호출만 만든다: auth token, api rate_limit, GET search/issues, graphql query, GET PR diff.
 //! 외부 문자열은 argv나 stdin 값으로만 간다. 셸을 거치지 않는다.
 //! 토큰은 gh auth token --user kairos-dev로 받아 자식 프로세스의 GH_TOKEN으로만 넘긴다.
 
@@ -174,6 +174,11 @@ impl GhClient {
             .ok_or_else(|| GhError::new(Outcome::ParseError, "search_item_shape"))?;
         let incomplete = body.get("incomplete_results").and_then(Value::as_bool) == Some(true);
         Ok(SearchPage { total_count, incomplete, ids })
+    }
+
+    /// PR의 변경을 unified diff로 받는다. `path`는 호출자가 검사한 `repos/<소유자>/<이름>/pulls/<번호>`다.
+    pub(crate) fn diff(&self, path: &str) -> Result<String, GhError> {
+        self.call(&["api", "-X", "GET", "-H", "Accept: application/vnd.github.diff", path])
     }
 
     /// 변수를 직접 주는 질의. errors가 하나라도 있거나 gh가 실패로 끝나면 실패다. 일부만 읽은 답을 쓰지 않는다.

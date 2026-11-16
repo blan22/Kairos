@@ -471,7 +471,7 @@ fn playbook_targets(file: &'static str, raw: &[RawPlaybookTarget]) -> Result<Vec
 /// 조직, 신뢰 도메인, 신뢰 캘린더, 본인 식별자, 플레이북 대상, 켠 호스트, MCP로 연 동작, 세션 바닥값 판번호가 든다.
 pub fn session_fingerprint(profile: &Profile) -> String {
     /// 세션 프로필(거부 목록, 샌드박스)을 바꾸면 올린다. 올리면 모든 사용자의 세션 잠금이 다시 걸린다.
-    const SESSION_FLOOR_VERSION: u32 = 2;
+    const SESSION_FLOOR_VERSION: u32 = 3;
     let mut lines = vec![format!("floor={SESSION_FLOOR_VERSION}")];
     let identity = &profile.identity;
     lines.push(format!(

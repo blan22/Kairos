@@ -42,7 +42,7 @@ kairos off [YYYY-MM-DD] [--clear]
 kairos setup [--org <파일> [--sha256 <값>]] [--yes] [--no-install] [--google <주소>] [--slack <ID>] [--name <이름>]
 kairos doctor
 kairos sources [on|off <소스>...] [--json]
-kairos connect [github | google <주소> | slack <ID> | name <이름> | mcp <소스> <서버> [동작=도구]... | session-token]
+kairos connect [github | google <주소> | slack <ID> | name <이름> | mcp <소스> <서버> [동작=도구]...]
 kairos config validate | show [--origin] | path | init [--org <파일> [--sha256 <값>]] [--force]
 kairos install [--dry-run [--preview-dir 폴더]] | --apply | --register [--claude 경로] [--gh 경로] [--root 폴더]
 kairos uninstall [--dry-run] [--runtime | --purge] [--yes]
@@ -103,7 +103,7 @@ kairos mcp serve
 |---|---|
 | 없음 | launchd 작업만 해제합니다 |
 | `--runtime` | 런타임(`<데이터 폴더>/<버전>`, `current`, `~/.local/bin/kairos` 링크)까지. 수집 기록과 설정은 남깁니다 |
-| `--purge` | 데이터 폴더 전체와 키체인의 세션 토큰까지 |
+| `--purge` | 데이터 폴더 전체와 키체인에 남은 예전 세션 토큰까지 |
 | `--dry-run` | 지울 대상을 보여 주기만 합니다 |
 
 `--runtime`과 `--purge`는 지울 대상을 먼저 보여 주고 `y`라고 답할 때만 지웁니다(`--yes`면 묻지 않습니다). 엉뚱한 폴더를 지우지 않도록 다음을 확인합니다.

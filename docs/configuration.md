@@ -84,7 +84,6 @@ kairos connect github                            # gh 로그인 사용자를 본
 kairos connect google <주소>                     # 개인 캘린더 ID이자 메일 주소
 kairos connect slack <사용자 ID>                  # Slack 프로필의 멤버 ID
 kairos connect name <이름>                       # 연차 일정과 Notion 알림에 쓰는 이름
-kairos connect session-token < 토큰파일           # 세션용 읽기 전용 토큰을 키체인에 저장합니다
 kairos config validate && kairos config show --origin
 kairos install --apply && kairos install --register
 ```

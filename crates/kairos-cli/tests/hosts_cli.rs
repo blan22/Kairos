@@ -116,17 +116,20 @@ fn accepted_fix_session(cli: &mut Cli) -> (std::path::PathBuf, std::path::PathBu
         &git,
         &format!(
             "#!/bin/sh\nprintf '%s\\n' \"$*\" >> '{log}'\nshift 2; while [ \"$1\" = -c ]; do shift 2; done\n\
-             [ \"$1\" = --no-replace-objects ] && shift\ncase \"$1\" in\n\
+             [ \"$1\" = --no-replace-objects ] && shift\ncase \"$1\" in --git-dir=*) shift ;; esac\ncase \"$1\" in\n\
              worktree) mkdir -p \"$6\" ;;\n\
              config) if [ -f '{config}' ]; then cat '{config}'; else printf 'local\\000remote.origin.url\\nhttps://github.com/contoso/atlas.git\\000'; fi ;;\n\
-             rev-parse) case \"$*\" in *refs/kairos/base/*) echo aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa ;; *) echo 0123456789abcdef0123456789abcdef01234567 ;; esac ;;\n\
+             rev-parse) case \"$*\" in *refs/kairos/base/*) echo aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa ;; \\\n\
+             *refs/kairos/head/check*) if [ -f '{moved}' ]; then echo 1111111111111111111111111111111111111111; else echo 0123456789abcdef0123456789abcdef01234567; fi ;; \\\n\
+             *) echo 0123456789abcdef0123456789abcdef01234567 ;; esac ;;\n\
              ls-remote) if [ -f '{remote}' ]; then cat '{remote}'; else printf 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\\trefs/heads/fe-stage\\n'; fi ;;\n\
              diff) printf 'src/button.ts\\0' ;;\n\
              log) printf '버튼 정렬을 고침\\037원인은 flex 방향\\n\\036' ;;\n\
              esac\nexit 0\n",
             log = log.display(),
             config = cli.root.join("git-config").display(),
-            remote = cli.root.join("git-ls-remote").display()
+            remote = cli.root.join("git-ls-remote").display(),
+            moved = cli.root.join("git-moved").display()
         ),
     );
     cli.set("KAIROS_GIT", git.to_str().unwrap());
@@ -172,7 +175,10 @@ fn pr은_세션이_커밋한_kairos_브랜치를_훅_없이_push하고_draft_pr�
     let branch = pr["branch"].as_str().unwrap();
     assert!(branch.starts_with("kairos/t-") && branch.len() == "kairos/t-".len() + 8, "{branch}");
     let calls = fs::read_to_string(&git_log).unwrap();
-    assert!(calls.contains("-c core.hooksPath=/dev/null --no-replace-objects log --reverse --no-merges"), "{calls}");
+    assert!(
+        calls.contains("-c core.hooksPath=/dev/null --no-replace-objects --git-dir=. log --reverse --no-merges"),
+        "{calls}"
+    );
     assert!(calls.contains("--no-replace-objects config --list --show-scope -z"), "{calls}");
     assert!(
         calls.contains("fetch --quiet --no-tags --no-write-fetch-head origin +refs/heads/fe-stage:refs/kairos/base/t-"),
@@ -187,12 +193,31 @@ fn pr은_세션이_커밋한_kairos_브랜치를_훅_없이_push하고_draft_pr�
         calls.contains("diff --name-only -z --no-renames aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa 0123"),
         "{calls}"
     );
+    // 비교와 push는 데이터 폴더의 검사용 저장소에서 한다. 세션이 쓸 수 있는 공용 .git의 객체를 다시 읽지 않는다.
+    let check = cli.root.join("pr-check").join(&branch["kairos/".len()..]);
+    let check = check.to_str().unwrap();
+    assert!(calls.contains(&format!("init --bare --quiet {check}\n")), "{calls}");
+    let fetched =
+        calls.lines().find(|line| line.starts_with(&format!("-C {check} ")) && line.contains(" fetch ")).unwrap();
+    assert!(
+        fetched.ends_with(&format!(
+            "-c transfer.fsckObjects=true fetch --quiet --no-tags --no-write-fetch-head {} +refs/kairos/base/{}:refs/kairos/base/check +HEAD:refs/kairos/head/check",
+            worktree_of(&calls),
+            &branch["kairos/".len()..]
+        )),
+        "{fetched}"
+    );
+    for step in ["log --reverse", "diff --name-only", "push --quiet"] {
+        let line = calls.lines().find(|line| line.contains(step)).unwrap();
+        assert!(line.starts_with(&format!("-C {check} ")), "{line}");
+    }
     assert!(
         calls.contains(&format!(
-            "-c core.hooksPath=/dev/null --no-replace-objects push --quiet origin 0123456789abcdef0123456789abcdef01234567:refs/heads/{branch}"
+            "-c core.hooksPath=/dev/null --no-replace-objects --git-dir=. push --quiet https://github.com/contoso/atlas.git 0123456789abcdef0123456789abcdef01234567:refs/heads/{branch}"
         )),
         "{calls}"
     );
+    assert!(!std::path::Path::new(check).exists(), "검사용 저장소는 끝나면 지운다");
     let argv = fs::read_to_string(&gh_log).unwrap();
     let argv: Vec<&str> = argv.lines().collect();
     let create = argv.iter().position(|arg| *arg == "create").unwrap();
@@ -201,6 +226,114 @@ fn pr은_세션이_커밋한_kairos_브랜치를_훅_없이_push하고_draft_pr�
         ["create", "--draft", "--repo", "contoso/atlas", "--base", "fe-stage", "--head", branch, "--title"]
     );
     assert_eq!(argv[create + 9], "버튼 정렬을 고침");
+}
+
+/// 확인한 뒤 HEAD가 바뀌면(세션이 남긴 프로세스) 검사용 저장소로 받은 커밋이 확인한 SHA와 달라진다. 올리지 않는다.
+#[test]
+fn pr은_검사용_저장소로_받은_커밋이_확인한_것과_다르면_올리지_않는다() {
+    let mut cli = Cli::new();
+    let (_, git_log) = accepted_fix_session(&mut cli);
+    fake_gh(&mut cli);
+    cli.db().connection().execute_batch(ENDED).unwrap();
+    fs::write(cli.root.join("git-moved"), "").unwrap();
+    let done = cli.run(&["pr", "1", "--json"]);
+    assert_eq!(done.body()["error"]["code"], "push_failed", "{}", done.out);
+    let calls = fs::read_to_string(&git_log).unwrap();
+    assert!(!calls.contains(" push --quiet "), "{calls}");
+    assert!(!calls.contains(" diff --name-only "), "{calls}");
+}
+
+/// 물음에 넣을 답. 화면의 확인 코드를 그대로 넣거나, 정한 글을 넣거나, 입력을 닫는다.
+enum Answer {
+    Code,
+    Text(&'static str),
+    Closed,
+}
+
+/// git 호스트로 수락한 고치는 세션을 kairos-run으로 띄우고, 가짜 claude가 0으로 끝난 뒤 물음에 `answer`로 답한다.
+/// gh는 글 읽기(graphql)와 PR 만들기를 흉내 낸다. 돌려주는 값은 (kairos-run 출력, git 기록)이다.
+fn run_fix_session(answer: Answer) -> (String, String) {
+    let mut cli = Cli::new();
+    let (_, git_log) = accepted_fix_session(&mut cli);
+    let worktree = fs::read_dir(cli.outside().join("worktrees")).unwrap().next().unwrap().unwrap().path();
+    fs::create_dir_all(worktree.join(".git")).unwrap();
+    let issue = serde_json::json!({ "data": { "repository": { "issueOrPullRequest": {
+        "__typename": "Issue", "id": "I_synth", "number": 1, "title": "합성 이슈", "body": "합성 본문",
+        "authorAssociation": "MEMBER", "author": { "__typename": "User", "login": "synthetic-lead" },
+        "comments": { "totalCount": 0, "pageInfo": { "hasNextPage": false, "endCursor": null }, "nodes": [] },
+    } } } });
+    let gh = cli.root.join("fake-gh");
+    write_script(
+        &gh,
+        &format!(
+            "#!/bin/sh
+case \"$1 $2\" in\n'auth token') printf 'synthetic-token\\n' ;;\n'api graphql') cat > /dev/null; printf '%s\\n' '{issue}' ;;\n\
+             'pr create') echo https://github.com/contoso/atlas/pull/7 ;;\n'pr list') ;;\n*) exit 1 ;;\nesac\n"
+        ),
+    );
+    cli.set("KAIROS_GH", gh.to_str().unwrap());
+    let claude = cli.root.join("fake-claude");
+    write_script(&claude, "#!/bin/sh\nexit 0\n");
+    let bin = cli.install_binaries();
+    let run_id = cli.db().connection().query_row("SELECT id FROM runs", [], |row| row.get::<_, String>(0)).unwrap();
+    let mut child = std::process::Command::new(bin.join("kairos-run"))
+        .arg(&run_id)
+        .current_dir(&worktree)
+        .env_clear()
+        .envs(&cli.env)
+        .env("KAIROS_CLAUDE", &claude)
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .spawn()
+        .unwrap();
+    // 물음이 나올 때까지 읽는다. 확인 코드는 물음 안에 있다.
+    let mut stdout = child.stdout.take().unwrap();
+    let mut seen = Vec::new();
+    let mut byte = [0u8; 1];
+    while !String::from_utf8_lossy(&seen).contains("다른 입력은 취소입니다:") {
+        assert_eq!(std::io::Read::read(&mut stdout, &mut byte).unwrap(), 1, "{}", String::from_utf8_lossy(&seen));
+        seen.push(byte[0]);
+    }
+    let prompt = String::from_utf8_lossy(&seen).into_owned();
+    let code = prompt.rsplit("열려면 ").next().unwrap()[..4].to_owned();
+    match answer {
+        Answer::Code => {
+            std::io::Write::write_all(child.stdin.as_mut().unwrap(), format!("{code}\n").as_bytes()).unwrap()
+        }
+        Answer::Text(text) => std::io::Write::write_all(child.stdin.as_mut().unwrap(), text.as_bytes()).unwrap(),
+        Answer::Closed => {}
+    }
+    drop(child.stdin.take());
+    let mut rest = String::new();
+    std::io::Read::read_to_string(&mut stdout, &mut rest).unwrap();
+    let output = child.wait_with_output().unwrap();
+    assert_eq!(output.status.code(), Some(0), "{}", String::from_utf8_lossy(&output.stderr));
+    let shown = format!("{prompt}{rest}{}", String::from_utf8_lossy(&output.stderr));
+    (shown, fs::read_to_string(&git_log).unwrap())
+}
+
+/// 정상으로 끝난 고치는 세션은 검사용 저장소에서 구한 커밋과 파일을 보여 주고 확인 코드를 묻는다.
+/// 코드를 그대로 넣을 때만 push하고 draft PR을 연다. y는 남은 프로세스도 넣을 수 있어 받지 않는다.
+#[test]
+fn kairos_run은_세션이_끝나면_커밋을_보여_주고_확인_코드를_받아야_올린다() {
+    let (shown, calls) = run_fix_session(Answer::Code);
+    assert!(shown.contains("올릴 커밋 0123456789abcdef0123456789abcdef01234567\n  - 버튼 정렬을 고침\n"), "{shown}");
+    assert!(shown.contains("바뀐 파일 1개\n  src/button.ts\n"), "{shown}");
+    assert!(shown.contains("draft PR을 만들었습니다 https://github.com/contoso/atlas/pull/7"), "{shown}");
+    assert!(calls.contains(" push --quiet https://github.com/contoso/atlas.git "), "{calls}");
+
+    for answer in [Answer::Text("y\n"), Answer::Text("0000x\n"), Answer::Closed] {
+        let (shown, calls) = run_fix_session(answer);
+        assert!(shown.contains("올리지 않았습니다. 패널의 PR 올리기로 올릴 수 있습니다"), "{shown}");
+        assert!(!calls.contains(" push --quiet "), "답하지 않거나 아니오면 올리지 않는다: {calls}");
+    }
+}
+
+/// 가짜 git 기록에서 PR 올리기가 본 worktree 폴더. config를 읽은 줄의 `-C` 값이다.
+fn worktree_of(calls: &str) -> String {
+    let line = calls.lines().find(|line| line.contains(" config --list ")).unwrap();
+    line.strip_prefix("-C ").unwrap().split(" -c ").next().unwrap().to_owned()
 }
 
 /// 가짜 gh. PR을 만들면 주소를 찍는다.

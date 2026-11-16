@@ -115,7 +115,7 @@ kairos help            # 전체 명령과 한 줄 설명
 |---|---|
 | 수집 기록, 항목, 실행 기록 | `~/Library/Application Support/kairos`(`KAIROS_HOME`). 폴더 0700, 파일 0600. Linux와 Windows의 자리는 [지원하는 OS](docs/platforms.md#파일이-놓이는-곳)에 있습니다 |
 | 설정(`org.toml`, `config.toml`, `connections.toml`) | 같은 폴더. 본인 소유이고 다른 사용자가 쓸 수 없을 때만 읽습니다 |
-| 세션용 읽기 전용 GitHub 토큰 | 키체인(`kairos connect session-token`) |
+| 세션 입력(이슈 본문과 댓글) | `~/Library/Caches/kairos/session-briefs/<run>`. run마다 0700 폴더와 0600 파일이고, 세션이 끝나면 지웁니다 |
 | launchd 작업 | `~/Library/LaunchAgents/dev.kairos.*.plist` |
 
 - 수집은 Claude Code의 MCP 연결(Calendar, Slack, Gmail)과 gh로 읽습니다. 호출할 수 있는 동작은 `crates/kairos-core/src/connector.rs`의 읽기 목록에 있는 것뿐입니다.
@@ -123,7 +123,7 @@ kairos help            # 전체 명령과 한 줄 설명
 - 사람과 조직마다 다른 값은 모두 설정 파일에 둡니다. 코드와 저장소에는 없습니다.
 - 데이터 폴더는 git 작업 트리 밖에 있어야 합니다. 안에 있으면 kairos가 실행을 거부합니다. 개인 데이터가 저장소에 커밋되는 일을 막기 위해서입니다.
 - Mac 알림에는 고정 문구와 건수만 나옵니다. 잠금 화면에 표시할지는 macOS 알림 설정에서 정합니다.
-- `kairos uninstall`은 launchd 작업을 해제합니다. `--runtime`은 런타임과 `kairos` 명령까지, `--purge`는 데이터 폴더와 키체인의 세션 토큰까지 지웁니다. 지울 대상을 먼저 보여 주고 확인을 받습니다. Orca 패널은 언로드하는 명령을 알려 줍니다.
+- `kairos uninstall`은 launchd 작업을 해제합니다. `--runtime`은 런타임과 `kairos` 명령까지, `--purge`는 데이터 폴더와 키체인에 남은 예전 세션 토큰까지 지웁니다. 지울 대상을 먼저 보여 주고 확인을 받습니다. Orca 패널은 언로드하는 명령을 알려 줍니다.
 
 > [!IMPORTANT]
 > Orca 패널은 `trusted-worker` 플러그인입니다. 패널은 kairos 실행 파일을 셸 없이 호출하기만 하지만, Orca의 권한 목록이 파일 접근을 막아 주는 샌드박스는 아닙니다.

@@ -363,7 +363,7 @@ impl AppContext {
         orca: &'a OrcaClient,
     ) -> kairos_sessions::PullRequestPublisher<'a> {
         let git = given(&self.env, "KAIROS_GIT").unwrap_or(kairos_sessions::GIT_BIN).to_owned();
-        let gh = configured_binary(&self.env, "KAIROS_GH", "gh").unwrap_or_else(|| "gh".to_owned());
+        let gh = self.gh_bin().unwrap_or_else(|| "gh".to_owned());
         let path = self.env.get("PATH").map_or("/usr/bin:/bin", String::as_str);
         let home = self.user_home.to_string_lossy().into_owned();
         kairos_sessions::PullRequestPublisher::new(
@@ -377,7 +377,7 @@ impl AppContext {
         )
     }
 
-    /// 세션 토큰의 키체인. 시험은 `KAIROS_SECURITY`로 가짜를 준다.
+    /// 예전 세션 토큰의 키체인. `uninstall --purge`가 남은 항목을 지운다. 시험은 `KAIROS_SECURITY`로 가짜를 준다.
     /// macOS는 security, Linux는 secret-tool이다. Windows는 세션을 열지 않아 키체인이 없다.
     pub fn keychain(&self) -> kairos_sessions::Keychain {
         let runner = self.runner.clone();
