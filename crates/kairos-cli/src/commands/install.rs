@@ -206,7 +206,7 @@ impl Uninstall {
             Ok(false) => {}
             Err(_) => {
                 console.print(
-                    "키체인의 예전 세션 토큰을 지우지 못했습니다. 키체인 접근에서 kairos-session-token을 지우세요",
+                    "키체인의 예전 세션 토큰을 지우지 못했습니다. 키체인 접근에서 이름이 kairos이고 계정이 session-gh-token인 항목을 지우세요",
                 );
                 return Ok(true);
             }

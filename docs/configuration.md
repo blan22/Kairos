@@ -107,7 +107,7 @@ kairos install --apply && kairos install --register
 - 세션 자격에 영향을 주는 값이 바뀌면 세션이 다시 잠기고 `doctor`의 `세션` 줄이 알려 줍니다.
 - MCP 바인딩을 바꿨다면 `kairos install --apply`를 다시 실행하세요. 그래야 수집 훅의 허용 목록(`hooks/allowed.ts`)에 반영됩니다.
 
-값을 바꾼 뒤에는 `kairos config validate`로 확인하고, `kairos config show --origin`으로 주요 값이 어느 파일에서 왔는지 볼 수 있습니다. 세션 호스트와 `[hosts.git]`의 값은 이 출력에 나오지 않으니 `config.toml`을 직접 확인하세요.
+값을 바꾼 뒤에는 `kairos config validate`로 확인하고, `kairos config show --origin`으로 각 값이 어느 파일에서 왔는지 볼 수 있습니다.
 
 ### config.toml
 

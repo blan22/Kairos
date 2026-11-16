@@ -31,6 +31,26 @@ fn validate와_show는_층과_출처를_보여_준다() {
     let body = json.body();
     assert_eq!(body["profile"]["playbooks"][0]["baseBranch"], "origin/fe-stage");
     assert_eq!(body["fingerprint"].as_str().unwrap().len(), 64);
+    assert!(show.out.contains("세션 호스트: orca  (기본값)"), "{}", show.out);
+    assert!(show.out.contains("git worktree 폴더: 클론 옆  (기본값)"), "{}", show.out);
+    assert_eq!(body["profile"]["sessionHost"], "orca");
+}
+
+#[test]
+fn show는_세션_호스트와_git_설정의_출처를_보여_준다() {
+    let cli = Cli::new();
+    append_user_config(
+        &cli,
+        "[sessions]\nhost = \"git\"\n\n[hosts.git]\nworktree_root = \"/tmp/contoso-worktrees\"\n\n[hosts.git.repos]\n\"contoso/atlas\" = \"/tmp/contoso-atlas\"\n",
+    );
+    let show = cli.run(&["config", "show", "--origin"]);
+    assert_eq!(show.status, 0, "{}", show.err);
+    assert!(show.out.contains("세션 호스트: git  (config.toml)"), "{}", show.out);
+    assert!(show.out.contains("git worktree 폴더: /tmp/contoso-worktrees  (config.toml)"), "{}", show.out);
+    assert!(show.out.contains("git 클론 contoso/atlas: /tmp/contoso-atlas  (config.toml)"), "{}", show.out);
+    let body = cli.json(&["config", "show", "--json"]).body();
+    assert_eq!(body["profile"]["git"]["repos"]["contoso/atlas"], "/tmp/contoso-atlas");
+    assert_eq!(body["profile"]["git"]["worktreeRoot"], "/tmp/contoso-worktrees");
 }
 
 #[test]

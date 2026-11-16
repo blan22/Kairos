@@ -202,6 +202,10 @@ fn 세션_밖_문구와_빈_환경값() {
     assert_eq!((inside.status, inside.out.as_str()), (1, "세션 안에서는 켤 수 없습니다\n"));
     let refused = cli.run_with(&[("CLAUDECODE", "1")], &["accept", "1"]);
     assert_eq!((refused.status, refused.out.as_str()), (1, "세션 안에서는 수락할 수 없습니다. 패널에서 누르세요\n"));
+    // PR 올리기는 외부 쓰기다. Claude Code 안의 모델이 부르지 못하게 --from 예외 없이 거절한다.
+    let pr = cli.run_with(&[("CLAUDECODE", "1")], &["pr", "1", "--json"]);
+    assert_eq!((pr.status, pr.body()["error"]["code"].as_str()), (1, Some("session_caller")));
+    assert!(pr.body()["error"]["message"].as_str().unwrap().contains("일반 터미널"), "{}", pr.out);
     assert_eq!(cli.run_with(&[("CLAUDECODE", "")], &["sessions", "on"]).out, "세션 열림\n");
 }
 
