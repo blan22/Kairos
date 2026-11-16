@@ -67,7 +67,8 @@
 
 - `doctor`에 `session-approval`이 나오면 세션 자격에 영향을 주는 설정이 바뀌어 세션이 잠긴 것입니다. 차단 테스트를 확인한 뒤 `kairos sessions on`을 다시 실행하세요([에이전트 세션](sessions.md#세션-켜기)).
 - `세션 열고 시작`이 `repo_unresolved`로 실패하면 kairos가 Orca에서 작업할 저장소를 하나로 고르지 못한 것입니다. 같은 원격의 클론을 Orca에 여러 개 등록했고 폴더 이름도 저장소 이름과 다를 때 생깁니다. `orca repo list --json`에서 쓸 저장소의 `id`를 골라 `config.toml`의 `[hosts.orca.repos]`에 적으세요([설정](configuration.md)).
-- 세션 토큰이 없다고 나오면 읽기 전용 fine-grained 토큰을 만들어 `kairos connect session-token < 토큰파일`로 등록하세요([세션 토큰](sessions.md#세션-토큰)).
+- `kairos-run`이 `이슈의 글을 모두 확인하지 못해 세션을 열지 않았습니다`로 끝나면 `gh auth status`로 gh 로그인을 확인하세요. 세션을 띄우기 직전에 사용자의 gh로 글을 읽습니다([세션이 읽는 내용](sessions.md#세션이-읽는-내용)). 세션용 토큰은 더 이상 필요하지 않습니다.
+- 세션이 끝났는데 PR이 올라가지 않았다면 세션 터미널의 마지막 줄에 까닭이 있습니다. 물음에 화면의 확인 코드 말고 다른 것을 입력했어도 올라가지 않습니다. 고친 뒤 패널의 `PR 올리기`를 누르세요([PR 올리기](sessions.md#pr-올리기)).
 
 ## Orca 패널
 

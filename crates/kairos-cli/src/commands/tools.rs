@@ -29,7 +29,7 @@ const WORDS: [(&str, &[&str]); 8] = [
     ("sessions", &["on", "off"]),
     ("sources", &["on", "off"]),
     ("config", &["validate", "show", "path", "init"]),
-    ("connect", &["github", "google", "slack", "name", "mcp", "session-token"]),
+    ("connect", &["github", "google", "slack", "name", "mcp"]),
     ("triage", &["keep", "drop"]),
     ("completions", &["zsh", "bash"]),
 ];

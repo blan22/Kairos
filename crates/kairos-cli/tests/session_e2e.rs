@@ -43,7 +43,6 @@ fn 끝까지_쉼표_따옴표_셸_문자가_든_제목이_있어도_claude_인�
     let title =
         format!("합성, \"큰따옴표\" 'x' $(touch {home}/pwned); `touch {home}/pwned2` | z", home = cli.root.display());
     seed_issue(&cli.db(), Some(&title));
-    cli.write_session_token();
     cli.open_sessions();
     let orca = cli.fake_orca();
     let gh_log = cli.fake_gh();
@@ -76,6 +75,10 @@ fn 끝까지_쉼표_따옴표_셸_문자가_든_제목이_있어도_claude_인�
     assert!(!cli.root.join("pwned2").exists());
     let gh_calls = fs::read_to_string(gh_log).unwrap();
     assert_eq!(gh_calls, "auth token --user kairos-dev\napi graphql --input -\n", "띄우기 직전에 글을 다시 읽는다");
+    // 고치는 세션이 정상으로 끝나면 세션 밖에서 PR 올리기를 부른다. 이 시험의 Orca에는 worktree가 없어 올리지 않고 까닭을 남긴다.
+    let stderr = String::from_utf8_lossy(&shell.stderr);
+    assert!(stderr.contains("kairos-run: PR을 자동으로 올리지 않았습니다."), "{stderr}");
+    assert!(stderr.contains("패널의 PR 올리기로 다시 할 수 있습니다"), "{stderr}");
 }
 
 /// 세션을 여는 흐름이다. 세션은 macOS에서만 연다.
@@ -88,7 +91,6 @@ fn kairos_run은_gh로_글을_다시_읽지_못하면_claude를_띄우지_않는
     let accepted = cli.run_installed(&bin, &["accept", "1", "--json"]).body();
     let run_id = accepted["run"]["id"].as_str().unwrap().to_owned();
     let (claude, dump) = fake_claude(&cli);
-    cli.write_session_token();
     // KAIROS_GH는 없는 파일을 가리킨다.
     let output = Command::new(bin.join("kairos-run"))
         .arg(&run_id)
@@ -332,7 +334,6 @@ fn kairos_run은_argv가_틀리면_db를_열기_전에_2로_끝난다() {
 fn kairos_run은_없는_run을_거절하고_claude를_띄우지_않는다() {
     let cli = Cli::new();
     prime(&cli.db(), SourceName::Slack, BEFORE);
-    cli.write_session_token();
     let (claude, dump) = fake_claude(&cli);
     let output =
         Command::new(RUN_BIN).arg(RUN_ID).env_clear().envs(&cli.env).env("KAIROS_CLAUDE", &claude).output().unwrap();
@@ -341,12 +342,15 @@ fn kairos_run은_없는_run을_거절하고_claude를_띄우지_않는다() {
     assert!(!dump.exists());
 }
 
-/// 토큰이 없을 때 소유자의 키체인 gh 로그인으로 내려가지 않는다. 고정 문구로 거절하고 claude를 띄우지 않는다.
+/// 세션은 토큰 없이 뜬다. 대신 kairos-run이 세션 밖에서 사용자 gh로 글을 읽지 못하면 claude를 띄우지 않는다.
 /// 세션을 여는 흐름이다. 세션은 macOS에서만 연다.
 #[cfg(target_os = "macos")]
 #[test]
-fn kairos_run은_읽기_전용_토큰이_없으면_claude를_띄우지_않는다() {
+fn kairos_run은_세션_밖에서_글을_읽지_못하면_claude를_띄우지_않는다() {
     let mut cli = cli_with_issue();
+    // 예전 버전의 토큰 파일. 이제 읽지 않으므로 kairos-run이 지운다.
+    let legacy = cli.home().file("session-gh-token");
+    fs::write(&legacy, "github_pat_SYNTHETIC0123456789abcdef\n").unwrap();
     cli.fake_orca();
     let bin = cli.install_binaries();
     let accepted = cli.run_installed(&bin, &["accept", "1", "--json"]).body();
@@ -363,9 +367,10 @@ fn kairos_run은_읽기_전용_토큰이_없으면_claude를_띄우지_않는다
     assert_eq!(output.status.code(), Some(1));
     assert_eq!(
         String::from_utf8_lossy(&output.stderr),
-        "kairos-run: 데이터 폴더에 읽기 전용 session-gh-token이 없어 세션을 시작하지 않습니다\n"
+        "kairos-run: 이슈의 글을 모두 확인하지 못해 세션을 열지 않았습니다 (live_gh_missing)\n"
     );
     assert!(!dump.exists());
+    assert!(!legacy.exists(), "예전 토큰 파일을 남기지 않는다");
 }
 
 /// 세션을 여는 흐름이다. 세션은 macOS에서만 연다.
@@ -375,7 +380,6 @@ fn 세션_거부_목록의_kairos_경로는_실제_설치_폴더다() {
     let mut cli = cli_with_issue();
     cli.fake_orca();
     cli.fake_gh();
-    cli.write_session_token();
     let bin = cli.install_binaries();
     let accepted = cli.run_installed(&bin, &["accept", "1", "--json"]).body();
     let run_id = accepted["run"]["id"].as_str().unwrap().to_owned();

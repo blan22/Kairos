@@ -3,8 +3,6 @@
 #![allow(dead_code, clippy::unwrap_used)]
 
 use std::collections::{BTreeMap, BTreeSet, HashMap};
-use std::fs;
-use std::os::unix::fs::PermissionsExt;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -21,10 +19,10 @@ use kairos_core::process::{ProcessEnd, ProcessOutput, ProcessRequest, ProcessRun
 use kairos_core::{Instant, KairosError, KairosHome, KairosResult, OffDates};
 use kairos_ledger::{IngestOptions, Ledger};
 use kairos_sessions::{
-    LiveAuthorCheck, OrcaClient, Run, RunRepo, RunSynchronizer, SESSION_GH_TOKEN_FILE, SessionLauncher, SessionOutcome,
-    SessionRefusal, SessionToken, SyncReport,
+    LiveAuthorCheck, OrcaClient, Run, RunRepo, RunSynchronizer, SessionLauncher, SessionOutcome, SessionRefusal,
+    SyncReport,
 };
-use kairos_source_github::LiveAuthors;
+use kairos_source_github::{LiveAuthors, LiveRead};
 use kairos_store::Database;
 use serde_json::{Value, json};
 use tempfile::TempDir;
@@ -41,19 +39,11 @@ pub const BEFORE: &str = "2026-03-01T01:00:00.000Z";
 pub const RUN: &str = "11111111-2222-4333-8444-555555555555";
 pub const OTHER_RUN: &str = "99999999-2222-4333-8444-555555555555";
 pub const RUN_BINARY: &str = "/synthetic/bin/kairos-run";
-/// 합성 fine-grained 토큰. 실제 GitHub 토큰이 아니다.
-pub const SYNTHETIC_TOKEN: &str = "github_pat_SYNTHETIC0123456789abcdef";
+/// 합성 세션 입력. 재확인이 통과하면 이 내용이 세션 입력 파일이 된다.
+pub const SYNTHETIC_BRIEF: &str = "# 세션 입력\n\n합성 이슈 본문\n";
 
-pub fn session_token() -> SessionToken {
-    SessionToken::parse(SYNTHETIC_TOKEN).unwrap()
-}
-
-/// 소유자가 두는 것과 같은 0600 토큰 파일을 데이터 폴더에 쓴다. 세션은 이 파일이 없으면 시작하지 않는다.
-pub fn write_session_token(home: &KairosHome, content: &str, mode: u32) {
-    let path = home.file(SESSION_GH_TOKEN_FILE);
-    let _ = fs::remove_file(&path);
-    fs::write(&path, content).unwrap();
-    fs::set_permissions(&path, fs::Permissions::from_mode(mode)).unwrap();
+pub fn brief() -> String {
+    SYNTHETIC_BRIEF.to_owned()
 }
 
 pub fn at(text: &str) -> Instant {
@@ -270,9 +260,11 @@ impl FakeLive {
 }
 
 impl LiveAuthorCheck for FakeLive {
-    fn live_authors(&self, url: &str) -> KairosResult<LiveAuthors> {
+    fn live_read(&self, url: &str) -> KairosResult<LiveRead> {
         self.urls.lock().unwrap().push(url.to_owned());
-        self.verdict.map_err(KairosError::new)
+        let authors = self.verdict.map_err(KairosError::new)?;
+        let brief = if authors == LiveAuthors::Insiders { brief() } else { String::new() };
+        Ok(LiveRead { authors, brief })
     }
 }
 

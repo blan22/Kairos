@@ -451,7 +451,6 @@ impl Wizard<'_> {
         for line in sources::lines(profile, &pinned) {
             self.console.print(&line);
         }
-        self.console.print("세션을 쓰려면 읽기 전용 토큰을 넣습니다: kairos connect session-token < 토큰파일");
     }
 
     /// 표시를 켜서 첫 수집부터 카드와 알림을 내게 한다. 기본값 auto는 기록 1근무일이 끝날 때까지 알리지 않는다.

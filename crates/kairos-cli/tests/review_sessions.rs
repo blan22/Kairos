@@ -308,7 +308,6 @@ fn r15_받을_때_이미_30일이_지난_t3_글도_시작을_막는다() {
 fn r15_kairos_run이_띄우기_직전에_본_외부_글은_실패_카드가_되고_시작을_다시_내지_않는다() {
     let (_dir, home, db) = file_seeded();
     accept(&db, &FakeOrca::new());
-    write_session_token(&home, SYNTHETIC_TOKEN, 0o600);
     let profile = SessionProfile::new(
         Path::new("/synthetic/kairos"),
         Path::new("/synthetic/kairos-home"),
@@ -354,7 +353,6 @@ impl SessionSpawner for Exits {
 fn r18_세션이_뒤에서_실패하면_실패_카드가_한_번_나오고_묶음에_다시_오른다() {
     let (_dir, home, db) = file_seeded();
     accept(&db, &FakeOrca::new());
-    write_session_token(&home, SYNTHETIC_TOKEN, 0o600);
     let profile = SessionProfile::new(
         Path::new("/synthetic/kairos"),
         Path::new("/synthetic/kairos-home"),

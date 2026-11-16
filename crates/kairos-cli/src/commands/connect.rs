@@ -1,8 +1,7 @@
-//! 계정 연동. 본인 식별자와 MCP 바인딩을 `connections.toml`에, 세션 토큰을 키체인에 쓴다.
+//! 계정 연동. 본인 식별자와 MCP 바인딩을 `connections.toml`에 쓴다.
 //! 쓰기 전에 세 설정 파일을 합쳐 검증한다. 세션이나 Orca 터미널 안에서는 쓰지 않는다(신뢰 범위가 바뀐다).
 
 use std::collections::BTreeMap;
-use std::io::Read;
 use std::time::Duration;
 
 use kairos_config::{Connections, IdentityField};
@@ -11,7 +10,6 @@ use kairos_core::process::{ProcessEnd, ProcessRequest};
 use kairos_core::profile::Profile;
 use kairos_core::{KairosError, KairosResult};
 use kairos_ops::find_binary;
-use kairos_sessions::SessionToken;
 use serde_json::json;
 
 use crate::app::AppContext;
@@ -19,11 +17,9 @@ use crate::args::{ArgParser, OptionSpec, flag, text};
 use crate::command::Command;
 use crate::reply::Reply;
 
-const USAGE: &str = "사용법: kairos connect [github | google <주소> | slack <사용자 ID> | name <이름> | mcp <calendar|gmail|slack> (<서버> [동작=도구]... | --reset) | session-token] [--json]";
+const USAGE: &str = "사용법: kairos connect [github | google <주소> | slack <사용자 ID> | name <이름> | mcp <calendar|gmail|slack> (<서버> [동작=도구]... | --reset)] [--json]";
 const OPTIONS: [OptionSpec; 3] = [flag("json"), flag("reset"), text("gh")];
 const GH_TIMEOUT: Duration = Duration::from_secs(15);
-/// 세션 토큰의 상한. 파일 검사와 같다.
-const TOKEN_MAX_BYTES: u64 = 512;
 
 pub struct Connect;
 
@@ -55,7 +51,6 @@ impl Command for Connect {
             ("name", [name]) => identity(context, &reply, IdentityField::Name, name),
             ("mcp", [source]) if parsed.flag("reset") => reset_binding(context, &reply, source),
             ("mcp", [source, server, tools @ ..]) => binding(context, &reply, source, server, tools),
-            ("session-token", []) => session_token(context, &reply),
             _ => Ok(reply.usage(USAGE)),
         }
     }
@@ -155,50 +150,9 @@ fn reset_binding(context: &AppContext, reply: &Reply<'_>, source: &str) -> Kairo
     save(context, reply, &connections, &format!("{source} 바인딩을 지웠습니다. 기본 커넥터 이름을 씁니다"))
 }
 
-/// stdin의 토큰을 키체인에 넣는다. 인자로 받지 않는다(셸 기록과 ps에 남는다).
-fn session_token(context: &AppContext, reply: &Reply<'_>) -> KairosResult<i32> {
-    let mut text = String::new();
-    std::io::stdin()
-        .take(TOKEN_MAX_BYTES)
-        .read_to_string(&mut text)
-        .map_err(|_| KairosError::new("token_unreadable"))?;
-    let token = match SessionToken::parse(&text) {
-        Ok(token) => token,
-        Err(_) => {
-            return Ok(reply.fail(
-                "session_token_invalid",
-                "fine-grained 토큰(github_pat_)만 받습니다. classic과 gh 로그인 토큰은 쓰기 범위가 있어 받지 않습니다",
-                1,
-            ));
-        }
-    };
-    context.keychain().write(&token)?;
-    // 키체인 하나만 남긴다. 파일이 있으면 지운다.
-    let file = context.home().file(kairos_sessions::SESSION_GH_TOKEN_FILE);
-    let removed = std::fs::remove_file(&file).is_ok();
-    let message = if removed {
-        "세션 토큰을 키체인에 넣고 토큰 파일을 지웠습니다"
-    } else {
-        "세션 토큰을 키체인에 넣었습니다"
-    };
-    if reply.json() {
-        return reply.success(json!({ "message": message }));
-    }
-    context.console().print(message);
-    Ok(0)
-}
-
 fn status(context: &AppContext, reply: &Reply<'_>) -> KairosResult<i32> {
     let profile: &Profile = kairos_core::profile::current();
     let identity = &profile.identity;
-    let token = match context.keychain().read() {
-        Ok(kairos_sessions::KeychainRead::Found(_)) => "키체인",
-        Ok(_) | Err(_) => match SessionToken::read(context.home()) {
-            Ok(Some(_)) => "파일",
-            Ok(None) => "없음",
-            Err(_) => "파일(형식이나 권한 오류)",
-        },
-    };
     let bindings: BTreeMap<&str, (String, bool)> = BINDABLE_SOURCES
         .iter()
         .map(|source| {
@@ -216,7 +170,6 @@ fn status(context: &AppContext, reply: &Reply<'_>) -> KairosResult<i32> {
                 "name": identity.display_name,
             },
             "bindings": bindings.iter().map(|(source, (server, custom))| ((*source).to_owned(), json!({ "server": server, "custom": custom }))).collect::<serde_json::Map<_, _>>(),
-            "sessionToken": token,
         }));
     }
     let or_none = |value: &Option<String>, hint: &str| value.clone().unwrap_or_else(|| format!("없음 ({hint})"));
@@ -228,6 +181,5 @@ fn status(context: &AppContext, reply: &Reply<'_>) -> KairosResult<i32> {
     for (source, (server, custom)) in &bindings {
         console.print(&format!("MCP {source}: {server}{}", if *custom { "" } else { " (기본)" }));
     }
-    console.print(&format!("세션 토큰: {token}"));
     Ok(0)
 }

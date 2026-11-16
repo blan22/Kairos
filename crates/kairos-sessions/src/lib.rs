@@ -4,12 +4,12 @@
 //! - `RunRepo`, `Run` runs 표의 쓰기.
 //! - `SessionLauncher` 시작, 취소, 이동. `RunSynchronizer` 세션 상태 추적.
 //! - `SessionProfile` kairos-run이 쓰는 claude 인자, 환경, 프롬프트. 보안 경계다. qa_issue는 고치는 세션, 나머지는 읽는 세션이다.
-//! - `PullRequestPublisher` 고치는 세션이 커밋한 일을 사용자가 누르면 draft PR로 올린다. 세션 밖에서 돈다.
+//! - `PullRequestPublisher` 고치는 세션이 커밋한 일을 draft PR로 올린다. 세션이 끝난 뒤 kairos-run이 사용자에게 물은 뒤, 또는 사용자가 누르면 부른다. 세션 밖의 검사용 저장소에서 검사하고 올린다.
 //! - `SessionWorkspace` 고치는 세션의 작업 공간과 세션이 고치지 못하는 git 경로.
-//! - `SessionRunner` 세션 터미널에서 도는 kairos-run 본체. 띄우기 직전에 `LiveAuthorCheck`로 글의 작성자를 다시 본다.
+//! - `SessionRunner` 세션 터미널에서 도는 kairos-run 본체. 띄우기 직전에 `LiveAuthorCheck`로 글의 작성자를 다시 보고 그 글을 세션 입력으로 넘긴다.
 //!
 //! 외부로 나가는 값은 고정 낱말, run ID에서 만든 이름, 정규식을 통과한 이슈 URL, Orca가 준 선택자뿐이다.
-//! 이슈 제목이나 메시지는 여기로 들어오지 않는다. SQL은 `RunRepo` 안에만 있다.
+//! 이슈 제목과 본문은 인자와 프롬프트에 들어가지 않고 세션 입력 파일로만 간다. SQL은 `RunRepo` 안에만 있다.
 
 mod git_host;
 mod keychain;
@@ -34,12 +34,14 @@ pub use orca::{
     OrcaWorktree, PsSnapshot, find_workspace_named, focus_navigated,
 };
 pub use profile::{
-    CLEARED_ENV, FIX_TOOLS, SESSION_GH_TOKEN_FILE, SESSION_MARKER_ENV, SESSION_SETTINGS_DIR, SESSION_TOOLS,
-    SESSIONS_UNSUPPORTED, SessionCommand, SessionProfile, SessionToken, WrittenSettings, session_tools,
+    CLEARED_ENV, FIX_TOOLS, SESSION_BRIEF_FILE, SESSION_BRIEF_ROOT, SESSION_MARKER_ENV, SESSION_SETTINGS_DIR,
+    SESSION_TOOLS, SESSIONS_UNSUPPORTED, SessionCommand, SessionProfile, WrittenBrief, WrittenSettings, session_tools,
 };
-pub use pull_request::{PrDraft, PrOutcome, PrStatus, PullRequestPublisher};
+pub use pull_request::{PrDraft, PrOutcome, PrStatus, PreparedPr, PullRequestPublisher, build_path};
 pub use run::{Run, RunRepo, RunState};
-pub use runner::{ClaimRefusal, LiveAuthorCheck, SessionClaim, SessionRunner, SessionSpawner, SystemSessionSpawner};
+pub use runner::{
+    AfterSession, ClaimRefusal, LiveAuthorCheck, SessionClaim, SessionRunner, SessionSpawner, SystemSessionSpawner,
+};
 pub use sync::{
     CLAIM_STALE_MS, RunSynchronizer, SESSION_LOST_MS, SESSION_VISIBLE_MS, SyncReport, SyncedRun, WORKING_WARN,
 };

@@ -19,8 +19,8 @@ use kairos_agenda::{ItemState, Playbook};
 use kairos_core::KairosHome;
 use kairos_core::ports::{FixedClock, SystemClock};
 use kairos_sessions::{
-    CLEARED_ENV, RunState, SessionCommand, SessionLauncher, SessionProfile, SessionRunner, SessionSpawner,
-    SessionWorkspace, SystemSessionSpawner,
+    CLEARED_ENV, RunState, SESSION_BRIEF_FILE, SessionCommand, SessionLauncher, SessionProfile, SessionRunner,
+    SessionSpawner, SessionWorkspace, SystemSessionSpawner,
 };
 use kairos_store::Database;
 
@@ -45,10 +45,11 @@ fn 대역_프로세스() {
     std::process::exit(runner.run(&[run_id]).unwrap());
 }
 
+/// 세션 입력은 사용자 홈 아래에 쓰므로 시험 데이터 폴더 안의 폴더를 홈으로 준다.
 fn profile_at(home: &KairosHome) -> SessionProfile {
-    SessionProfile::new(Path::new("/synthetic/kairos"), home.root(), Path::new("/synthetic/home")).with_workspace(
-        SessionWorkspace::discover(Path::new("/synthetic/workspace"), Path::new("/synthetic/home")).unwrap(),
-    )
+    let user_home = home.root().join("user-home");
+    SessionProfile::new(Path::new("/synthetic/kairos"), home.root(), &user_home)
+        .with_workspace(SessionWorkspace::discover(Path::new("/synthetic/workspace"), &user_home).unwrap())
 }
 
 fn double() -> Command {
@@ -159,7 +160,7 @@ fn scene(title: Option<String>) -> Scene {
             object.text_head = title;
         }
     });
-    write_session_token(&home, &format!("{SYNTHETIC_TOKEN}\n"), 0o600);
+    fs::create_dir(home.root().join("user-home")).unwrap();
     let root = dir.path().join("tools");
     fs::create_dir(&root).unwrap();
     Scene { root, _dir: dir, home }
@@ -178,7 +179,7 @@ fn fake_run_binary(root: &Path) -> String {
     path.to_str().unwrap().to_owned()
 }
 
-/// 받은 인자와 환경, --settings 파일의 권한과 내용을 파일에 남기는 가짜 claude.
+/// 받은 인자와 환경, --settings 파일의 권한과 내용, --add-dir 폴더의 세션 입력을 파일에 남기는 가짜 claude.
 fn fake_claude(root: &Path) -> PathBuf {
     let claude = root.join("fake-claude");
     let tokens: String = CLEARED_ENV
@@ -191,11 +192,18 @@ fn fake_claude(root: &Path) -> PathBuf {
          if [ \"$prev\" = --settings ]; then\n\
          mode() {{ stat -c '%a' \"$1\" 2>/dev/null || stat -f '%Lp' \"$1\"; }}; mode \"$arg\" > \"{mode}\"; mode \"$(dirname \"$arg\")\" > \"{dir_mode}\"; cat \"$arg\" > \"{content}\"\n\
          fi\n\
+         if [ \"$prev\" = --add-dir ]; then\n\
+         mode() {{ stat -c '%a' \"$1\" 2>/dev/null || stat -f '%Lp' \"$1\"; }}; mode \"$arg/{file}\" > \"{brief_mode}\"; mode \"$arg\" > \"{brief_dir_mode}\"; cat \"$arg/{file}\" > \"{brief}\"\n\
+         fi\n\
          prev=$arg\n\
          done\n",
         mode = root.join("settings-mode").display(),
         dir_mode = root.join("settings-dir-mode").display(),
         content = root.join("settings").display(),
+        file = SESSION_BRIEF_FILE,
+        brief_mode = root.join("brief-mode").display(),
+        brief_dir_mode = root.join("brief-dir-mode").display(),
+        brief = root.join("brief").display(),
     );
     executable(
         &claude,
@@ -247,29 +255,26 @@ fn 끝까지_쉼표_따옴표_셸_문자가_든_제목이_있어도_claude_인�
 
     let env = fs::read_to_string(scene.root.join("env")).unwrap();
     assert_eq!(env.lines().count(), CLEARED_ENV.len());
-    assert!(
-        env.lines().all(|line| line.ends_with("=unset") || line == format!("GH_TOKEN={SYNTHETIC_TOKEN}")),
-        "env -u로 지우고 GH_TOKEN은 소유자 토큰으로 바꾼다: {env}"
-    );
+    assert!(env.lines().all(|line| line.ends_with("=unset")), "env -u로 모두 지운다: {env}");
     let argv = fs::read_to_string(scene.root.join("argv")).unwrap();
     let args: Vec<&str> = argv.trim_end_matches('\0').split('\0').collect();
     assert!(!argv.contains("큰따옴표"));
-    assert_eq!(*args.last().unwrap(), SessionProfile::prompt(Playbook::QaIssue, &issue_url(1)).unwrap());
     let expected = profile_at(&scene.home)
-        .command(claude.to_str().unwrap(), RUN, Playbook::QaIssue, &issue_url(1), session_token())
+        .command(claude.to_str().unwrap(), RUN, Playbook::QaIssue, &issue_url(1), brief())
         .unwrap();
-    // /usr/bin/env가 -u와 claude 경로를 먹으므로 그 뒤의 값이 claude가 받은 인자다. GH_TOKEN은 -u에서 빠진다.
-    assert_eq!(args, expected.args[(CLEARED_ENV.len() - 1) * 2 + 1..]);
+    let brief_path = expected.brief_dir().unwrap().join(SESSION_BRIEF_FILE);
+    assert_eq!(*args.last().unwrap(), SessionProfile::prompt(Playbook::QaIssue, &issue_url(1), &brief_path).unwrap());
+    // /usr/bin/env가 -u와 claude 경로를 먹으므로 그 뒤의 값이 claude가 받은 인자다.
+    assert_eq!(args, expected.args[CLEARED_ENV.len() * 2 + 1..]);
     assert!(!pwned.exists());
     assert!(!dir.path().join("pwned2").exists());
     assert_eq!(state(&scene).0, RunState::Ended);
 }
 
-/// 소유자가 둔 토큰은 실제 /usr/bin/env를 지나 claude의 GH_TOKEN으로만 닿는다. 다른 토큰은 그대로 지운다.
+/// 세션은 토큰 없이 실제 /usr/bin/env를 지나 뜬다. 시작 환경의 토큰은 모두 지우고, 세션 입력은 --add-dir 폴더의 파일로 닿는다.
 #[test]
-fn 끝까지_토큰_파일의_값은_claude_환경으로만_가고_인자에는_없다() {
+fn 끝까지_토큰은_모두_지우고_세션_입력은_add_dir_폴더의_파일로만_간다() {
     let scene = scene(None);
-    let token = SYNTHETIC_TOKEN;
     let claude = fake_claude(&scene.root);
     let command = accepted_command(&scene, &fake_run_binary(&scene.root));
 
@@ -282,24 +287,25 @@ fn 끝까지_토큰_파일의_값은_claude_환경으로만_가고_인자에는_
 
     let env = fs::read_to_string(scene.root.join("env")).unwrap();
     assert_eq!(env.lines().count(), CLEARED_ENV.len());
-    assert!(env.lines().any(|line| line == format!("GH_TOKEN={token}")), "{env}");
-    assert!(
-        env.lines().filter(|line| !line.starts_with("GH_TOKEN=")).all(|line| line.ends_with("=unset")),
-        "시작 환경의 다른 토큰은 env -u로 지운다: {env}"
-    );
+    assert!(env.lines().all(|line| line.ends_with("=unset")), "시작 환경의 토큰은 env -u로 모두 지운다: {env}");
     let argv = fs::read_to_string(scene.root.join("argv")).unwrap();
-    assert!(!argv.contains("SYNTHETIC0123"), "토큰은 인자에 없다. 다른 사용자도 ps로 읽는다");
-    assert!(!String::from_utf8_lossy(&output.stderr).contains("SYNTHETIC0123"));
-    assert!(!String::from_utf8_lossy(&output.stdout).contains("SYNTHETIC0123"));
-    // claude가 본 --settings 파일은 0700 폴더의 0600 파일이고 GH_TOKEN을 읽기 전용 토큰으로 고정한다.
+    assert!(!argv.contains("합성 이슈 본문"), "세션 입력은 인자에 없다");
+    // claude가 본 --settings 파일은 0700 폴더의 0600 파일이고 GH_TOKEN을 빈 값으로 고정한다.
     assert_eq!(fs::read_to_string(scene.root.join("settings-mode")).unwrap().trim(), "600");
     assert_eq!(fs::read_to_string(scene.root.join("settings-dir-mode")).unwrap().trim(), "700");
     let settings: serde_json::Value =
         serde_json::from_str(&fs::read_to_string(scene.root.join("settings")).unwrap()).unwrap();
-    assert_eq!(settings["env"]["GH_TOKEN"], token);
-    let path = profile_at(&scene.home).settings_path(RUN);
+    assert_eq!(settings["env"]["GH_TOKEN"], "");
+    // claude가 본 세션 입력은 0700 run 폴더의 0600 파일이고, 끝나면 지운다.
+    assert_eq!(fs::read_to_string(scene.root.join("brief")).unwrap(), SYNTHETIC_BRIEF);
+    assert_eq!(fs::read_to_string(scene.root.join("brief-mode")).unwrap().trim(), "600");
+    assert_eq!(fs::read_to_string(scene.root.join("brief-dir-mode")).unwrap().trim(), "700");
+    let profile = profile_at(&scene.home);
+    let (path, brief_dir) = (profile.settings_path(RUN), profile.brief_dir(RUN));
     assert!(argv.split('\0').any(|arg| Path::new(arg) == path), "--settings는 데이터 폴더의 파일을 가리킨다");
+    assert!(argv.split('\0').any(|arg| Path::new(arg) == brief_dir), "--add-dir는 run 폴더를 가리킨다");
     assert!(!path.exists(), "claude가 끝나면 지운다");
+    assert!(!brief_dir.exists(), "claude가 끝나면 지운다");
     assert_eq!(state(&scene).0, RunState::Ended);
 }
 

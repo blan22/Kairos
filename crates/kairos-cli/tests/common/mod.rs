@@ -104,13 +104,6 @@ impl Cli {
         KairosHome::at(&self.root)
     }
 
-    /// 소유자가 두는 읽기 전용 토큰 파일. kairos-run은 이 파일이 없으면 세션을 띄우지 않는다. 값은 합성이다.
-    pub fn write_session_token(&self) {
-        let path = self.home().file("session-gh-token");
-        fs::write(&path, "github_pat_SYNTHETIC0123456789abcdef\n").unwrap();
-        fs::set_permissions(&path, fs::Permissions::from_mode(0o600)).unwrap();
-    }
-
     pub fn set(&mut self, key: &str, value: &str) {
         self.env.insert(key.to_owned(), value.to_owned());
     }

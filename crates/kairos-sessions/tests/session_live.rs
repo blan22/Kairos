@@ -86,7 +86,6 @@ fn config() -> GithubConfig {
 fn run_with_gh(home: &KairosHome, graphql: ProcessOutput) -> (i32, usize, Arc<FakeGh>) {
     let gh = Arc::new(FakeGh { graphql, calls: Mutex::new(Vec::new()) });
     let live = LiveAuthorReader::new(gh.clone(), config());
-    write_session_token(home, SYNTHETIC_TOKEN, 0o600);
     let profile = SessionProfile::new(
         Path::new("/synthetic/kairos"),
         Path::new("/synthetic/kairos-home"),

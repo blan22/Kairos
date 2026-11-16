@@ -12,7 +12,7 @@ use std::collections::HashMap;
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 
-use common::{RUN_BINARY, SYNTHETIC_TOKEN, later, session_token, write_session_token};
+use common::{RUN_BINARY, brief, later};
 use kairos_agenda::{IdSource, ItemActions, Playbook};
 use kairos_core::KairosHome;
 use kairos_core::ports::FixedClock;
@@ -196,8 +196,6 @@ fn play(script: &mut Script, base: &Path, scenario: &Value, defaults: &Value) {
     let seed = Database::open(&home).unwrap();
     seed.connection().execute_batch(include_str!("fixtures/golden/seed.sql")).unwrap();
     drop(seed);
-    // 세션은 읽기 전용 토큰 없이 시작하지 않는다. 원본에 없던 전제라 합성 토큰을 둔다.
-    write_session_token(&home, SYNTHETIC_TOKEN, 0o600);
     let replies = defaults.as_object().unwrap().iter().map(|(key, value)| (key.clone(), value.clone())).collect();
     let orca =
         Arc::new(ScenarioOrca { home: home.clone(), state: Mutex::new(Scenario { replies, ..Scenario::default() }) });
@@ -259,7 +257,7 @@ fn play(script: &mut Script, base: &Path, scenario: &Value, defaults: &Value) {
             }
             "command" => {
                 let (claude, url) = (step["claude"].as_str().unwrap(), step["url"].as_str().unwrap());
-                match profile.command(claude, run_id, Playbook::QaIssue, url, session_token()) {
+                match profile.command(claude, run_id, Playbook::QaIssue, url, brief()) {
                     Ok(command) => json!({ "file": command.file, "args": command.args }),
                     Err(_) => json!({ "refused": true }),
                 }

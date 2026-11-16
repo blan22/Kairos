@@ -29,7 +29,7 @@ mod tests;
 mod truncation;
 
 pub use config::GithubConfig;
-pub use live::{LiveAuthorReader, LiveAuthors};
+pub use live::{LiveAuthorReader, LiveAuthors, LiveRead};
 pub use source::GithubSource;
 
 /// 본인 GitHub 로그인(소문자). 프로필에서 온다. 설정하지 않았으면 어떤 로그인과도 같지 않은 값이고,

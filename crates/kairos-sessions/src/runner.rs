@@ -6,23 +6,22 @@ use std::process::{Command, Stdio};
 use std::thread;
 use std::time::Duration;
 
-use kairos_agenda::{ItemRepo, ItemState, playbook_of};
+use kairos_agenda::{ItemRepo, ItemState, Playbook, playbook_of};
 use kairos_core::ports::Clock;
 #[cfg(unix)]
 use kairos_core::process::{ProcessRequest, ProcessRunner, SystemProcessRunner};
 use kairos_core::text::sanitize;
 use kairos_core::{Instant, KairosHome, KairosResult, string_enum};
 use kairos_ledger::{ObjectRepo, OutsiderMarkRepo};
-use kairos_source_github::{LiveAuthorReader, LiveAuthors};
+use kairos_source_github::{LiveAuthorReader, LiveAuthors, LiveRead};
 use kairos_store::Database;
 #[cfg(unix)]
 use signal_hook::consts::{SIGHUP, SIGINT, SIGTERM};
 #[cfg(unix)]
 use signal_hook::iterator::Signals;
 
-use crate::keychain::{Keychain, KeychainRead};
 use crate::launch::RUN_ID;
-use crate::profile::{SessionCommand, SessionProfile, SessionToken};
+use crate::profile::{SessionCommand, SessionProfile};
 use crate::run::{FailCode, Run, RunLifecycle, RunRepo, RunState};
 
 const CHILD_POLL: Duration = Duration::from_millis(20);
@@ -33,15 +32,14 @@ const NOT_LAUNCHED: i32 = 127;
 const NOT_PREPARED: i32 = 126;
 
 const BAD_ID: &str = "kairos-run: run ID 형식이 아닙니다";
-const BAD_TOKEN: &str =
-    "kairos-run: session-gh-token은 본인 소유의 0600 일반 파일이고 fine-grained 토큰(github_pat_) 한 줄이어야 합니다";
-const NO_TOKEN: &str = "kairos-run: 데이터 폴더에 읽기 전용 session-gh-token이 없어 세션을 시작하지 않습니다";
 const NO_CLAUDE: &str = "kairos-run: claude를 찾지 못했습니다";
 const OUTSIDER: &str = "kairos-run: 외부 사람의 글이 있어 세션을 열지 않았습니다";
 const UNVERIFIED: &str = "kairos-run: 이슈의 글을 모두 확인하지 못해 세션을 열지 않았습니다";
 const UNKNOWN_AUTHOR: &str = "kairos-run: 작성자를 확인할 수 없는 글이 있어 세션을 열지 않았습니다";
 const NO_WORKSPACE: &str = "kairos-run: 작업 공간을 확인하지 못해 세션을 시작하지 않습니다";
 const BAD_SETTINGS: &str = "kairos-run: 세션 설정 파일을 안전하게 쓰지 못해 세션을 시작하지 않습니다";
+const BAD_BRIEF: &str = "kairos-run: 세션 입력 파일을 안전하게 쓰지 못해 세션을 시작하지 않습니다";
+const OTHER_FIX_RUNNING: &str = "kairos-run: 다른 고치는 세션이 열려 있어 PR을 자동으로 올리지 않았습니다. 그 세션을 닫은 뒤 패널의 PR 올리기를 누르세요";
 
 string_enum! {
     pub enum ClaimRefusal {
@@ -69,22 +67,28 @@ pub enum SessionClaim {
     Refused(ClaimRefusal),
 }
 
-/// claude를 띄우기 직전에 세션이 읽을 글의 작성자를 GitHub에서 다시 본다.
+/// claude를 띄우기 직전에 세션이 읽을 글의 작성자를 GitHub에서 다시 보고, 그 글을 세션 입력으로 받는다.
 /// `playbook_of`는 DB만 본다. 처음 읽을 때 최근 20개 밖에 있던 글과 마지막 수집 뒤의 글은 모른다.
+/// 세션은 GitHub에 닿지 않으므로 여기서 판정한 글만 읽는다.
 pub trait LiveAuthorCheck {
     /// 글 전체를 읽었다고 보일 수 없으면 오류다. 오류도 세션을 막는다.
-    fn live_authors(&self, url: &str) -> KairosResult<LiveAuthors>;
+    fn live_read(&self, url: &str) -> KairosResult<LiveRead>;
 }
 
 impl LiveAuthorCheck for LiveAuthorReader {
-    fn live_authors(&self, url: &str) -> KairosResult<LiveAuthors> {
-        self.read(url)
+    fn live_read(&self, url: &str) -> KairosResult<LiveRead> {
+        self.read_brief(url)
     }
 }
 
+/// 세션이 끝난 뒤 세션 밖에서 하는 일. 고치는 세션의 커밋을 사용자 자격으로 올린다.
+/// 돌려준 문구는 세션 터미널에 찍는다. 실패해도 run은 이미 끝으로 적혀 있고, 패널의 PR 올리기로 다시 할 수 있다.
+pub trait AfterSession {
+    fn after(&self, database: &Database, run: &Run) -> Option<String>;
+}
+
 /// 세션 자식을 띄우고 끝날 때까지 기다려 종료 코드를 준다. 띄우지 못하면 127이다.
-/// `command.child_env()`는 인자에 넣을 수 없는 값이라 자식 환경으로만 넘긴다.
-/// `command.settings_path()`가 있으면 띄우기 직전에 그 파일을 쓰고, 자식이 끝나거나 띄우지 못하면 지운다. 쓰지 못하면 띄우지 않는다.
+/// `command.settings_path()`와 `command.brief_dir()`이 있으면 띄우기 직전에 그 파일을 쓰고, 자식이 끝나거나 띄우지 못하면 지운다. 쓰지 못하면 띄우지 않는다.
 pub trait SessionSpawner {
     fn spawn(&self, command: &SessionCommand) -> i32;
 }
@@ -111,9 +115,11 @@ impl SessionSpawner for SystemSessionSpawner {
         let Ok(_settings) = command.write_settings() else {
             return refuse(BAD_SETTINGS, NOT_PREPARED);
         };
+        let Ok(_brief) = command.write_brief() else {
+            return refuse(BAD_BRIEF, NOT_PREPARED);
+        };
         let spawned = Command::new(&command.file)
             .args(&command.args)
-            .envs(command.child_env())
             .stdin(Stdio::inherit())
             .stdout(Stdio::inherit())
             .stderr(Stdio::inherit())
@@ -156,7 +162,7 @@ pub struct SessionRunner<'a> {
     spawner: &'a dyn SessionSpawner,
     live: &'a dyn LiveAuthorCheck,
     clock: &'a dyn Clock,
-    keychain: Option<Keychain>,
+    after: Option<&'a dyn AfterSession>,
 }
 
 impl<'a> SessionRunner<'a> {
@@ -169,31 +175,41 @@ impl<'a> SessionRunner<'a> {
         live: &'a dyn LiveAuthorCheck,
         clock: &'a dyn Clock,
     ) -> Self {
-        Self {
-            home,
-            claude_bin: claude_bin.filter(|bin| !bin.is_empty()),
-            profile,
-            spawner,
-            live,
-            clock,
-            keychain: None,
-        }
+        Self { home, claude_bin: claude_bin.filter(|bin| !bin.is_empty()), profile, spawner, live, clock, after: None }
     }
 
-    /// 키체인을 먼저 본다. 키체인에 없거나 키체인을 쓸 수 없으면 토큰 파일을 본다.
+    /// 고치는 세션이 정상으로 끝나면 부를 일. 없으면 PR은 패널의 버튼으로만 올라간다.
     #[must_use]
-    pub fn with_keychain(mut self, keychain: Keychain) -> Self {
-        self.keychain = Some(keychain);
+    pub fn with_after(mut self, after: &'a dyn AfterSession) -> Self {
+        self.after = Some(after);
         self
     }
 
-    fn session_token(&self) -> KairosResult<Option<SessionToken>> {
-        if let Some(keychain) = &self.keychain
-            && let KeychainRead::Found(token) = keychain.read()?
-        {
-            return Ok(Some(token));
+    /// 같은 클론의 다른 고치는 세션은 공용 .git을 바꿀 수 있다(SECURITY.md의 남은 위험). 하나라도 열려 있으면 자동으로 올리지 않는다.
+    fn after_session(&self, database: &Database, run: &Run) -> KairosResult<()> {
+        let Some(after) = self.after else {
+            return Ok(());
+        };
+        if run.playbook != Playbook::QaIssue {
+            return Ok(());
         }
-        SessionToken::read(&self.home)
+        // 방금 이 프로세스가 `ended`로 내린 run만 올린다. 세션 중에 취소되거나 실패로 내린 run은 사용자가 올리지 않기로 한 것이다.
+        let current = RunRepo::new(database.connection()).get(&run.id)?;
+        if current.is_none_or(|current| current.state != RunState::Ended) {
+            return Ok(());
+        }
+        let others = RunRepo::new(database.connection())
+            .active()?
+            .iter()
+            .any(|other| other.id != run.id && other.playbook == Playbook::QaIssue);
+        if others {
+            refuse(OTHER_FIX_RUNNING, 0);
+            return Ok(());
+        }
+        if let Some(line) = after.after(database, run) {
+            refuse(&line, 0);
+        }
+        Ok(())
     }
 
     /// 같은 run은 한 번만 뜬다. 늦게 도착한 터미널 명령이나 실패로 내린 run을 여기서 막는다.
@@ -242,18 +258,19 @@ impl<'a> SessionRunner<'a> {
     /// 외부 글을 봤으면 객체에 표시를 남겨 DB 게이트도 막는다. 되돌린 항목에 시작 버튼이 다시 나오지 않는다.
     /// 표시는 지우지 않으므로 수집과 같은 `Actor` 규칙으로 T3인 글(`LiveAuthors::Outsider`)에만 남긴다.
     /// 읽지 못한 경우와 작성자를 알 수 없는 글(지운 계정, 연관 정보 없음)은 표시하지 않고 live_unverified로 내린다. 다음 시작 때 다시 읽는다.
-    fn verify_live(&self, run: &Run, url: &str) -> KairosResult<Option<i32>> {
-        let verdict = self.live.live_authors(url);
+    /// 통과하면 세션 입력을 돌려준다. 막으면 종료 코드다.
+    fn verify_live(&self, run: &Run, url: &str) -> KairosResult<Result<String, i32>> {
+        let verdict = self.live.live_read(url);
         let database = Database::open(&self.home)?;
-        let (code, message) = match verdict {
-            Ok(LiveAuthors::Insiders) => {
+        let (code, message) = match verdict.map(|read| (read.authors, read.brief)) {
+            Ok((LiveAuthors::Insiders, brief)) => {
                 // 읽는 사이에 사용자가 취소했거나 추적이 내린 run은 띄우지 않는다.
                 let current = RunRepo::new(database.connection()).get(&run.id)?;
                 let active = current.is_some_and(|current| current.state.is_active());
-                return Ok((!active).then(|| refuse(ClaimRefusal::InvalidState.message(), 1)));
+                return Ok(if active { Ok(brief) } else { Err(refuse(ClaimRefusal::InvalidState.message(), 1)) });
             }
-            Ok(LiveAuthors::Outsider) => (FailCode::OutsiderWriting, OUTSIDER.to_owned()),
-            Ok(LiveAuthors::Unknown) => (FailCode::LiveUnverified, UNKNOWN_AUTHOR.to_owned()),
+            Ok((LiveAuthors::Outsider, _)) => (FailCode::OutsiderWriting, OUTSIDER.to_owned()),
+            Ok((LiveAuthors::Unknown, _)) => (FailCode::LiveUnverified, UNKNOWN_AUTHOR.to_owned()),
             Err(error) => (FailCode::LiveUnverified, format!("{UNVERIFIED} ({})", sanitize(error.code()))),
         };
         let now = self.clock.now();
@@ -263,7 +280,7 @@ impl<'a> SessionRunner<'a> {
             OutsiderMarkRepo::new(database.connection()).mark(&item.object_key, &now.to_iso())?;
         }
         RunLifecycle::new(&database).fail(&run.id, run.item_id, now, Some(code))?;
-        Ok(Some(refuse(&message, 1)))
+        Ok(Err(refuse(&message, 1)))
     }
 
     /// `argv`는 프로그램 이름을 뺀 인자다. 반환값은 종료 코드다. 0 정상, 1 거절이나 세션 실패, 2 사용법 오류.
@@ -274,13 +291,6 @@ impl<'a> SessionRunner<'a> {
         if !RUN_ID.is_match(run_id) {
             return Ok(refuse(BAD_ID, 2));
         }
-        // 세션의 GitHub 권한은 읽기 전용 토큰 하나뿐이다. 없거나 위험하면 키체인 로그인으로 내려가지 않고 run을 시작으로 적기 전에 멈춘다.
-        // 남은 claimed run은 sync가 5분 뒤 내린다.
-        let gh_token = match self.session_token() {
-            Ok(Some(token)) => token,
-            Ok(None) => return Ok(refuse(NO_TOKEN, 1)),
-            Err(_) => return Ok(refuse(BAD_TOKEN, 1)),
-        };
         // 세션이 오래 돌므로 DB를 잡아 두지 않고 끝날 때 다시 연다.
         let (url, run) = {
             let database = Database::open(&self.home)?;
@@ -294,13 +304,15 @@ impl<'a> SessionRunner<'a> {
             }
         };
         // DB를 닫은 뒤에 읽는다. 네트워크를 기다리는 동안 수집 틱의 쓰기를 막지 않는다.
-        if let Some(code) = self.verify_live(&run, &url)? {
-            return Ok(code);
-        }
+        // 세션에는 GitHub 자격 증명이 없다. 글은 여기서 사용자 gh로 읽어 세션 입력 파일로 넘긴다.
+        let brief = match self.verify_live(&run, &url)? {
+            Ok(brief) => brief,
+            Err(code) => return Ok(code),
+        };
         let claude = self.claude_bin.as_deref().unwrap_or_default();
         // 고치는 세션은 작업 공간의 git 경로를 알아야 뜬다. 모르면 띄우지 않고 실패로 내린다.
         // 다른 오류도 run은 실패로 내리고, 문구는 작업 공간 탓으로 돌리지 않고 오류 코드 그대로 올린다.
-        let command = match self.profile.command(claude, run_id, run.playbook, &url, gh_token) {
+        let command = match self.profile.command(claude, run_id, run.playbook, &url, brief) {
             Ok(command) => command,
             Err(error) => {
                 let database = Database::open(&self.home)?;
@@ -314,6 +326,10 @@ impl<'a> SessionRunner<'a> {
         let code = self.spawner.spawn(&command);
         let database = Database::open(&self.home)?;
         Self::finish(&database, &run, code, self.clock.now())?;
+        // 정상으로 끝난 고치는 세션만 올린다. 터미널이 닫히거나 실패한 세션은 사용자가 확인하고 버튼으로 올린다.
+        if code == 0 {
+            self.after_session(&database, &run)?;
+        }
         Ok(i32::from(code != 0))
     }
 }
