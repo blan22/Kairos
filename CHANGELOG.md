@@ -19,6 +19,7 @@
 ### 수정
 
 - `[hosts.orca.repos]`를 적지 않으면 에이전트 제안의 `세션 열고 시작`이 `worktree_failed`로 실패하던 문제를 고쳤습니다. 이제 `orca repo list`에서 원격 주소가 같은 저장소를 찾아 씁니다. 하나로 고르지 못하면 새 코드 `repo_unresolved`와 고칠 설정을 패널에 보여 줍니다. `git` 세션 호스트에서 로컬 클론을 찾지 못한 경우도 같은 코드로 알립니다.
+- Linux와 Windows에서 알림 뒤의 패널 열기와 `kairos reveal`이 PATH의 orca를 검사 없이 고르던 문제를 고쳤습니다. 이제 패널과 같은 규칙으로 고릅니다. Linux는 본인이나 root 소유이고 다른 사용자가 고칠 수 없는 파일만, Windows는 `orca.exe`만 씁니다. 찾지 못하면 패널을 열지 않습니다.
 - `kairos config show`의 플레이북 줄이 Orca 저장소 ID가 없을 때 `미설정` 대신 `원격 주소로 찾음`을 보여 줍니다.
 
 ## [0.4.2] - 2026-11-13

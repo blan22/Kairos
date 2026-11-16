@@ -18,9 +18,9 @@ pub use install::collector_allowlist;
 pub use install::{
     COLLECT_LABEL, InstallMode, InstallOptions, InstallPaths, InstallPlan, InstallResult, Installer, LABELS,
     NOTIFIER_APP_ID, PlanInput, REVEAL_SCHEME, RemovalPlan, Scheduler, ServiceFile, UninstallOptions, UninstallResult,
-    VERSION, WATCHDOG_LABEL, default_launch_agents_dir, default_service_dir, find_binary, find_claude, is_legacy_label,
-    legacy_labels, plan_install, plan_runtime_removal, purge_refusal, remove_data, remove_runtime, render_template,
-    runtime_refusal, system_tool,
+    VERSION, WATCHDOG_LABEL, default_launch_agents_dir, default_service_dir, find_binary, find_claude, find_orca,
+    is_legacy_label, legacy_labels, plan_install, plan_runtime_removal, purge_refusal, remove_data, remove_runtime,
+    render_template, runtime_refusal, system_tool,
 };
 pub use maintenance::{
     BACKUP_KEEP, Maintenance, MaintenanceRecord, MaintenanceRepo, OPEN_TEXT_RETENTION_DAYS, backup_dir,

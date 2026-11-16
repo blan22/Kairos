@@ -160,3 +160,28 @@ fn reveal_link는_윈도우_토스트의_링크에서_항목_id만_받는다() {
     assert_eq!(done.status, 0, "{}", done.err);
     assert!(!reveal_file(&cli).exists());
 }
+
+/// Linux는 PATH에서 orca를 찾는다. 남이 고칠 수 있는 파일은 PATH 앞에 있어도 부르지 않는다.
+#[cfg(target_os = "linux")]
+#[test]
+fn reveal은_path에서_남이_쓸_수_있는_orca를_부르지_않는다() {
+    let mut cli = Cli::new();
+    // 하네스는 없는 KAIROS_ORCA를 기본으로 준다. 지워야 PATH에서 찾는다.
+    cli.env.remove("KAIROS_ORCA");
+    let shared = cli.root.join("shared-bin");
+    fs::create_dir(&shared).unwrap();
+    let (orca, log) = (shared.join("orca"), cli.root.join("orca.log"));
+    write_script(&orca, &format!("#!/bin/sh\nprintf '%s\\n' \"$@\" >> '{}'\nexit 0\n", log.display()));
+    fs::set_permissions(&orca, fs::Permissions::from_mode(0o777)).unwrap();
+    cli.set("PATH", &format!("{}:/usr/bin:/bin", shared.display()));
+    let done = cli.json(&["reveal", "3"]);
+    assert_eq!(done.status, 0, "{}", done.err);
+    assert_eq!(done.body()["panelOpened"], json!(false));
+    assert!(lines(&log).is_empty(), "그룹과 기타가 쓸 수 있는 orca를 불렀다");
+    assert!(reveal_file(&cli).exists(), "패널을 못 열어도 reveal.json은 남긴다");
+
+    fs::set_permissions(&orca, fs::Permissions::from_mode(0o755)).unwrap();
+    let done = cli.json(&["reveal", "3"]);
+    assert_eq!(done.body()["panelOpened"], json!(true), "{}", done.err);
+    assert_eq!(lines(&log), PANEL_OPEN_ARGS);
+}

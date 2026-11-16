@@ -29,7 +29,7 @@ kairos는 macOS, Linux, Windows에서 돕니다. 수집, 카드, 알림, 호스�
 - 수집은 systemd 사용자 timer가 3분마다, 감시자는 5분마다 실행합니다. 로그인한 동안만 돕니다. 로그아웃한 뒤에도 돌리려면 `loginctl enable-linger`를 직접 켜세요.
 - 알림은 `notify-send`로 보냅니다. 알림을 눌러도 패널이 열리지 않습니다. 같은 항목은 Orca 패널의 알림 띠에 나옵니다.
 - 잠자기는 `/sys/power/suspend_stats/success`의 횟수로 알아챕니다. 이 파일이 없으면 하트비트의 틈으로만 봅니다.
-- Orca 패널은 PATH의 절대 경로 항목에서 `orca`를 찾습니다. 본인이나 root 소유이고 다른 사용자가 고칠 수 없는 파일만 씁니다.
+- Orca 패널과 `kairos reveal`은 PATH의 절대 경로 항목에서 `orca`를 찾습니다. 본인이나 root 소유이고 다른 사용자가 고칠 수 없는 파일만 씁니다.
 - WSL2에서도 설치할 수 있습니다. `/etc/wsl.conf`의 `[boot]`에 `systemd=true`를 켜야 수집이 돕니다. 알림은 WSL의 데스크톱 환경에 따라 보이지 않을 수 있습니다.
 
 ### Windows
@@ -39,7 +39,7 @@ kairos는 macOS, Linux, Windows에서 돕니다. 수집, 카드, 알림, 호스�
 - 알림은 토스트로 보냅니다. 보낸 이름(`dev.kairos.notifier`)과 `kairos-reveal:` 링크 처리기는 설치할 때 사용자 범위(HKCU)에 등록합니다. 관리자 권한은 필요 없습니다.
 - 알림을 누르면 `kairos reveal --link`가 패널을 엽니다. 다른 프로그램도 이 링크를 열 수 있지만, 할 수 있는 일은 항목 번호로 패널을 여는 것뿐입니다.
 - 잠자기 횟수를 읽지 않습니다. 하트비트의 틈으로만 봅니다.
-- Orca 패널은 PATH의 절대 경로 항목에서 `orca.exe`를 찾습니다. npm으로 설치해 `orca.cmd`만 있으면 패널 열기 명령은 안내만 하고, 사이드바 아이콘으로 패널을 엽니다.
+- Orca 패널과 `kairos reveal`은 PATH의 절대 경로 항목에서 `orca.exe`를 찾습니다. npm으로 설치해 `orca.cmd`만 있으면 패널 열기 명령은 안내만 하고, 사이드바 아이콘으로 패널을 엽니다.
 - Claude Code 플러그인의 MCP 서버는 Git Bash 같은 sh에서 뜹니다. 실행 파일의 소유자와 권한 비트는 검사하지 않고, 정해진 자리(`%LOCALAPPDATA%\kairos\current\bin\kairos.exe`)의 파일만 실행합니다.
 
 ## 세션을 macOS에서만 여는 이유
