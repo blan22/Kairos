@@ -166,6 +166,8 @@ fn reveal_link는_윈도우_토스트의_링크에서_항목_id만_받는다() {
 #[test]
 fn reveal은_path에서_남이_쓸_수_있는_orca를_부르지_않는다() {
     let mut cli = Cli::new();
+    // 하네스는 없는 KAIROS_ORCA를 기본으로 준다. 지워야 PATH에서 찾는다.
+    cli.env.remove("KAIROS_ORCA");
     let shared = cli.root.join("shared-bin");
     fs::create_dir(&shared).unwrap();
     let (orca, log) = (shared.join("orca"), cli.root.join("orca.log"));
