@@ -146,7 +146,7 @@ impl Command for Pr {
             Err(code) => return Ok(code),
         };
         if inside_session(context, None) {
-            return Ok(reply.fail("session_caller", "세션 안에서는 PR을 올릴 수 없습니다. 패널에서 누르세요", 1));
+            return Ok(reply.fail("session_caller", "세션, Claude Code, Orca 터미널 안에서는 PR을 올릴 수 없습니다. 패널의 PR 올리기를 누르거나 일반 터미널에서 실행하세요", 1));
         }
         let database = context.open_db()?;
         let orca = context.orca();

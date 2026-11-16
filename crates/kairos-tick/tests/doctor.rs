@@ -241,6 +241,21 @@ fn r28_doctor가_세션_잠금_상태를_보여_준다() {
     assert!(changed.lines.last().unwrap().starts_with("세션: 잠김. 설정이 바뀌어"));
 }
 
+/// 켠 값이 시각이 아니어도 열림으로 보이고, 자바스크립트의 `undefined` 같은 낱말을 내지 않는다.
+#[test]
+fn 세션을_켠_값이_시각이_아니면_켠_시각_없이_열림으로_보인다() {
+    let (_dir, home) = temp_home();
+    drop(Database::open(&home).unwrap());
+    ControlFile::new(&home).write(&control_on().with_sessions(Some(T0))).unwrap();
+    let path = home.file("control.json");
+    let mut control: serde_json::Value = serde_json::from_str(&fs::read_to_string(&path).unwrap()).unwrap();
+    control["sessionTestPassedAt"] = serde_json::json!(true);
+    fs::write(&path, control.to_string()).unwrap();
+    kairos_agenda::SessionApproval::new(&home).record().unwrap();
+    let opened = diagnose(&home, T1, Vec::new());
+    assert_eq!(opened.lines.last().unwrap(), "세션: 열림(켠 시각 기록 없음)");
+}
+
 #[test]
 fn 수집_중단은_문제로_올리고_모르는_값은_알_수_없음으로_적는다() {
     let (_dir, home) = temp_home();

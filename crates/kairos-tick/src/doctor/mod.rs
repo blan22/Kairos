@@ -430,7 +430,8 @@ impl Doctor {
                 "세션: 잠김. 설정이 바뀌어 차단 시험을 다시 본 뒤 kairos sessions on".to_owned()
             }
             Some(passed) => format!("세션: 열림({passed}에 켬)"),
-            None if control.sessions_allowed() => "세션: 열림(undefined에 켬)".to_owned(),
+            // 켠 값이 시각 문자열이 아니다(예: true). 열려 있지만 켠 때를 모른다.
+            None if control.sessions_allowed() => "세션: 열림(켠 시각 기록 없음)".to_owned(),
             None => "세션: 잠김. 차단 시험 뒤 kairos sessions on".to_owned(),
         });
         Ok(())

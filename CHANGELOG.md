@@ -7,6 +7,14 @@
 ### 변경
 
 - 문서를 0.6.0 동작에 맞췄습니다. Linux와 Windows에도 맞는 알림과 예약 작업 설명, 개인 플레이북 대상(`config.toml`의 `[[playbooks]]`)과 `[hosts.git] worktree_root`, 호스트 계약의 오류 응답과 빠진 명령(`next --ack`, `focus`, `display auto`, `watchdog`)을 더했습니다.
+- `kairos config show`가 배포 태그, Notion 워크스페이스, 세션 호스트, `[hosts.git]`의 worktree 폴더와 클론 경로를 출처와 함께 보여 줍니다. `--json`에는 `sessionHost`와 `git`을 추가했습니다.
+- Claude Code나 Orca 터미널 안에서 `kairos pr`을 실행하면 패널의 `PR 올리기`나 일반 터미널을 쓰라고 안내합니다. 동작은 그대로이고 문구만 바꿨습니다.
+
+### 수정
+
+- 세션을 켠 값이 시각이 아닐 때 `doctor`가 `세션: 열림(undefined에 켬)`을 보여 주던 문제를 고쳤습니다. 이제 `세션: 열림(켠 시각 기록 없음)`을 보여 줍니다.
+- `kairos uninstall --purge`가 키체인 항목을 지우지 못했을 때, 실제 항목(이름 `kairos`, 계정 `session-gh-token`)을 지우라고 안내합니다.
+- `kairos connect`가 쓰지 않는 `--gh` 옵션을 받던 것을 없앴습니다.
 
 ## [0.6.0] - 2026-11-16
 

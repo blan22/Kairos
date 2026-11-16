@@ -351,11 +351,13 @@ impl Builder {
         }
         if let Some(root) = &raw.hosts.git.worktree_root {
             self.profile.git.worktree_root = Some(values::absolute_path(At::new(F, "hosts.git.worktree_root"), root)?);
+            self.set("hosts.git.worktree_root", Layer::User);
         }
         for (repo, path) in &raw.hosts.git.repos {
             let repo = values::full_repo(At::new(F, "hosts.git.repos"), repo)?;
             let path = values::absolute_path(At::new(F, "hosts.git.repos"), path)?;
             self.profile.git.repos.insert(repo, path);
+            self.set("hosts.git.repos", Layer::User);
         }
         for action in &raw.mcp.allow_actions {
             if !MCP_ACTIONS.contains(&action.as_str()) {

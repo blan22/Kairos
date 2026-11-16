@@ -179,6 +179,11 @@ fn profile_view(profile: &Profile) -> Value {
         })).collect::<Vec<_>>(),
         "disabledSources": profile.disabled_sources,
         "hosts": profile.hosts.enabled,
+        "sessionHost": profile.session_host.as_str(),
+        "git": {
+            "repos": profile.git.repos.iter().map(|(repo, path)| (repo.clone(), json!(path.to_string_lossy()))).collect::<serde_json::Map<_, _>>(),
+            "worktreeRoot": profile.git.worktree_root.as_ref().map(|root| root.to_string_lossy()),
+        },
         "bindings": profile.bindings.iter().map(|(source, binding)| (source.clone(), json!({
             "server": binding.server,
             "tools": binding.tools,
@@ -210,6 +215,8 @@ fn show_lines(loaded: &Loaded, origin: bool) -> Vec<String> {
         format!("배포 캘린더: {}{}", or_none(&profile.org.deploy_calendar), from("org.deploy_calendar")),
         format!("연차 캘린더: {}{}", or_none(&profile.org.leave_calendar), from("org.leave_calendar")),
         format!("공휴일 캘린더: {}{}", or_none(&profile.org.holiday_calendar), from("org.holiday_calendar")),
+        format!("배포 태그: {}{}", profile.org.deploy_tag, from("org.deploy_tag")),
+        format!("Notion 워크스페이스: {}{}", or_none(&profile.org.notion_workspace), from("org.notion_workspace")),
         format!("시간대: {}{}", schedule.zone.name(), from("schedule.timezone")),
         format!("근무 요일: {}{}", schedule.days.names().join(", "), from("schedule.days")),
         format!("근무: {}~{}{}", minutes(schedule.work.start), minutes(schedule.work.end), from("schedule.work")),
@@ -229,6 +236,16 @@ fn show_lines(loaded: &Loaded, origin: bool) -> Vec<String> {
         format!("수집: {}~{}{}", minutes(schedule.tick.start), minutes(schedule.tick.end), from("schedule.collect")),
         format!("끈 소스: {}{}", list(&profile.disabled_sources), from("sources.disabled")),
         format!("호스트: {}{}", list(&profile.hosts.enabled), from("hosts.enabled")),
+        format!("세션 호스트: {}{}", profile.session_host.as_str(), from("sessions.host")),
+        format!(
+            "git worktree 폴더: {}{}",
+            profile
+                .git
+                .worktree_root
+                .as_ref()
+                .map_or_else(|| "클론 옆".to_owned(), |root| root.to_string_lossy().into_owned()),
+            from("hosts.git.worktree_root")
+        ),
         format!("MCP로 연 동작: {}{}", list(&profile.mcp_actions), from("mcp.allow_actions")),
         format!("새 판 확인: {}{}", if profile.update_check_off { "끔" } else { "켬" }, from("updates.check")),
     ];
@@ -242,6 +259,9 @@ fn show_lines(loaded: &Loaded, origin: bool) -> Vec<String> {
             target.orca_repo.as_deref().unwrap_or("원격 주소로 찾음"),
             from("playbooks")
         ));
+    }
+    for (repo, path) in &profile.git.repos {
+        lines.push(format!("git 클론 {repo}: {}{}", path.to_string_lossy(), from("hosts.git.repos")));
     }
     for (source, binding) in &profile.bindings {
         lines.push(format!("MCP 바인딩 {source}: {}{}", binding.server, from("bindings")));

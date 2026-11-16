@@ -13,12 +13,12 @@ use kairos_ops::find_binary;
 use serde_json::json;
 
 use crate::app::AppContext;
-use crate::args::{ArgParser, OptionSpec, flag, text};
+use crate::args::{ArgParser, OptionSpec, flag};
 use crate::command::Command;
 use crate::reply::Reply;
 
 const USAGE: &str = "사용법: kairos connect [github | google <주소> | slack <사용자 ID> | name <이름> | mcp <calendar|gmail|slack> (<서버> [동작=도구]... | --reset)] [--json]";
-const OPTIONS: [OptionSpec; 3] = [flag("json"), flag("reset"), text("gh")];
+const OPTIONS: [OptionSpec; 2] = [flag("json"), flag("reset")];
 const GH_TIMEOUT: Duration = Duration::from_secs(15);
 
 pub struct Connect;

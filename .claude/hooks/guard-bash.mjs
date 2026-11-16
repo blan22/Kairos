@@ -25,7 +25,7 @@ const rules = [
   [/\bgit\s+format-patch\b[^|;&]*\s(-[a-zA-Z]*o|--output-directory)/, 'deny', 'git format-patch -o는 파일을 쓴다'],
   [/\bgit\b[^|;&]*\s--ou[a-z-]*(=|\s|$)/, 'deny', 'git의 --output은 파일을 쓴다. 출력은 표준 출력으로 본다'],
   [/\bnpm\b.*\brun\s+shots\b/, 'ask', 'Orca 창을 숨겨야 해서 이 세션도 가려진다. 매번 사용자 확인을 받는다'],
-  [/\bsecurity\s+(find|add|delete)-generic-password\b/, 'deny', '키체인의 세션 토큰은 kairos connect session-token만 다룬다'],
+  [/\bsecurity\s+(find|add|delete)-generic-password\b/, 'deny', '키체인은 에이전트가 읽거나 고치지 않는다. 예전 세션 토큰은 kairos uninstall --purge가 지운다'],
 ]
 // 첫 일치에서 멈추지 않고 모든 규칙을 본 뒤 가장 엄한 결정을 낸다. 앞의 ask가 뒤의 deny를 가리지 않는다.
 const hits = rules.filter(([pattern]) => pattern.test(command))
