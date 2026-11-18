@@ -69,6 +69,13 @@ fn 시작_버튼은_플레이북_조건을_통과한_담당_이슈에만_있다(
     assert!(issue_url_matches(&url));
     assert!(!issue_url_matches(&format!("{url}?x=1")));
     assert!(!issue_url_matches(&format!("{url}\n")));
+    // 조직 이름은 ASCII 대소문자만 무시한다. 유니코드 접기로 맞는 글자(ſ, 켈빈 기호 K)는 받지 않는다.
+    assert!(issue_url_matches(&url.replacen(PLAYBOOK_ORG, &PLAYBOOK_ORG.to_uppercase(), 1)));
+    for lookalike in ["\u{17f}", "\u{212a}"] {
+        let forged = url.replacen(PLAYBOOK_ORG, &format!("{PLAYBOOK_ORG}{lookalike}"), 1);
+        assert!(!issue_url_matches(&forged), "{forged}");
+    }
+    assert!(!issue_url_matches(&url.replacen("contoso", "conto\u{17f}o", 1)));
     let when = kst(MON, "10:00");
     let shaped = |number, permalink: String, trust_tier| NormalizedObject {
         permalink: Some(permalink),
