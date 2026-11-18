@@ -17,13 +17,14 @@ use crate::item::ItemState;
 /// 세션 프롬프트에 들어갈 수 있는 유일한 외부 값의 모양이다. 수락 쪽은 이 정규식을 다시 검사한다.
 /// 조직은 프로필의 플레이북 대상(설계 7.2의 매핑표)에서 오고 이스케이프한다. 대상이 없으면 어떤 URL도 받지 않는다.
 /// GitHub 조직 이름은 대소문자를 가리지 않고, 설정은 소문자로 바꿔 둔다. 주소는 GitHub가 준 대소문자 그대로라 조직 부분만 대소문자를 무시한다.
+/// 유니코드 접기(`ſ`, 켈빈 기호 등)로 ASCII 밖 글자가 통과하지 않게 ASCII 대소문자만 무시한다(`-u`).
 static ISSUE_URL: LazyLock<Regex> = LazyLock::new(|| {
     let owners: Vec<String> =
         kairos_core::profile::current().playbooks.owners().into_iter().map(regex::escape).collect();
     if owners.is_empty() {
         return Regex::new(r"[^\s\S]").expect("상수 정규식");
     }
-    Regex::new(&format!(r"^https://github\.com/(?i:{})/[A-Za-z0-9_.-]+/(?:pull|issues)/[0-9]+$", owners.join("|")))
+    Regex::new(&format!(r"^https://github\.com/(?i-u:{})/[A-Za-z0-9_.-]+/(?:pull|issues)/[0-9]+$", owners.join("|")))
         .expect("이스케이프한 조직의 정규식")
 });
 
