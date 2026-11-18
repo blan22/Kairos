@@ -1,10 +1,19 @@
 /** 목록 줄의 묶음과 순서를 정하는 순수 함수. 패널과 워커가 같이 쓰므로 node 모듈을 쓰지 않는다. */
 import type { ItemRow } from './protocol.ts'
 
-export type Section = 'running' | 'urgent' | 'offer' | 'today' | 'relaxed' | 'parked' | 'baseline'
+export type Section = 'running' | 'urgent' | 'offer' | 'today' | 'relaxed' | 'parked' | 'cleanup' | 'baseline'
 
 /** 자르기 우선순위이기도 하다. 세션이 있는 줄은 잘리면 패널에서 그 세션으로 갈 길이 없어 맨 앞에 둔다. */
-const SORT_ORDER: readonly Section[] = ['running', 'urgent', 'offer', 'today', 'relaxed', 'parked', 'baseline']
+const SORT_ORDER: readonly Section[] = ['running', 'urgent', 'offer', 'today', 'relaxed', 'parked', 'cleanup', 'baseline']
+
+/**
+ * 패널이 묶음을 그리는 순서. 시각과 상관없이 늘 같다. 긴급이 맨 위이고, 맡긴 세션과 맡길 수 있는 일이 그 아래다.
+ * 손댈 일(오늘, 여유 있을 때) 뒤에 미룬 일과 정리할 일, 이전부터 있던 일이 온다.
+ */
+export const SECTION_ORDER: readonly Section[] = ['urgent', 'running', 'offer', 'today', 'relaxed', 'parked', 'cleanup', 'baseline']
+
+/** 칩과 개요가 세는 묶음. 사용자가 손댈 열린 일이다. 세션은 에이전트가, 미룬 일과 정리할 일, 이전부터 있던 일은 이미 아는 일이다. */
+const COUNTED: ReadonlySet<Section> = new Set(['urgent', 'offer', 'today', 'relaxed'])
 
 /** 여유 있을 때가 이보다 길면 미룬 일을 접어 둔다. */
 const FOLD_FROM = 6
@@ -18,10 +27,17 @@ const TRIM_FLOOR = 10
 /** kairos가 세션을 제안한 줄. 범위 없이는 제안을 그리지 않는다. */
 export const hasOffer = (item: ItemRow): boolean => item.playbook !== null && item.scope !== null
 
-/** 제안은 등급보다 앞에서 묶는다. 여유 있을 때 묶음은 기본으로 접혀 있어 그 안에 두면 제안이 보이지 않는다. 긴급만 자리를 지킨다. */
+/** 이슈나 PR이 닫혔거나 병합됐다. kairos의 사실 코드로만 판정한다. 근거가 없으면 열린 것으로 친다. */
+export const isClosedObject = (item: ItemRow): boolean => item.why?.facts.some(fact => fact === 'closed' || fact === 'merged') === true
+
+/**
+ * 제안은 등급보다 앞에서 묶는다. 등급 묶음 사이에 섞이면 맡길 수 있는 일이 눈에 띄지 않는다. 긴급만 자리를 지킨다.
+ * 닫혔거나 병합된 이슈와 PR의 일은 정리할 일로 모은다. 글에 답해야 하는 일이라도 객체가 끝났으면 대개 할 일이 남지 않는다.
+ */
 export function sectionOf(item: ItemRow): Section {
   if (item.run !== null || item.state === 'accepted') return 'running'
   if (item.state === 'parked') return 'parked'
+  if (isClosedObject(item)) return 'cleanup'
   if (item.baseline) return 'baseline'
   if (item.tier === 'P0') return 'urgent'
   if (hasOffer(item)) return 'offer'
@@ -65,30 +81,26 @@ export function trimRows(rows: readonly ItemRow[], limit: number): ItemRow[] {
 }
 
 export function groupRows(rows: readonly ItemRow[]): Record<Section, ItemRow[]> {
-  const groups: Record<Section, ItemRow[]> = { running: [], urgent: [], offer: [], today: [], relaxed: [], parked: [], baseline: [] }
+  const groups: Record<Section, ItemRow[]> = { running: [], urgent: [], offer: [], today: [], relaxed: [], parked: [], cleanup: [], baseline: [] }
   for (const row of rows) groups[sectionOf(row)].push(row)
   return groups
 }
 
 /** 사용자가 고른 값이 없을 때의 펼침 상태. undefined이면 접는 머리글이 없는 묶음이다. */
 export function defaultOpen(section: Section, groups: Record<Section, readonly ItemRow[]>): boolean | undefined {
-  if (section === 'baseline') return false
-  // 대기 탭의 주인은 여유 있을 때다. 그 묶음이 길면 미룬 일은 접어 둔다.
+  // 이미 아는 일과 끝난 일은 접어 둔다. 머리글의 건수로 있다는 것만 알린다.
+  if (section === 'baseline' || section === 'cleanup') return false
+  // 여유 있을 때가 길면 그 아래의 미룬 일은 접어 둔다.
   if (section === 'parked') return groups.relaxed.length < FOLD_FROM
   return undefined
 }
 
-/** 진행 상태 탭. 지금은 손댈 일, 대기는 기다려도 되는 일, 세션은 맡긴 일이다. 프로바이더를 고른 뒤 그 안에서 고른다. */
-export type TabId = 'now' | 'waiting' | 'sessions'
+/** 칩과 개요가 세는 일인가. */
+export const isCounted = (item: ItemRow): boolean => COUNTED.has(sectionOf(item))
 
-export const TAB_ORDER: readonly TabId[] = ['now', 'waiting', 'sessions']
-
-/** 탭마다 그리는 묶음. 순서가 화면 순서다. 긴급과 제안은 놓치면 안 되므로 지금에 둔다. */
-export const TAB_SECTIONS: Record<TabId, readonly Section[]> = {
-  now: ['urgent', 'offer', 'today'],
-  waiting: ['relaxed', 'parked', 'baseline'],
-  sessions: ['running'],
-}
+/** 세는 일의 건수. omittedBy를 주면 목록이 길어 넘기지 않은 줄도 묶음별로 더한다. */
+export const countedOf = (rows: readonly ItemRow[], omittedBy: Readonly<Record<string, number>> = {}): number =>
+  rows.filter(isCounted).length + [...COUNTED].reduce((sum, section) => sum + (omittedBy[section] ?? 0), 0)
 
 /** 일이 온 곳. 수집 소스와 같은 이름이고, 직접 추가한 일과 모르는 소스는 따로 둔다. all은 모두다. */
 export type ProviderId = 'all' | 'github' | 'slack' | 'calendar' | 'gmail' | 'notion' | 'manual' | 'other'
@@ -147,11 +159,13 @@ export function marksOf(value: unknown): Marks {
 
 /**
  * 사용자가 아직 보지 않은 새 일인가. 기준선, 직접 추가, 미룬 일, 세션에 맡긴 일은 사용자가 이미 아는 일이라 새 일이 아니다.
+ * 이 판정을 바꾸면 워커가 그리는 상태 표시줄의 점도 함께 바뀐다.
  * 기준이 없으면 아무것도 새 일이 아니다. 처음 읽은 목록이 기준이 된다.
  */
 export function isFresh(item: ItemRow, marks: Marks): boolean {
   if (marks.floor === null || item.id <= marks.floor) return false
-  if (item.baseline || item.reason === 'manual' || item.state !== 'open' || item.run !== null) return false
+  // 닫힌 이슈와 PR의 일은 정리할 일이다. 접힌 묶음에 있어 점을 띄우면 지울 길이 없다.
+  if (item.baseline || item.reason === 'manual' || item.state !== 'open' || item.run !== null || isClosedObject(item)) return false
   return !marks.seen.includes(item.id)
 }
 
@@ -193,23 +207,8 @@ export const sameMarks = (a: Marks, b: Marks): boolean =>
 /** 상태 표시줄의 새 일 점. 패널이 센 뒤에 열린 일이 있거나, 센 때 아직 보지 않은 일이 남았다. */
 export const hasFresh = (marks: Marks, newest: number | null): boolean => marks.floor !== null && (marks.unseen > 0 || (newest !== null && newest > marks.known))
 
-export const isTabId = (value: unknown): value is TabId => typeof value === 'string' && (TAB_ORDER as readonly string[]).includes(value)
-
-/** 묶음이 속한 탭. */
-export function tabOf(section: Section): TabId {
-  return TAB_ORDER.find(tab => TAB_SECTIONS[tab].includes(section)) ?? 'now'
-}
-
-/** 줄이 속한 탭. */
-export const tabOfRow = (item: ItemRow): TabId => tabOf(sectionOf(item))
-
-/** 탭의 건수. 목록이 길어 넘기지 않은 줄도 센다. */
-export function tabCount(tab: TabId, groups: Record<Section, readonly ItemRow[]>, omittedBy: Readonly<Record<string, number>>): number {
-  return TAB_SECTIONS[tab].reduce((sum, section) => sum + groups[section].length + (omittedBy[section] ?? 0), 0)
-}
-
-/** 줄 높이가 곧 중요도다. 손댈 일은 제목을 다 읽게 두 줄로, 기다려도 되는 일은 한 줄로 그린다. */
-export const isCompact = (section: Section): boolean => section === 'relaxed' || section === 'parked' || section === 'baseline'
+/** 줄 높이가 곧 중요도다. 손댈 일은 제목을 다 읽게 두 줄로, 기다려도 되는 일과 끝난 일은 한 줄로 그린다. */
+export const isCompact = (section: Section): boolean => section === 'relaxed' || section === 'parked' || section === 'cleanup' || section === 'baseline'
 
 /** 묶음에서 그릴 줄 수. 세션 줄은 줄이지 않고, 펼친 행은 숨기지 않는다. openIndex는 펼친 행의 자리이고 없으면 -1이다. */
 export function visibleCount(section: Section, total: number, showAll: boolean, openIndex: number): number {

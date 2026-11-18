@@ -6,7 +6,7 @@ use std::collections::BTreeSet;
 use kairos_core::model::{Outcome, QuerySpec, Source, SourceMode, SourceName};
 use kairos_core::{Instant, KairosResult, OffDates, string_enum};
 use kairos_ledger::{CoverageGapRow, EventRepo, MANUAL_SKIP, OffDateBook, RunSummary, SourceRunRepo};
-use kairos_policy::{tick_end_minutes, tick_start_minutes};
+use kairos_policy::{collecting_since, tick_end_minutes, tick_start_minutes};
 use kairos_store::Connection;
 use serde::Serialize;
 
@@ -94,11 +94,6 @@ fn shown_last_ok(status: HealthStatus, left: Option<String>, right: Option<&str>
 /// 최근의 덮지 못한 구간.
 pub type CoverageGap = CoverageGapRow;
 
-/// 그날 수집이 시작된 순간. 밤사이 공백을 지연으로 세지 않기 위해 쓴다.
-fn tick_start(now: Instant) -> Instant {
-    now.minus_ms((i64::from(now.local_minutes()) - i64::from(tick_start_minutes())) * 60_000)
-}
-
 struct HealthInput<'a> {
     source: &'a dyn Source,
     query: &'a QuerySpec,
@@ -136,7 +131,7 @@ fn health_of(input: HealthInput<'_>) -> SourceHealth {
         resumed_at.and_then(Instant::parse).filter(|resumed| *resumed <= now).unwrap_or(Instant::from_millis(0));
     let threshold = (query.interval_seconds * 3).max(MIN_ALERT_SECONDS) * 1000;
     // 해석할 수 없는 시각은 NaN이라 `age <= threshold`가 거짓이고 지연 분은 null로 나간다.
-    let age = Instant::parse(&last_ok.finished_at).map(|ok| now.ms_since(ok.max(tick_start(now)).max(resumed)));
+    let age = Instant::parse(&last_ok.finished_at).map(|ok| now.ms_since(ok.max(collecting_since(now)).max(resumed)));
     match age {
         Some(age) if age <= threshold => base(HealthStatus::Ok, None, None),
         Some(age) => base(HealthStatus::Delayed, Some(age.div_euclid(60_000)), None),

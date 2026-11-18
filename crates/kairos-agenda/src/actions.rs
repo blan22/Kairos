@@ -3,7 +3,7 @@
 use kairos_core::text::sanitize_head;
 use kairos_core::{Instant, KairosResult, OffDates, string_enum};
 use kairos_ledger::{EventRepo, upcoming_deploys};
-use kairos_policy::{DeployLinkStatus, ItemReason, WorkSchedule, work_start_minutes};
+use kairos_policy::{DeployLinkStatus, ItemReason, WorkSchedule, morning_minutes};
 use kairos_store::{Connection, Database};
 use serde::Serialize;
 use uuid::Uuid;
@@ -69,7 +69,7 @@ pub struct ActionContext<'a> {
 const HOUR_MS: i64 = 3_600_000;
 
 string_enum! {
-    /// 나중에의 때. next_bundle 다음 묶음, hour 한 시간 뒤, tomorrow 다음 근무일의 근무 시작.
+    /// 나중에의 때. next_bundle 다음 묶음, hour 한 시간 뒤, tomorrow 다음 근무일의 아침(`morning_minutes`).
     pub enum LaterWhen {
         NextBundle => "next_bundle",
         Hour => "hour",
@@ -84,7 +84,7 @@ impl LaterWhen {
             Self::NextBundle => WorkSchedule::new(context.off_dates).next_bundle_at(context.now),
             Self::Hour => context.now.plus_ms(HOUR_MS),
             Self::Tomorrow => {
-                Instant::at_local(context.off_dates.next_workday(context.now.local_date()), work_start_minutes())
+                Instant::at_local(context.off_dates.next_workday(context.now.local_date()), morning_minutes())
             }
         }
     }
@@ -218,7 +218,7 @@ impl<'a> ItemTransitions<'a> {
         let Some(deploy) = deploy else {
             return Ok(ActionResult::of(item, ActionStatus::NoDeploy, item.state, "연결된 배포가 없습니다"));
         };
-        let until = Instant::at_local(context.off_dates.previous_workday(deploy.date), work_start_minutes());
+        let until = Instant::at_local(context.off_dates.previous_workday(deploy.date), morning_minutes());
         if until <= context.now {
             return Ok(ActionResult::of(item, ActionStatus::DeployImminent, item.state, "이미 배포 시점입니다"));
         }

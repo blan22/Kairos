@@ -131,6 +131,9 @@ impl WorkDays {
     }
 }
 
+/// 하루의 분. 구간 끝의 `24:00`이다.
+pub const DAY_MINUTES: u32 = 24 * 60;
+
 /// 시간대와 근무 리듬.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Schedule {
@@ -147,15 +150,29 @@ pub struct Schedule {
     pub tick: MinuteRange,
 }
 
+/// 기본은 언제나다. 모든 요일 하루 종일 수집하고 카드와 알림을 낸다. 방해 금지 시간은 `[schedule]`로 고른다.
 impl Default for Schedule {
     fn default() -> Self {
         Self {
             zone: chrono_tz::Asia::Seoul,
+            days: WorkDays::ALL,
+            work: MinuteRange::new(0, DAY_MINUTES),
+            lunch: MinuteRange::new(0, 0),
+            bundles: vec![13 * 60 + 30, 18 * 60],
+            tick: MinuteRange::new(0, DAY_MINUTES),
+        }
+    }
+}
+
+impl Schedule {
+    /// 평일 근무 시간 일정. 0.6.0까지의 기본값이고, 시험 프로필과 방해 금지 시간 예시가 쓴다.
+    pub fn office() -> Self {
+        Self {
             days: WorkDays::WEEKDAYS,
             work: MinuteRange::new(10 * 60, 19 * 60 + 30),
             lunch: MinuteRange::new(12 * 60, 13 * 60 + 30),
-            bundles: vec![13 * 60 + 30, 18 * 60],
             tick: MinuteRange::new(9 * 60, 20 * 60),
+            ..Self::default()
         }
     }
 }
@@ -304,7 +321,8 @@ impl Profile {
                 deploy_tag: "[배포]".to_owned(),
                 notion_workspace: Some("Contoso".to_owned()),
             },
-            schedule: Schedule::default(),
+            // 방해 금지 시간이 있는 일정이라야 보류와 묶음 규칙을 시험할 수 있다.
+            schedule: Schedule::office(),
             playbooks: Playbooks {
                 targets: vec![PlaybookTarget {
                     owner: "contoso".to_owned(),
@@ -368,6 +386,20 @@ pub fn zone() -> Tz {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn 기본_일정은_언제나이고_근무_일정은_평일_근무_시간이다() {
+        let always = Schedule::default();
+        assert_eq!(always.days, WorkDays::ALL);
+        assert!(always.work.contains(0) && always.work.contains(DAY_MINUTES - 1));
+        assert!(always.tick.contains(0) && always.tick.contains(DAY_MINUTES - 1));
+        assert!(!always.lunch.contains(12 * 60), "점심 보류가 없다");
+        let office = Schedule::office();
+        assert_eq!(office.days, WorkDays::WEEKDAYS);
+        assert_eq!((office.work.start, office.work.end), (600, 1170));
+        assert_eq!((office.tick.start, office.tick.end), (540, 1200));
+        assert_eq!(office.bundles, always.bundles);
+    }
 
     #[test]
     fn 근무_요일은_월요일부터_이름과_iso_숫자로_읽는다() {

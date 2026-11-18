@@ -60,6 +60,18 @@ export interface WhyView {
   attendees: number | null
   startsAt: string | null
   offer: OfferWhy | null
+  /** 에이전트 제안이 없는 까닭. 제안이 없는 열린 GitHub 이슈와 PR에만 있다. */
+  noOffer: NoOfferWhy | null
+}
+
+/** 제안이 없는 까닭의 코드. 순서는 kairos가 보는 순서다. 고칠 수 없는 조건이 먼저이고 설정으로 풀 수 있는 unmapped가 뒤다. */
+export const NO_OFFER_CODES = ['parked', 'closed', 'unsupported', 'untrusted_author', 'outsider', 'unmapped', 'session', 'sibling'] as const
+export type NoOfferCode = (typeof NO_OFFER_CODES)[number]
+
+/** 저장소는 GitHub 이름 모양(`owner/name`)만 받는다. 화면과 설정 예시에만 쓰고 세션 입력으로 쓰지 않는다. */
+export interface NoOfferWhy {
+  code: NoOfferCode
+  repo: string | null
 }
 
 /** 에이전트 제안의 근거. 저장소와 브랜치는 kairos가 검증한 모양만 받는다. */

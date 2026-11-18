@@ -31,14 +31,15 @@ schema = 1
 # name = "홍길동"
 
 [schedule]
-# 근무 요일과 근무 시간 밖은 방해 금지다. 카드와 Mac 알림을 내지 않는다.
-# 주말에도 하루 종일 받으려면 days에 sat, sun을 넣고 work와 collect를 ["00:00", "24:00"]으로, lunch를 []로 둔다.
-# timezone = "Asia/Seoul"
+# 기본은 언제나다. 모든 요일 하루 종일 수집하고 분류하며 카드와 알림도 시간과 상관없이 낸다.
+# 방해 금지 시간을 두려면 근무 요일과 시간을 적는다. 그 밖에는 카드와 알림을 모아 두었다가 근무 시작 때 낸다.
+# 예: 평일 근무 시간만 받기
 # days = ["mon", "tue", "wed", "thu", "fri"]
 # work = ["10:00", "19:30"]
 # lunch = ["12:00", "13:30"]
-# bundles = ["13:30", "18:00"]
 # collect = ["09:00", "20:00"]
+# timezone = "Asia/Seoul"
+# bundles = ["13:30", "18:00"]
 
 # 끈 소스는 `kairos sources off <소스>`가 connections.toml에 쓴다.
 # 여기 적은 소스는 `kairos sources on`으로도 켜지지 않는다.

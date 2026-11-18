@@ -1,7 +1,8 @@
 //! 펼친 줄과 에이전트 제안이 보여 주는 근거. 패널은 코드를 고정 문구로 바꿔 그린다.
 //!
 //! 외부 글(제목, 본문, 마일스톤 이름, 사람 이름)은 넣지 않는다. 값은 규칙 ID, 고정 사실 코드, 수, 시각,
-//! 플레이북 URL 정규식을 통과한 저장소 이름, 프로필에서 검증한 작업 저장소와 기준 브랜치뿐이다.
+//! 플레이북 URL 정규식을 통과한 저장소 이름, 프로필에서 검증한 작업 저장소와 기준 브랜치,
+//! 제안이 없는 까닭의 코드와 GitHub 주소 모양 정규식을 통과한 저장소 이름(`owner/name`)뿐이다.
 //! golden이 지키는 `Presenter`의 출력은 바꾸지 않는다. CLI가 `--json` 응답을 만든 뒤 채운다(`sources`, `reveal`과 같다).
 
 use std::sync::LazyLock;
@@ -13,7 +14,7 @@ use kairos_store::Connection;
 use regex::Regex;
 use serde::Serialize;
 
-use super::playbook::{Playbook, issue_url_matches};
+use super::playbook::{NoOffer, Playbook, github_repo_of, issue_url_matches, no_offer_of};
 use super::views::ItemView;
 use crate::repo::ItemRepo;
 
@@ -52,6 +53,18 @@ pub struct WhyView {
     /// 에이전트 제안의 근거. 제안이 붙은 줄에만 있다.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub offer: Option<OfferWhy>,
+    /// 에이전트 제안이 없는 까닭. 제안이 없는 열린 GitHub 이슈와 PR의 줄에만 있다.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub no_offer: Option<NoOfferWhy>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NoOfferWhy {
+    pub code: NoOffer,
+    /// 이슈나 PR의 저장소(`owner/name`). 대상 저장소가 아닐 때 사용자가 설정에 더할 이름이다. 모양이 틀린 주소면 없다.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub repo: Option<String>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize)]
@@ -86,6 +99,11 @@ fn code_facts(object: &ObjectRow, facts: &mut Vec<&'static str>) {
     match object.review_decision.as_deref() {
         Some("CHANGES_REQUESTED") => facts.push("changes_requested"),
         Some("APPROVED") => facts.push("approved"),
+        _ => {}
+    }
+    match object.state.as_deref() {
+        Some("closed") => facts.push("closed"),
+        Some("merged") => facts.push("merged"),
         _ => {}
     }
     match object.checks_state.as_deref() {
@@ -197,6 +215,10 @@ impl<'a> Explainer<'a> {
                 why.starts_at = object.start_at.clone().filter(|at| ISO_TIME.is_match(at));
             }
             why.offer = view.playbook.and_then(|playbook| offer_of(playbook, object));
+            if view.playbook.is_none() && view.run.is_none() {
+                let code = no_offer_of(self.connection, item.reason, item.state, &item.object_key, Some(object))?;
+                why.no_offer = code.map(|code| NoOfferWhy { code, repo: org_repo_of(object.permalink.as_deref()) });
+            }
         }
         Ok(Some(why))
     }
@@ -208,6 +230,13 @@ impl<'a> Explainer<'a> {
         }
         Ok(())
     }
+}
+
+/// 패널이 대상에 더하라고 안내할 저장소. 조직 밖 저장소는 신뢰 범위 밖이라 이름을 싣지 않는다.
+fn org_repo_of(permalink: Option<&str>) -> Option<String> {
+    let repo = github_repo_of(permalink?)?;
+    let owner = repo.split('/').next()?;
+    kairos_core::profile::current().org.is_org(owner).then_some(repo)
 }
 
 #[cfg(test)]
@@ -225,6 +254,26 @@ mod tests {
         assert_eq!(rule_of(&heads[..2], None).as_deref(), Some("p1.ci_failed"));
         assert_eq!(rule_of(&heads[..1], None).as_deref(), Some("p2.owned_comment"));
         assert_eq!(rule_of(&[], Some(&head("p2.assigned"))).as_deref(), Some("p2.assigned"));
+    }
+
+    #[test]
+    fn 저장소_이름은_github_주소_모양에서만_뽑는다() {
+        assert_eq!(
+            github_repo_of("https://github.com/contoso/atlas-web/issues/3").as_deref(),
+            Some("contoso/atlas-web")
+        );
+        assert_eq!(github_repo_of("https://github.com/acme/widget.js/pull/12").as_deref(), Some("acme/widget.js"));
+        for bad in [
+            "https://github.com/contoso/atlas/issues/3?x=1",
+            "https://github.com/contoso/atlas/issues/3\n",
+            "https://github.com/contoso/../issues/3",
+            "https://github.com/-bad/atlas/issues/3",
+            "https://github.com/contoso/at las/issues/3",
+            "http://github.com/contoso/atlas/issues/3",
+            "https://github.example/contoso/atlas/issues/3",
+        ] {
+            assert_eq!(github_repo_of(bad), None, "{bad}");
+        }
     }
 
     #[test]

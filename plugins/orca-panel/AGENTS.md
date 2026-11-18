@@ -1,7 +1,7 @@
 # Orca 패널 안내
 
 - 테스트는 이 폴더에서 `orca plugin test .`로 돌린다. 타입은 `orca plugin types .`가 `.orca/types`에 만든다(git 무시).
-- 패널(`panel.tsx`)은 Orca 컴포넌트만 쓰고 DOM을 직접 그리지 않는다. 외부 문자열은 `Text`와 `ListItem`의 title로만 그리고 Markdown, Link는 쓰지 않는다.
+- 패널(`panel.tsx`)은 Orca 컴포넌트만 쓰고 DOM을 직접 그리지 않는다. 외부 문자열은 `Text`와 `ListItem`의 title로만 그리고 Markdown, Link는 쓰지 않는다. 예외로 `isRepoName`으로 거른 저장소 이름은 `Code`와 설정 조각(`playbookSnippet`)에 쓴다.
 - 워커만 쓰는 경로와 Node API는 `paths.ts`, `runner.ts`, `service.ts`에 둔다. `config.ts`는 패널도 읽으므로 Node 모듈을 import하지 않는다.
 - 이 폴더는 플러그인 폴더 밖의 모듈을 읽지 못할 수 있으므로 `packages/kairos-client`를 쓰지 않는다. 같은 규칙(셸 없는 argv, ID 정규식, 계약 버전 검사)을 `runner.ts`가 지킨다.
 - 화면 상태는 `panel.check.ts`의 시나리오로 정의한다. 시나리오를 추가했다면 `npm --prefix storybook run gen`을 돌린다. 절차는 `/panel-scenario`에 있다.

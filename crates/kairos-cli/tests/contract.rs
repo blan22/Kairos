@@ -227,7 +227,20 @@ fn plan_tick은_stdout_json_한_줄을_낸다() {
     assert_eq!(body["version"], 1);
     assert!(!body["calls"].as_array().unwrap().is_empty(), "첫 틱은 모든 질의가 차례다");
     let contract = cli.run_with(&[("KAIROS_CONTRACT_TEST", "1")], &["plan-tick"]).body();
-    assert_eq!(contract["calls"], body["calls"]);
+    // 두 실행 사이에 초가 바뀌면 지금 시각에서 잰 범위 값만 다르다. 그 값을 빼고 견준다.
+    assert_eq!(without_clock(&contract["calls"]), without_clock(&body["calls"]));
+}
+
+fn without_clock(calls: &serde_json::Value) -> serde_json::Value {
+    let mut calls = calls.clone();
+    for call in calls.as_array_mut().into_iter().flatten() {
+        if let Some(args) = call.get_mut("args").and_then(serde_json::Value::as_object_mut) {
+            for key in ["startTime", "endTime", "after"] {
+                args.remove(key);
+            }
+        }
+    }
+    calls
 }
 
 #[test]

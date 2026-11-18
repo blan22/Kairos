@@ -42,7 +42,7 @@
 권한이 있는데도 오지 않는다면 다음을 확인하세요.
 
 - `kairos notify`가 `off`라면 `kairos notify on`으로 켜세요.
-- 근무 요일과 근무 시간 밖에는 알림을 내지 않습니다(`config.toml`의 `[schedule]`).
+- `config.toml`의 `[schedule]`로 근무 요일과 근무 시간을 정했다면 그 밖에는 알림을 모아 두었다가 근무가 시작되면 냅니다. 기본 일정은 시각과 관계없이 알립니다. 공휴일, 연차, `kairos off`로 적은 날은 쉬는 날이라 처음 잡힌 P1을 알리지 않습니다.
 - 표시 모드가 auto라면 첫 수집 뒤 첫 근무일에는 기록만 하고 카드와 알림을 내지 않습니다. `kairos setup`으로 설치하면 표시를 켜 두지만, `kairos install --register`만 실행했거나 `kairos display auto`를 골랐다면 auto입니다. `kairos display`로 현재 상태를 보고 `kairos display on`으로 여세요.
 - 설치 직후의 첫 수집은 알림 권한을 허용하기 전에 돌 수 있습니다. 그때 알리지 못한 일은 권한을 허용한 뒤의 틱이 다시 알립니다.
 - `kairos pause` 중에는 알림을 내지 않고, `kairos focus` 중에는 쌓아 둡니다.

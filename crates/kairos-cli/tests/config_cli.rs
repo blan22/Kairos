@@ -37,6 +37,24 @@ fn validate와_show는_층과_출처를_보여_준다() {
 }
 
 #[test]
+fn 기본_일정은_언제나이고_근무_시간을_적으면_방해_금지가_생긴다() {
+    let cli = Cli::new();
+    let body = cli.json(&["config", "show", "--json"]).body();
+    let schedule = &body["profile"]["schedule"];
+    assert_eq!(schedule["days"], serde_json::json!(["mon", "tue", "wed", "thu", "fri", "sat", "sun"]));
+    assert_eq!(schedule["work"], serde_json::json!(["00:00", "24:00"]));
+    assert_eq!(schedule["collect"], serde_json::json!(["00:00", "24:00"]));
+    assert_eq!(schedule["lunch"], serde_json::json!([]));
+    append_user_config(
+        &cli,
+        "[schedule]\ndays = [\"mon\", \"tue\", \"wed\", \"thu\", \"fri\"]\nwork = [\"10:00\", \"19:30\"]\n",
+    );
+    let office = cli.json(&["config", "show", "--json"]).body();
+    assert_eq!(office["profile"]["schedule"]["work"], serde_json::json!(["10:00", "19:30"]));
+    assert_eq!(office["profile"]["schedule"]["days"].as_array().unwrap().len(), 5);
+}
+
+#[test]
 fn show는_세션_호스트와_git_설정의_출처를_보여_준다() {
     let cli = Cli::new();
     append_user_config(

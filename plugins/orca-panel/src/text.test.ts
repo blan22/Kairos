@@ -1,5 +1,6 @@
 import { assert, test } from 'orca/testing'
 import { DANGEROUS_TITLE, SLACK_TITLE } from './fixtures.ts'
+import { NO_OFFER_CODES } from './protocol.ts'
 import {
   actionFailure,
   attendeesWord,
@@ -17,8 +18,12 @@ import {
   isSourceTrouble,
   joinLine,
   matchesSearch,
+  MISSING_OFFER_CODES,
+  noOfferLabel,
+  noOfferLine,
   openableUrl,
   playbookCopy,
+  playbookSnippet,
   ruleSentence,
   SEARCH_LIMIT,
   searchWords,
@@ -307,6 +312,47 @@ test('사실 코드는 고정 낱말과 색으로 옮기고 모르는 코드는 
     { code: 'changes_requested', text: '변경 요청됨', tone: 'warning' },
     { code: 'approved', text: '승인됨', tone: 'success' },
   ])
+  assert.deepEqual(factsOf(['closed', 'merged']).map(fact => fact.text), ['닫힘', '병합됨'])
+})
+
+test('제안이 없는 까닭은 코드마다 고정 이름이 있고 미룬 일과 닫힌 일은 줄에 문장을 쓰지 않는다', () => {
+  for (const code of NO_OFFER_CODES) assert.ok(noOfferLabel(code).length > 0, code)
+  assert.equal(noOfferLine('parked'), null)
+  assert.equal(noOfferLine('closed'), null)
+  assert.match(noOfferLine('unmapped') ?? '', /조직의 저장소는 설정에 더하면/)
+  assert.match(noOfferLine('untrusted_author') ?? '', /지시로 읽을 수 있습니다/)
+  assert.deepEqual(MISSING_OFFER_CODES, ['unmapped', 'unsupported', 'untrusted_author', 'outsider'])
+})
+
+test('대상 저장소 조각은 저장소마다 한 대상이고 작업도 그 저장소에서 한다', () => {
+  const snippet = playbookSnippet(['acme-synthetic/widget', 'contoso-synthetic/atlas'])
+  assert.equal(
+    snippet,
+    [
+      '# 기준 브랜치가 다르면 base_branch를 고칩니다',
+      '',
+      '[[playbooks]]',
+      'owner = "acme-synthetic"',
+      'repos = ["widget"]',
+      'workspace_repo = "acme-synthetic/widget"',
+      'base_branch = "origin/main"',
+      '',
+      '[[playbooks]]',
+      'owner = "contoso-synthetic"',
+      'repos = ["atlas"]',
+      'workspace_repo = "contoso-synthetic/atlas"',
+      'base_branch = "origin/main"',
+    ].join('\n'),
+  )
+})
+
+test('대상 저장소 조각은 GitHub 이름 모양이 아닌 값을 넣지 않는다', () => {
+  const bad = ['a/b"\n[[playbooks]]', 'a/b\nowner = "x"', 'a\\b/c', 'a/.', 'a/..', '/x', 'a/', 'a/b/c', '']
+  const snippet = playbookSnippet([...bad, 'acme-synthetic/widget'])
+  assert.equal(snippet.match(/\[\[playbooks\]\]/g)?.length, 1)
+  assert.ok(!snippet.includes('owner = "x"'))
+  assert.equal(snippet.split('\n').filter(line => line.includes('"')).length, 4)
+  assert.equal(playbookSnippet(bad), '# 기준 브랜치가 다르면 base_branch를 고칩니다')
 })
 
 test('제안 근거와 플레이북은 고정 문구이고 모르는 값은 빠진다', () => {

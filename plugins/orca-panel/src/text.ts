@@ -1,4 +1,6 @@
 /** 표시용 문자열 처리. 패널에서도 불러서 node 모듈을 쓰지 않는다. */
+import type { NoOfferCode } from './protocol.ts'
+
 const LINE_BREAKS = /[\t\n\v\f\r\u0085\p{Zl}\p{Zp}]+/gu
 /** 제어 문자, 양방향 재정렬, 폭 없는 문자를 뺀다. 한글 자모 결합에 쓰는 ZWNJ와 ZWJ만 둔다. */
 const UNSAFE = /[\p{Cc}\p{Cf}\p{Cs}\p{Zl}\p{Zp}]/u
@@ -283,6 +285,8 @@ const FACT_COPY: Record<string, string> = {
   review_requested: '내게 리뷰 요청',
   authored_me: '내가 만든 일',
   draft: '초안 PR',
+  closed: '닫힘',
+  merged: '병합됨',
   changes_requested: '변경 요청됨',
   approved: '승인됨',
   checks_failed: '검사 실패',
@@ -338,6 +342,50 @@ const CHECK_COPY: Record<string, string> = {
 }
 
 export const checksOf = (codes: readonly string[]): string[] => codes.flatMap(code => lookup(CHECK_COPY, code) ?? [])
+
+/**
+ * 에이전트 제안이 없는 까닭. 펼친 줄에 쓰는 문장과 상태 화면에 쓰는 짧은 이름이다.
+ * 미룬 일과 닫힌 일은 이유와 사실 낱말이 이미 말하므로 줄에는 쓰지 않는다(line이 null).
+ */
+const NO_OFFER_COPY: Readonly<Record<NoOfferCode, { label: string; line: string | null }>> = {
+  parked: { label: '미룬 일', line: null },
+  closed: { label: '닫힌 일', line: null },
+  unsupported: { label: '맡을 플레이북 없음', line: '이런 일을 맡는 플레이북이 아직 없습니다. 담당 이슈, 리뷰 요청 PR, 이슈 글의 답장만 맡깁니다.' },
+  untrusted_author: { label: '조직 밖 사람이 연 일', line: '조직 밖 사람이 연 일이라 맡기지 않습니다. 세션이 그 글을 지시로 읽을 수 있습니다.' },
+  outsider: { label: '조직 밖 글이 있음', line: '조직 밖 사람의 글이 있어 맡기지 않습니다. 세션이 그 글을 지시로 읽을 수 있습니다.' },
+  unmapped: { label: '대상 저장소가 아님', line: '플레이북 대상 저장소가 아닙니다. 조직의 저장소는 설정에 더하면 제안합니다.' },
+  session: { label: '세션이 이미 있음', line: '같은 이슈의 세션이 이미 있습니다.' },
+  sibling: { label: '다른 줄에 제안', line: '같은 이슈의 다른 줄에 제안이 있습니다.' },
+}
+
+export const noOfferLabel = (code: NoOfferCode): string => NO_OFFER_COPY[code].label
+export const noOfferLine = (code: NoOfferCode): string | null => NO_OFFER_COPY[code].line
+
+/** 상태 화면이 세는 까닭. 사용자가 손쓸 수 있거나 알아야 하는 것만이다. 세션과 다른 줄의 제안은 제안이 있는 것과 같다. */
+export const MISSING_OFFER_CODES: readonly NoOfferCode[] = ['unmapped', 'unsupported', 'untrusted_author', 'outsider']
+
+/** 설정 예시에 넣는 기준 브랜치. 저장소마다 다를 수 있어 예시 안에서 고치라고 적는다. */
+const SNIPPET_BASE = 'origin/main'
+
+/** GitHub 저장소 이름 모양(`owner/name`). 이 글자는 TOML 문자열을 끝내거나 새 줄을 만들 수 없다. 이름이 `.`, `..`인 저장소는 GitHub에 없다. */
+const REPO_NAME = /^[A-Za-z0-9-]{1,39}\/[A-Za-z0-9_.-]{1,100}$/
+export const isRepoName = (value: unknown): value is string => {
+  if (typeof value !== 'string' || !REPO_NAME.test(value)) return false
+  const name = value.slice(value.indexOf('/') + 1)
+  return name !== '.' && name !== '..'
+}
+
+/**
+ * 대상 저장소를 더하는 config.toml 조각. 사용자가 붙여 넣는 설정이라 parse가 거른 값이어도 여기서 다시 거른다.
+ * 모양이 틀린 이름은 조각에 넣지 않는다. 한 저장소가 한 대상이고 작업도 그 저장소에서 한다.
+ */
+export function playbookSnippet(repos: readonly string[]): string {
+  const blocks = repos.filter(isRepoName).map(repo => {
+    const [owner = '', name = ''] = repo.split('/')
+    return [`[[playbooks]]`, `owner = "${owner}"`, `repos = ["${name}"]`, `workspace_repo = "${repo}"`, `base_branch = "${SNIPPET_BASE}"`].join('\n')
+  })
+  return [`# 기준 브랜치가 다르면 base_branch를 고칩니다`, ...blocks].join('\n\n')
+}
 
 /** 플레이북마다 에이전트가 하는 일. 세션 프롬프트(kairos-sessions의 prompt)와 같은 범위를 사람 말로 쓴다. */
 export interface PlaybookCopy {

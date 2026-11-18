@@ -40,7 +40,7 @@ impl GateReason {
 pub struct DisplayStart {
     /// 연결된 소스 중 가장 이른 T0. 정상 수집이 없으면 None.
     pub t0: Option<String>,
-    /// T0 이후 1근무일이 끝나는 시각(그날 20:00 KST). T0가 없으면 None.
+    /// T0 이후 1근무일이 끝나는 시각(그날 수집 시간이 끝나는 때). T0가 없으면 None.
     pub starts_at: Option<Instant>,
     /// now가 starts_at 이후인가.
     pub ready: bool,
@@ -48,7 +48,7 @@ pub struct DisplayStart {
 
 impl DisplayStart {
     /// T0가 근무일 10:00 이전에 섰으면 그날, 아니면 다음 근무일을 기록 1근무일로 센다.
-    /// 그 근무일의 수집이 끝나는 20:00 KST가 표시 시작 시점이다.
+    /// 그 근무일의 수집 시간이 끝나는 때가 표시 시작 시점이다. 기본 일정에서는 그날 자정이다.
     pub fn compute(t0: Option<&str>, now: Instant, off_dates: &OffDates) -> KairosResult<Self> {
         let Some(t0) = t0 else {
             return Ok(Self { t0: None, starts_at: None, ready: false });

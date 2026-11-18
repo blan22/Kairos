@@ -121,15 +121,20 @@ impl OffDates {
         self.0.iter().copied()
     }
 
-    /// 프로필의 근무 요일이고 쉬는 날 목록에 없으면 근무일이다. 기본 근무 요일은 월~금이다.
+    /// 프로필의 근무 요일이고 쉬는 날 목록에 없으면 근무일이다. 기본 근무 요일은 모든 요일이다.
     pub fn is_workday(&self, date: LocalDate) -> bool {
         crate::profile::current().schedule.days.contains(date.weekday()) && !self.contains(date)
     }
 
-    /// date 직전의 근무일.
+    /// date 직전의 평일 근무일. 배포처럼 평일에 잡히는 일정의 전 근무일을 셀 때 쓴다.
+    /// 근무 요일에 주말이 들어 있어도(기본 일정) 주말은 건너뛴다. 평일 근무 요일이 하나도 없으면 근무 요일만 본다.
     pub fn previous_workday(&self, date: LocalDate) -> LocalDate {
+        let days = crate::profile::current().schedule.days;
+        let weekday_work = [Weekday::Mon, Weekday::Tue, Weekday::Wed, Weekday::Thu, Weekday::Fri]
+            .into_iter()
+            .any(|day| days.contains(day));
         let mut cursor = date.add_days(-1);
-        while !self.is_workday(cursor) {
+        while !(self.is_workday(cursor) && !(weekday_work && cursor.is_weekend())) {
             cursor = cursor.add_days(-1);
         }
         cursor

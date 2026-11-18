@@ -69,7 +69,7 @@
 
 ### 항목의 `why`
 
-`--json` 응답의 항목(`list`의 줄과 카드의 줄)에는 왜 올라왔고 왜 제안했는지를 담은 `why`가 붙습니다. 값은 모두 코드와 숫자이고, 외부에서 온 글은 들어 있지 않습니다. 근거를 만들 수 없으면 키 자체가 없습니다.
+`--json` 응답의 항목(`list`의 줄과 카드의 줄)에는 왜 올라왔고 왜 제안했는지(또는 왜 제안하지 않았는지)를 담은 `why`가 붙습니다. 값은 모두 코드와 숫자이고, 외부에서 온 글은 들어 있지 않습니다. 근거를 만들 수 없으면 키 자체가 없습니다.
 
 ```json
 {
@@ -89,17 +89,33 @@
 | `facts` | 객체에서 읽은 사실 코드. 순서가 화면에 그리는 순서입니다. 비어 있으면 키가 없습니다 |
 | `attendees`, `startsAt` | 일정의 참석자 수와 시작 시각. 일정이 아니면 키가 없습니다 |
 | `offer` | 에이전트 제안이 붙은 줄에만 있습니다. `repo`는 대상 저장소, `workspace`와 `base`는 세션이 일할 저장소와 기준 브랜치, `checks`는 제안이 나온 조건 코드입니다 |
+| `noOffer` | 제안이 없는 열린 GitHub 이슈와 PR의 줄에만 있습니다. `code`는 제안하지 않은 까닭, `repo`는 이슈나 PR의 저장소(`owner/name`)입니다. 주소 모양이 틀리거나 조직 프로필의 GitHub 조직 밖 저장소면 `repo`가 없습니다. 세션이 도는 줄에는 없습니다 |
 
 `facts`의 코드는 다음과 같습니다.
 
-- GitHub: `issue`, `pull_request`, `assigned_me`, `review_requested`, `authored_me`, `draft`, `changes_requested`, `approved`, `checks_failed`, `checks_pending`, `checks_passed`, `milestone`
+- GitHub: `issue`, `pull_request`, `assigned_me`, `review_requested`, `authored_me`, `draft`, `closed`, `merged`, `changes_requested`, `approved`, `checks_failed`, `checks_pending`, `checks_passed`, `milestone`
 - 일정: `response_needed`, `attending`, `tentative`, `declined`, `all_day`
 - Slack: `dm`
 - Gmail: `mail`
 
 `offer.checks`의 코드는 `assigned_me`, `review_requested`, `reply_owed`, `open`, `mapped`, `insiders`, `no_session`입니다.
 
-호스트는 규칙 ID와 코드를 낱말 모양으로 검사하고, 자기 표에 있는 것만 그립니다. 모르는 코드는 버립니다. 저장소와 브랜치는 모양이 틀리면 `offer`만 버립니다.
+`noOffer.code`는 앞의 것부터 봅니다. 고칠 수 없는 조건이 먼저이고, 설정으로 풀 수 있는 `unmapped`는 뒤에 옵니다.
+
+| 코드 | 뜻 |
+|---|---|
+| `parked` | 미뤄 둔 일입니다. 다시 올라오면 제안합니다 |
+| `closed` | 이슈나 PR이 닫혔거나 병합됐습니다 |
+| `unsupported` | 이 일을 맡는 플레이북이 없습니다(내 PR의 CI 실패, PR 글의 답장 같은 일) |
+| `untrusted_author` | 연 사람이 본인이나 조직의 사람이 아닙니다 |
+| `outsider` | 조직 밖 사람의 글이 있습니다 |
+| `unmapped` | 플레이북 대상 저장소가 아닙니다. 조직의 저장소라면 사용자가 `config.toml`의 `[[playbooks]]`에 더해 제안을 받을 수 있습니다 |
+| `session` | 같은 이슈에 이미 세션이 있습니다 |
+| `sibling` | 같은 이슈의 다른 줄에 제안이 붙어 있습니다 |
+
+`repo`는 화면에 그리고 설정 예시에 넣는 이름일 뿐입니다. 호스트는 이 값으로 세션을 시작하지 않습니다. 세션 대상은 언제나 프로필에서 옵니다.
+
+호스트는 규칙 ID와 코드를 낱말 모양으로 검사하고, 자기 표에 있는 것만 그립니다. 모르는 코드는 버립니다. 저장소와 브랜치는 모양이 틀리면 `offer`만 버립니다. `noOffer`도 코드가 표에 없으면 버리고, `repo`만 모양이 틀리면 `repo`만 버립니다.
 
 ### `next`의 `newest`
 
@@ -117,7 +133,7 @@
 - 업데이트 명령은 싣지 않습니다. 호스트는 고정 문구 `kairos update --apply`를 보여 주고, 사용자가 일반 터미널에서 실행합니다. 호스트가 설치를 실행하지 않습니다.
 - `watch`는 `update.json`이 바뀌어도 `changed`를 냅니다.
 
-`why`, `newest`, `update`는 추가 필드라서 계약 버전은 그대로입니다.
+`why`(`noOffer` 포함), `newest`, `update`는 추가 필드라서 계약 버전은 그대로입니다.
 
 ### 수락 응답의 `launch`
 

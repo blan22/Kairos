@@ -22,7 +22,7 @@ sqlite=/usr/bin/sqlite3
 notifier=${KAIROS_WATCHDOG_NOTIFIER:-${0:A:h}/notifier/KairosNotifier.app/Contents/MacOS/KairosNotifier}
 
 # 수집 시간과 요일은 수집이 watch-window.tsv에 적는다(설정의 schedule.collect, schedule.days).
-# 파일이 없거나 모양이 틀리면 기본값(월~금 09:00~20:00)을 쓴다.
+# 파일이 없거나 모양이 틀리면 옛 근무 일정(월~금 09:00~20:00)으로 좁게 본다. 수집이 아직 돌지 않았을 때 밤에 알리지 않는다.
 window_start=540
 window_end=1200
 window_days=12345
@@ -44,6 +44,18 @@ minutes_now=$(( 10#$hour * 60 + 10#$minute ))
 # 그날 수집 시작 시각. 밤사이 공백을 지연으로 세지 않기 위한 하한이다.
 day_start=$(( now - ( (minutes_now - window_start) * 60 + 10#$second ) ))
 today=$(strftime '%Y-%m-%d' $now)
+# 하루 종일 수집하면 공백이 자정을 넘어 이어진다. 전날도 수집 요일이면 그날로 내려가고, 일곱 요일 모두면 하한이 없다.
+since=$day_start
+if (( window_start == 0 && window_end == 1440 )); then
+  back_day=$weekday
+  every_day=1
+  for _ in 1 2 3 4 5 6 7; do
+    back_day=$(( (back_day + 5) % 7 + 1 ))
+    if [[ $window_days != *$back_day* ]]; then every_day=0; break; fi
+    since=$(( since - 86400 ))
+  done
+  (( every_day )) && since=0
+fi
 
 # 잠자기 판정. 감시자는 5분마다 돈다. 간격이 7분 30초를 넘으면 Mac이 쉰 것이고 수집이 멈춘 것이 아니다.
 # 깨어 있는 동안은 간격이 벌어지지 않으므로 멈춘 수집은 그대로 알린다. 수집도 잠자기를 보면 같은 파일에 쓴다.
@@ -84,6 +96,8 @@ else
     zstat -A mtime +mtime $watch 2>/dev/null
     first=$(read -r line < $watch; print -r -- $line)
     if [[ $first == $'active\t0' && $(strftime '%Y-%m-%d' ${mtime[1]:-0}) == $today ]]; then skip_today=1; fi
+    # 전날이 쉬는 날이면 수집이 한 시간에 한 번이었다. 자정을 넘는 공백을 멈춤으로 세지 않는다.
+    if [[ $first == $'active\t0' && $(strftime '%Y-%m-%d' ${mtime[1]:-0}) == $(strftime '%Y-%m-%d' $(( day_start - 1 ))) ]]; then since=$day_start; fi
   fi
 
   if (( ! skip_today )); then
@@ -95,7 +109,7 @@ else
       # 마지막 run 행이 없는 것도 경고다.
       problems+=("kairos 수집 기록 없음")
     else
-      floor=$(( last_run > day_start ? last_run : day_start ))
+      floor=$(( last_run > since ? last_run : since ))
       floor=$(( floor > resumed ? floor : resumed ))
       age=$(( now - floor ))
       stalled=0
@@ -112,7 +126,7 @@ else
           (( stalled )) && continue
           [[ $name =~ '^[a-z0-9_-]+$' && $query =~ '^[a-z0-9_-]+$' && $threshold =~ '^[0-9]+$' ]] || continue
           ok_at=$($sqlite -cmd '.timeout 3000' -cmd 'PRAGMA query_only = 1' $db "SELECT coalesce(strftime('%s', max(finished_at)), '') FROM source_run WHERE source = '$name' AND query = '$query' AND outcome = 'ok'" 2>/dev/null)
-          ok_floor=$(( ${ok_at:-0} > day_start ? ${ok_at:-0} : day_start ))
+          ok_floor=$(( ${ok_at:-0} > since ? ${ok_at:-0} : since ))
           ok_floor=$(( ok_floor > resumed ? ok_floor : resumed ))
           ok_age=$(( now - ok_floor ))
           (( ok_age > threshold )) && problems+=("$name $(( ok_age / 60 ))분 지연")

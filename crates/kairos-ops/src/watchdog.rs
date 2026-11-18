@@ -2,7 +2,9 @@
 //! (`ops/kairos-watchdog.zsh`)를 쓴다. 두 구현은 `tests/watchdog.rs`의 같은 장면으로 시험한다.
 //!
 //! 수집 코드에 기대지 않는다. 데이터 폴더의 파일과 DB만 읽기 전용으로 본다. 판정 순서는 zsh와 같다.
-//! 1. 수집 시간(`watch-window.tsv`, 없으면 월~금 09:00~20:00) 밖이면 아무것도 하지 않는다.
+//! 1. 수집 시간(`watch-window.tsv`) 밖이면 아무것도 하지 않는다. 파일이 없으면 수집이 아직 돌지 않은 것이라
+//!    밤에 알리지 않도록 옛 근무 일정(월~금 09:00~20:00)으로 좁게 본다.
+//!    공백은 수집이 이어진 구간 안에서만 잰다. 하루 종일 수집하면 자정을 넘어 전날로 이어진다. 전날이 쉬는 날이었으면 오늘 자정부터 잰다.
 //! 2. 자기 실행 간격이 7분 30초를 넘으면 컴퓨터가 쉰 것으로 보고 `resumed.at`에 깨어난 시각을 쓴다.
 //! 3. 마지막 수집이 10분을 넘었거나 소스가 허용 지연을 넘었으면 알린다. 같은 경고(숫자만 다른 것)는 다시 알리지 않는다.
 
@@ -115,6 +117,28 @@ fn last_finished(connection: &Connection, filter: Option<(&str, &str)>) -> Optio
     Some(text.filter(|value| !value.is_empty()).and_then(|value| value.parse().ok()))
 }
 
+/// 공백을 재는 하한. `day_start`는 오늘 수집이 시작된 순간, `since`는 수집이 쉬지 않고 이어진 구간의 시작이다.
+#[derive(Clone, Copy)]
+struct Floor {
+    day_start: i64,
+    since: i64,
+}
+
+/// 하루 종일 수집하는 창에서 자정을 넘어 이어진 구간의 시작. 전날이 수집 요일이 아니면 오늘 자정이다.
+/// 일곱 요일 모두 수집하면 하한이 없다. 시간대 전환은 zsh 구현처럼 하루를 86400초로 본다.
+fn continuous_since(midnight: i64, weekday: chrono::Weekday, days: &str) -> i64 {
+    let mut since = midnight;
+    let mut day = weekday;
+    for _ in 0..7 {
+        day = day.pred();
+        if !days.contains(&day.number_from_monday().to_string()) {
+            return since;
+        }
+        since -= 86_400;
+    }
+    0
+}
+
 impl Watchdog<'_> {
     pub fn run(&self, notify: &dyn WatchdogNotify) -> KairosResult<Vec<String>> {
         let home = self.home;
@@ -128,6 +152,8 @@ impl Watchdog<'_> {
             return Ok(Vec::new());
         }
         let day_start = self.now - ((minutes_now - start) * 60 + i64::from(local.second()));
+        let since =
+            if start == 0 && end == 1440 { continuous_since(day_start, local.weekday(), &days) } else { day_start };
         let today = local.date_naive();
 
         let (beat_file, resume_file) = (home.file("watchdog.beat"), home.file("resumed.at"));
@@ -139,7 +165,7 @@ impl Watchdog<'_> {
         write_line(&beat_file, &self.now.to_string())?;
         let resumed = read_number(&resume_file).filter(|at| *at <= self.now).unwrap_or(0);
 
-        let problems = self.problems(day_start, resumed, today);
+        let problems = self.problems(Floor { day_start, since }, resumed, today);
         let last_file = home.file("watchdog.last");
         if problems.is_empty() {
             if non_empty(&last_file) {
@@ -173,7 +199,15 @@ impl Watchdog<'_> {
         }
     }
 
-    fn problems(&self, day_start: i64, resumed: i64, today: chrono::NaiveDate) -> Vec<String> {
+    /// watch.tsv를 마지막으로 쓴 날(현지).
+    fn watch_day(&self, watch: &Path) -> Option<chrono::NaiveDate> {
+        let modified = fs::metadata(watch).and_then(|metadata| metadata.modified()).ok()?;
+        let since = modified.duration_since(std::time::UNIX_EPOCH).ok()?;
+        DateTime::from_timestamp(i64::try_from(since.as_secs()).ok()?, 0)
+            .map(|utc| utc.with_timezone(&self.zone).date_naive())
+    }
+
+    fn problems(&self, floor: Floor, resumed: i64, today: chrono::NaiveDate) -> Vec<String> {
         let home = self.home;
         let db = home.db_path();
         if !db.is_file() {
@@ -181,19 +215,18 @@ impl Watchdog<'_> {
         }
         let watch = home.file("watch.tsv");
         let watch_text = fs::read_to_string(&watch).ok();
+        let off_day = watch_text
+            .as_deref()
+            .is_some_and(|text| text.lines().next() == Some("active\t0"))
+            .then(|| self.watch_day(&watch))
+            .flatten();
         // 수집기가 쉬는 날(kairos off)이면 오늘은 판정하지 않는다.
-        if let Some(text) = &watch_text
-            && text.lines().next() == Some("active\t0")
-        {
-            let modified = fs::metadata(&watch).and_then(|metadata| metadata.modified()).ok();
-            let modified_day = modified
-                .and_then(|time| time.duration_since(std::time::UNIX_EPOCH).ok())
-                .and_then(|since| DateTime::from_timestamp(i64::try_from(since.as_secs()).ok()?, 0))
-                .map(|utc| utc.with_timezone(&self.zone).date_naive());
-            if modified_day == Some(today) {
-                return Vec::new();
-            }
+        if off_day == Some(today) {
+            return Vec::new();
         }
+        // 전날이 쉬는 날이면 수집이 한 시간에 한 번이었다. 자정을 넘는 공백을 멈춤으로 세지 않는다.
+        let off_yesterday = off_day.is_some() && off_day == today.pred_opt();
+        let day_start = if off_yesterday { floor.day_start } else { floor.since };
         let Some(connection) = open_read_only(&db) else {
             return vec!["kairos 데이터베이스를 읽지 못함".to_owned()];
         };
