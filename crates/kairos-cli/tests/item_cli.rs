@@ -110,8 +110,13 @@ fn later의_when은_hour와_tomorrow만_받는다() {
     let waited = until.ms_since(before);
     assert!((3_600_000..3_660_000).contains(&waited), "{waited}");
     let cli = cli_with_item();
+    let before = now();
     let tomorrow = cli.json(&["later", "1", "--when", "tomorrow"]);
     assert_eq!(tomorrow.body()["results"][0]["message"], "다음 근무일 아침에 다시 보여 줍니다");
+    // 기본 일정은 하루 종일 근무라 근무 시작이 자정이다. 아침은 다음 날 09:00이다.
+    let until = Instant::parse(items(&cli.db())[0].parked_until.as_deref().unwrap()).unwrap();
+    assert_eq!(until.local_minutes(), 9 * 60);
+    assert_eq!(until.local_date(), before.local_date().add_days(1));
 }
 
 #[test]

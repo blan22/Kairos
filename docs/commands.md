@@ -86,7 +86,7 @@ kairos plan-tick | page-info < JSON | ingest < JSON
 |---|---|
 | 없음 | 다음 [묶음](concepts.md#묶음) 시각 |
 | `--when hour` | 1시간 뒤 |
-| `--when tomorrow` | 다음 근무일의 근무 시작 시각. 쉬는 날은 건너뜁니다 |
+| `--when tomorrow` | 다음 근무일의 근무 시작 시각. 근무 시간이 00:00에 시작하면(기본 일정) 09:00입니다. 쉬는 날은 건너뜁니다 |
 
 다른 값은 사용법 오류입니다. 미룬 횟수는 어느 쪽이든 한 번으로 셉니다.
 

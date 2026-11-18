@@ -16,6 +16,8 @@ import type {
   ListView,
   BudgetView,
   NextView,
+  NoOfferCode,
+  NoOfferWhy,
   OfferWhy,
   PanelAction,
   ReadyView,
@@ -26,8 +28,9 @@ import type {
   UpdateView,
   WhyView,
 } from './protocol.ts'
+import { NO_OFFER_CODES } from './protocol.ts'
 import { sectionOf, sortRows, trimRows } from './rows.ts'
-import { cleanText, displayTitle } from './text.ts'
+import { cleanText, displayTitle, isRepoName } from './text.ts'
 
 export const CONTRACT_VERSION = 1
 /** kairos의 ITEM_ID와 같은 모양이다. */
@@ -113,8 +116,6 @@ function parseDeploy(value: unknown): DeployView | null {
 const RULE_ID = /^[a-z0-9_]{1,16}\.[a-z0-9_]{1,40}$/
 const FACT_CODE = /^[a-z][a-z_]{0,31}$/
 const FACT_LIMIT = 16
-/** GitHub 저장소 이름 모양(`owner/name`). kairos가 플레이북 정규식으로 검사했지만 여기서 다시 거른다. */
-const REPO_NAME = /^[A-Za-z0-9-]{1,39}\/[A-Za-z0-9_.-]{1,100}$/
 /** 기준 브랜치. kairos-config의 검사와 같은 모양(`origin/` + 안전한 글자)이다. */
 const BASE_BRANCH = /^origin\/[A-Za-z0-9._\/-]{1,200}$/
 
@@ -125,10 +126,18 @@ const codes = (value: unknown, pattern: RegExp, limit: number): string[] =>
 function parseOfferWhy(value: unknown): OfferWhy | null {
   if (!isRecord(value)) return null
   const { repo, workspace, base } = value
-  if (typeof repo !== 'string' || !REPO_NAME.test(repo)) return null
-  if (typeof workspace !== 'string' || !REPO_NAME.test(workspace)) return null
+  // 저장소 이름은 kairos가 플레이북 정규식으로 검사했지만 여기서 다시 거른다.
+  if (!isRepoName(repo) || !isRepoName(workspace)) return null
   if (typeof base !== 'string' || !BASE_BRANCH.test(base)) return null
   return { repo, workspace, base, checks: codes(value.checks, FACT_CODE, FACT_LIMIT) }
+}
+
+const isNoOfferCode = (value: unknown): value is NoOfferCode => typeof value === 'string' && (NO_OFFER_CODES as readonly string[]).includes(value)
+
+/** 표에 없는 코드면 통째로 버린다. 저장소만 모양이 틀리면 저장소만 버린다. */
+function parseNoOffer(value: unknown): NoOfferWhy | null {
+  if (!isRecord(value) || !isNoOfferCode(value.code)) return null
+  return { code: value.code, repo: isRepoName(value.repo) ? value.repo : null }
 }
 
 function parseWhy(value: unknown): WhyView | null {
@@ -141,6 +150,7 @@ function parseWhy(value: unknown): WhyView | null {
     attendees: count(value.attendees) || null,
     startsAt: startsAt !== null && !Number.isNaN(Date.parse(startsAt)) ? startsAt : null,
     offer: parseOfferWhy(value.offer),
+    noOffer: parseNoOffer(value.noOffer),
   }
 }
 

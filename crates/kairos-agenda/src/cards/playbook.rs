@@ -16,13 +16,14 @@ use crate::item::ItemState;
 
 /// 세션 프롬프트에 들어갈 수 있는 유일한 외부 값의 모양이다. 수락 쪽은 이 정규식을 다시 검사한다.
 /// 조직은 프로필의 플레이북 대상(설계 7.2의 매핑표)에서 오고 이스케이프한다. 대상이 없으면 어떤 URL도 받지 않는다.
+/// GitHub 조직 이름은 대소문자를 가리지 않고, 설정은 소문자로 바꿔 둔다. 주소는 GitHub가 준 대소문자 그대로라 조직 부분만 대소문자를 무시한다.
 static ISSUE_URL: LazyLock<Regex> = LazyLock::new(|| {
     let owners: Vec<String> =
         kairos_core::profile::current().playbooks.owners().into_iter().map(regex::escape).collect();
     if owners.is_empty() {
         return Regex::new(r"[^\s\S]").expect("상수 정규식");
     }
-    Regex::new(&format!(r"^https://github\.com/(?:{})/[A-Za-z0-9_.-]+/(?:pull|issues)/[0-9]+$", owners.join("|")))
+    Regex::new(&format!(r"^https://github\.com/(?i:{})/[A-Za-z0-9_.-]+/(?:pull|issues)/[0-9]+$", owners.join("|")))
         .expect("이스케이프한 조직의 정규식")
 });
 
@@ -103,6 +104,83 @@ pub fn playbook_for(reason: ItemReason, state: ItemState, object: Option<&Object
     let url = object.permalink.as_deref().filter(|url| ISSUE_URL.is_match(url))?;
     kairos_core::profile::current().playbooks.target_for_url(url)?;
     Playbook::choose(reason, object)
+}
+
+/// GitHub 이슈와 PR 주소의 모양. 매핑표 밖 조직도 받는다. 제안이 없는 까닭에 저장소 이름을 쓸 때만 쓰고, 세션 입력에는 쓰지 않는다.
+static GITHUB_URL: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"^https://github\.com/([A-Za-z0-9][A-Za-z0-9-]{0,38})/([A-Za-z0-9_.-]{1,100})/(?:pull|issues)/[0-9]+$")
+        .expect("상수 정규식")
+});
+
+/// 주소에서 `owner/name`을 뽑는다. 모양이 틀리거나 이름이 `.`, `..`이면 None이다.
+pub fn github_repo_of(url: &str) -> Option<String> {
+    let found = GITHUB_URL.captures(url)?;
+    let (owner, name) = (found.get(1)?.as_str(), found.get(2)?.as_str());
+    (name != "." && name != "..").then(|| format!("{owner}/{name}"))
+}
+
+string_enum! {
+    /// 에이전트 제안이 없는 까닭. 고칠 수 없는 조건을 먼저 보고, 설정으로 풀 수 있는 저장소 조건(`unmapped`)은 뒤에 본다.
+    pub enum NoOffer {
+        /// 미뤄 둔 일이다. 다시 올라오면 제안한다.
+        Parked => "parked",
+        /// 이슈나 PR이 닫혔거나 병합됐다.
+        Closed => "closed",
+        /// 이 사유와 종류의 일을 맡는 플레이북이 없다(내 PR의 CI, PR 답장 같은 일).
+        Unsupported => "unsupported",
+        /// 연 사람이 본인(T0)이나 조직의 사람(T1)이 아니다.
+        UntrustedAuthor => "untrusted_author",
+        /// 조직 밖 사람의 글을 본 적이 있다.
+        Outsider => "outsider",
+        /// 플레이북 대상 저장소가 아니다. 사용자가 `config.toml`의 `[[playbooks]]`로 더할 수 있다.
+        Unmapped => "unmapped",
+        /// 같은 이슈에 이미 세션이 있다.
+        Session => "session",
+        /// 같은 이슈의 다른 항목에 제안이 붙어 있다.
+        Sibling => "sibling",
+    }
+}
+
+/// 제안이 없는 GitHub 이슈와 PR의 까닭. 판정은 `playbook_of`의 조건을 같은 객체에서 다시 본다. 제안이 있어야 하는데 없다면
+/// 세션이나 한 이슈 한 버튼 조건이 막은 것이다. 이슈와 PR이 아니거나 열린 항목이 아니면 None이다.
+pub fn no_offer_of(
+    connection: &Connection,
+    reason: ItemReason,
+    state: ItemState,
+    object_key: &str,
+    object: Option<&ObjectRow>,
+) -> KairosResult<Option<NoOffer>> {
+    let Some(object) = object.filter(|object| matches!(object.kind, ObjectKind::Issue | ObjectKind::PullRequest))
+    else {
+        return Ok(None);
+    };
+    match state {
+        ItemState::Parked => return Ok(Some(NoOffer::Parked)),
+        ItemState::Open => {}
+        ItemState::Accepted | ItemState::Closed => return Ok(None),
+    }
+    if object.state.as_deref() != Some("open") {
+        return Ok(Some(NoOffer::Closed));
+    }
+    if Playbook::choose(reason, object).is_none() {
+        return Ok(Some(NoOffer::Unsupported));
+    }
+    if !matches!(object.trust_tier, Some(TrustTier::T0 | TrustTier::T1)) {
+        return Ok(Some(NoOffer::UntrustedAuthor));
+    }
+    if EventRepo::new(connection).has_outsider_on_object(object_key)? {
+        return Ok(Some(NoOffer::Outsider));
+    }
+    let mapped = object
+        .permalink
+        .as_deref()
+        .filter(|url| ISSUE_URL.is_match(url))
+        .and_then(|url| kairos_core::profile::current().playbooks.target_for_url(url));
+    if mapped.is_none() {
+        return Ok(Some(NoOffer::Unmapped));
+    }
+    let running = crate::repo::ReadOnlyRunRepo::new(connection).active_on_object(object_key)?;
+    Ok(Some(if running.is_some() { NoOffer::Session } else { NoOffer::Sibling }))
 }
 
 /// 수락과 kairos-run이 다시 보는 조건. 시작 버튼은 여기에 한 이슈 한 버튼 조건을 더한다.

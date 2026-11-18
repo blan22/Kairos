@@ -182,6 +182,30 @@ macro_rules! scenarios {
             }
 
             #[test]
+            fn 감시자_하루_종일_수집하면_자정을_넘는_멈춤도_이어서_센다() {
+                // 월요일 23:30 KST에 멈췄다.
+                let test = stopped("2026-03-02T14:30:00.000Z");
+                fs::write(test.join("watch-window.tsv"), "0\t1440\t1234567\n").unwrap();
+                let first = at("2026-03-02T14:45:00.000Z").millis();
+                assert!(watchdog(test.path(), first).contains("15분째 멈춤"));
+                // 자정을 지나도 복구로 보지 않으므로 같은 경고를 다시 보내지 않는다.
+                for step in 1..=6 {
+                    assert_eq!(watchdog(test.path(), first + step * 5 * MINUTE_MS), "", "{step}");
+                }
+                assert!(!fs::read_to_string(test.join("watchdog.last")).unwrap().is_empty());
+            }
+
+            #[test]
+            fn 감시자_전날이_쉬는_날이면_자정부터_센다() {
+                // watch.tsv의 수정 시각이 오늘이므로 장면은 오늘 밤에서 내일로 넘어간다.
+                let today = SystemClock.now().local_date();
+                let test = stopped(&format!("{today}T14:00:00.000Z"));
+                fs::write(test.join("watch-window.tsv"), "0\t1440\t1234567\n").unwrap();
+                write_watch(test.path(), "active\t0\n");
+                assert_eq!(watchdog(test.path(), at(&format!("{today}T15:05:00.000Z")).millis()), "");
+            }
+
+            #[test]
             fn 감시자_소스별_ok가_허용_지연을_넘으면_소스_이름으로_알린다() {
                 let test = TestHome::new();
                 let db = test.open_db();

@@ -271,10 +271,10 @@ impl Cli {
     }
 }
 
-/// 합성 조직 프로필. `Profile::fixture`와 같은 값이다.
+/// 합성 조직 프로필. `Profile::fixture`의 조직 값과 같다. 일정은 적지 않아 실행 파일은 기본 일정(언제나)으로 돈다.
 pub const EXAMPLE_ORG: &str = include_str!("../../../../examples/org.toml");
 
-/// 시험 프로필(`Profile::fixture`)과 같은 값을 설정 파일로 쓴다. 실행 파일은 설정 파일에서 프로필을 읽는다.
+/// 시험 프로필(`Profile::fixture`)의 조직 값을 설정 파일로 쓴다. 실행 파일은 설정 파일에서 프로필을 읽는다. 일정은 기본 일정이다.
 pub fn write_fixture_config(root: &Path) {
     use std::os::unix::fs::PermissionsExt;
     let files = [

@@ -11,7 +11,7 @@ use kairos_policy::{tick_end_minutes, tick_start_minutes};
 use kairos_store::Connection;
 use serde::Serialize;
 
-/// 09:00~20:00 밖과 비근무일에는 소스 주기가 이보다 짧아도 이 간격으로만 호출한다.
+/// 수집 시간 밖과 비근무일(쉬는 날)에는 소스 주기가 이보다 짧아도 이 간격으로만 호출한다.
 pub const OFF_HOURS_INTERVAL_SECONDS: i64 = 3600;
 /// launchd는 3분 격자로 돈다. 앞 실행의 끝 시각 기준이라 180초가 조금 안 된 틱도 제 차례다.
 pub const DUE_TOLERANCE_SECONDS: i64 = 45;

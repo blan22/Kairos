@@ -1,5 +1,5 @@
 use kairos_core::{Instant, KairosResult};
-use kairos_policy::tick_start_minutes;
+use kairos_policy::collecting_since;
 use kairos_store::row::sql;
 use kairos_store::{Connection, OptionalExtension, params};
 
@@ -36,11 +36,11 @@ impl<'a> TickClockRepo<'a> {
     }
 
     /// 이번 틱을 적고 복귀 시각을 돌려준다. P1 알림 합치기의 기준이다(설계 16절).
-    /// 공백은 그날 수집이 시작된 뒤부터 잰다. 밤과 주말은 수집이 쉬는 시간이라 근무일 아침의 첫 틱은 복귀가 아니다.
+    /// 공백은 수집이 이어진 구간 안에서만 잰다. 수집 시간을 좁힌 일정에서는 밤과 주말이 쉬는 시간이라 근무일 아침의 첫 틱은 복귀가 아니다.
     /// 얼어붙은 틱은 공백과 무관하게 복귀다. `at`에 깨어난 시각을 넘긴다.
     pub fn note_tick(&self, at: Instant, frozen: bool) -> KairosResult<Option<Instant>> {
         let row = self.get()?;
-        let day_start = Instant::at_local(at.local_date(), tick_start_minutes());
+        let day_start = collecting_since(at);
         // 저장된 시각을 읽지 못하면 원본의 NaN처럼 공백 비교가 거짓이 된다.
         let floor = match &row {
             Some((last_tick_at, _)) => Instant::parse(last_tick_at).map(|last| last.max(day_start)),

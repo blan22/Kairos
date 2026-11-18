@@ -338,10 +338,23 @@ test('추천 이유는 규칙 ID와 사실 코드를 낱말 모양으로만 옮�
     attendees: 4,
     startsAt: '2026-11-04T05:00:00.000Z',
     offer: null,
+    noOffer: null,
   })
   const bad = why({ rule: 'P1.CI failed; rm', events: -2, facts: ['checks_failed', 'checks_failed', 'Bad-Code', 7, '$(id)'], attendees: -3, startsAt: '내일' })
   const [odd] = parseList(listJson([item(1, { why: bad })]))?.items ?? []
-  assert.deepEqual(odd?.why, { rule: null, events: 0, facts: ['checks_failed'], attendees: null, startsAt: null, offer: null })
+  assert.deepEqual(odd?.why, { rule: null, events: 0, facts: ['checks_failed'], attendees: null, startsAt: null, offer: null, noOffer: null })
+})
+
+test('제안이 없는 까닭은 표에 있는 코드만 옮기고 저장소는 이름 모양일 때만 남긴다', () => {
+  const noOfferOf = (value: unknown) => parseList(listJson([item(1, { why: why({ noOffer: value }) })]))?.items[0]?.why?.noOffer
+  assert.deepEqual(noOfferOf({ code: 'unmapped', repo: 'acme-synthetic/widget.js' }), { code: 'unmapped', repo: 'acme-synthetic/widget.js' })
+  assert.deepEqual(noOfferOf({ code: 'unsupported' }), { code: 'unsupported', repo: null })
+  for (const repo of ['../etc/passwd', 'acme/..', 'acme/.', 'acme/wid"get', 'acme/widget\n[x]', 'acme widget', 7, 'a'.repeat(40) + '/x']) {
+    assert.deepEqual(noOfferOf({ code: 'unmapped', repo }), { code: 'unmapped', repo: null }, JSON.stringify(repo))
+  }
+  for (const value of [{ code: 'Unmapped' }, { code: 'constructor' }, { code: 'run_me', repo: 'acme/widget' }, { repo: 'acme/widget' }, 'unmapped', null]) {
+    assert.equal(noOfferOf(value), null, JSON.stringify(value))
+  }
 })
 
 test('제안 근거는 저장소와 브랜치 모양이 맞을 때만 옮기고 하나라도 틀리면 근거만 버린다', () => {

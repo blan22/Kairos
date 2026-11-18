@@ -1,12 +1,13 @@
 // orca plugin check가 상태마다 패널을 그린다. 워커는 점검 실행이라 실제 kairos를 부르지 않는다.
-// 점검은 버튼을 누를 수 없다. 처리 중, 처리 실패, 펼친 행, 지금 말고 다른 탭, 검색은 panel.test.tsx가 맡는다.
-// 스토리북에서는 탭을 눌러 볼 수 있어 몇 시나리오에 소스별 수집 상태를 실어 둔다.
+// 점검은 버튼을 누를 수 없다. 처리 중, 처리 실패, 펼친 행, 수집 상태 화면, 검색은 panel.test.tsx가 맡는다.
+// 스토리북에서는 버튼을 눌러 볼 수 있어 몇 시나리오에 소스별 수집 상태와 제안이 없는 까닭을 실어 둔다.
 import { defineCheck, hostError } from 'orca/testing'
 import {
   accepted,
   bundle,
   card,
   carryover,
+  closedObject,
   counts,
   DANGEROUS_TITLE,
   failedCard,
@@ -29,6 +30,7 @@ import {
   snapshotOf,
   sourceRows,
   startable,
+  unoffered,
   updateNotice,
   why,
   workdayRows,
@@ -55,6 +57,7 @@ const everyTier = [
   item(25, { tier: 'P2' }),
   parked(26),
   item(27, { baseline: true }),
+  closedObject(28, 'merged'),
 ]
 
 export default defineCheck({
@@ -103,7 +106,8 @@ export default defineCheck({
   health: answers(snapshotOf(nextJson({ health: 'Slack 수집이 30분 늦습니다' }), listJson())),
   healthWithRows: answers(snapshotOf(nextJson({ health: 'Slack 수집이 30분 늦습니다', counts: counts({ P1: 1, P2: 1 }) }), listJson(shortList))),
   healthWithSources: answers(snapshotOf(nextJson({ health: 'Slack 수집이 37분 늦습니다', sources: sourceRows(), counts: counts({ P1: 1, P2: 1 }) }), listJson(shortList))),
-  nowEmptyOthersLeft: answers(snapshotOf(nextJson({ counts: counts({ P2: 1 }, { parked: 1, accepted: 1 }) }), listJson([item(12, { tier: 'P2' }), parked(13), accepted(14)]))),
+  // 손댈 일이 하나뿐이어도 세션과 미룬 일의 묶음을 그린다. 빈 표시는 없다.
+  othersLeft: answers(snapshotOf(nextJson({ counts: counts({ P2: 1 }, { parked: 1, accepted: 1 }) }), listJson([item(12, { tier: 'P2' }), parked(13), accepted(14)]))),
   holdDayOff: held('day_off', shortList),
   holdOffHours: held('off_hours', shortList),
   holdFocus: held('focus', shortList),
@@ -147,6 +151,27 @@ export default defineCheck({
   items40: answers(snapshotOf(nextJson({ card: card([startable(900)]), counts: counts({ P0: 8, P1: 16, P2: 16 }) }), listJson(manyItems(40)))),
   items120: answers(snapshotOf(nextJson({ counts: counts({ P0: 24, P1: 48, P2: 48 }) }), listJson(manyItems(120)))),
   parkedRows: answers(snapshotOf(nextJson({ counts: counts({}, { parked: 3 }) }), listJson([parked(1), parked(2, { parkTrigger: 'deploy' }), parked(3, { parkTrigger: 'kept' })]))),
+  // 닫혔거나 병합된 객체의 일은 정리할 일로 접혀 있다. 펼치면 한 번에 완료할 수 있다.
+  cleanupRows: answers(
+    snapshotOf(
+      nextJson({ counts: counts({ P1: 4 }) }),
+      listJson([item(1), closedObject(2), closedObject(3, 'merged'), closedObject(4, 'closed', { reason: 'review_owed', reasonLabel: '리뷰 요청' })]),
+    ),
+  ),
+  // 제안이 없는 GitHub 일. 펼치면 까닭을 쓰고, 대상 밖 저장소면 설정 조각을 접어 둔다. 수집 상태에는 대상 밖 저장소를 모은다.
+  noOfferRows: answers(
+    snapshotOf(
+      nextJson({ counts: counts({ P1: 5 }) }),
+      listJson([
+        startable(1),
+        unoffered(2, 'unmapped', 'acme-synthetic/widget'),
+        unoffered(3, 'unmapped', 'acme-synthetic/widget'),
+        unoffered(4, 'unmapped', 'contoso-synthetic/atlas'),
+        unoffered(5, 'untrusted_author', 'contoso-synthetic/app'),
+        unoffered(6, 'unsupported', undefined, { reason: 'work_owed', reasonLabel: '할 일' }),
+      ]),
+    ),
+  ),
   baselineRows: answers(snapshotOf(nextJson(), listJson([item(1, { baseline: true }), item(2, { baseline: true })]))),
   manualRow: answers(snapshotOf(nextJson({ counts: counts({ P1: 1 }, { manual: 1 }) }), listJson([manual(1)]))),
   kairosFailed: answers({ next: null, list: null, error: { code: 'bad_output', message: 'kairos 응답을 읽지 못했습니다' } }),

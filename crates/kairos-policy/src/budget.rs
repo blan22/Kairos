@@ -6,13 +6,32 @@
 use kairos_core::Instant;
 
 /// 수집 틱이 도는 시간(현지, 자정 이후 분). 근무 시간과 다르다. launchd 일정, 감시자와 맞물린다.
-/// 시각 값은 모두 프로필의 `schedule`에서 온다. 기본은 9:00~20:00, 근무 10:00~19:30, 점심 12:00~13:30, 묶음 13:30과 18:00이다.
+/// 시각 값은 모두 프로필의 `schedule`에서 온다. 기본은 언제나(모든 요일 00:00~24:00, 점심 없음)이고 묶음은 13:30과 18:00이다.
 pub fn tick_start_minutes() -> u32 {
     schedule().tick.start
 }
 
 pub fn tick_end_minutes() -> u32 {
     schedule().tick.end
+}
+
+/// 지금까지 수집이 쉬지 않고 이어진 구간의 시작. 그 앞의 공백은 수집 시간 밖이라 지연이 아니다.
+/// 보통은 오늘 수집이 시작된 순간이다. 수집이 하루 종일이면 자정을 넘어 이어지므로, 전날도 수집 요일이면 그날로 내려간다.
+/// 모든 요일에 하루 종일 수집하면(기본 일정) 하한이 없다.
+pub fn collecting_since(at: Instant) -> Instant {
+    let schedule = schedule();
+    let mut day = at.local_date();
+    if schedule.tick.start != 0 || schedule.tick.end != kairos_core::profile::DAY_MINUTES {
+        return Instant::at_local(day, schedule.tick.start);
+    }
+    for _ in 0..7 {
+        let before = day.add_days(-1);
+        if !schedule.days.contains(before.weekday()) {
+            return Instant::at_local(day, 0);
+        }
+        day = before;
+    }
+    Instant::from_millis(0)
 }
 
 fn schedule() -> &'static kairos_core::profile::Schedule {
@@ -36,6 +55,17 @@ pub const CARD_TTL_MS: i64 = 3_600_000;
 pub const P1_DUE_MS: i64 = 90 * 60_000;
 pub fn work_start_minutes() -> u32 {
     schedule().work.start
+}
+
+/// 근무 시작이 자정인 일정(기본값)의 아침. '내일 아침'과 날짜만 있는 일정이 쓴다.
+pub const MORNING_FALLBACK_MINUTES: u32 = 9 * 60;
+
+/// '내일 아침'처럼 하루를 여는 시각. 근무 시작이 있으면 그 시각이고, 하루 종일 근무면 09:00이다.
+pub fn morning_minutes() -> u32 {
+    match work_start_minutes() {
+        0 => MORNING_FALLBACK_MINUTES,
+        start => start,
+    }
 }
 
 pub fn work_end_minutes() -> u32 {

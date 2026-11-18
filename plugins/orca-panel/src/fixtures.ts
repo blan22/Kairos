@@ -99,6 +99,17 @@ export function why(overrides: Json = {}): Json {
   return { rule: 'p1.ci_failed', events: 3, facts: ['pull_request', 'authored_me', 'checks_failed'], ...overrides }
 }
 
+/** 닫혔거나 병합된 이슈와 PR에 걸린 답장 필요. 패널은 정리할 일로 접는다. */
+export function closedObject(id: number, fact: 'closed' | 'merged' = 'closed', overrides: Json = {}): Json {
+  return item(id, { reason: 'reply_owed', reasonLabel: '답장 필요', why: why({ rule: 'p1.direct_mention', events: 1, facts: ['issue', fact] }), ...overrides })
+}
+
+/** 제안이 없는 까닭이 붙은 GitHub 일. 저장소 이름은 합성이다. */
+export function unoffered(id: number, code: string, repo?: string, overrides: Json = {}): Json {
+  const noOffer = repo === undefined ? { code } : { code, repo }
+  return item(id, { why: why({ rule: 'p2.assigned', events: 1, facts: ['issue', 'assigned_me'], noOffer }), ...overrides })
+}
+
 /** 시작 버튼이 있는 항목. */
 export function startable(id: number, overrides: Json = {}): Json {
   const key = String(id)

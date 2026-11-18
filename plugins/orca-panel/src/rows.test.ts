@@ -1,32 +1,31 @@
 import { assert, test } from 'orca/testing'
-import { accepted, item, listJson, manual, offered, parked, startable } from './fixtures.ts'
+import { accepted, item, listJson, manual, offered, parked, startable, why } from './fixtures.ts'
 import { parseList } from './parse.ts'
 import type { ItemRow } from './protocol.ts'
 import {
   canStart,
   commitMarks,
+  countedOf,
   defaultOpen,
   EMPTY_MARKS,
   groupRows,
   hasFresh,
   hasOffer,
+  isClosedObject,
   isCompact,
+  isCounted,
   isFresh,
   isProviderId,
-  isTabId,
   marksOf,
   providerOf,
   providersOf,
   ROW_LIMIT,
   sameMarks,
+  SECTION_ORDER,
   sectionOf,
   sortReady,
   sortRows,
   startMarks,
-  TAB_ORDER,
-  TAB_SECTIONS,
-  tabCount,
-  tabOf,
   trimRows,
   visibleCount,
   type Marks,
@@ -36,6 +35,9 @@ import {
 const rows = (...raw: Record<string, unknown>[]): ItemRow[] => parseList(listJson(raw))?.items ?? []
 const row = (raw: Record<string, unknown>): ItemRow => rows(raw)[0] as ItemRow
 const idsOf = (list: readonly ItemRow[]): number[] => list.map(each => each.id)
+/** 닫혔거나 병합된 GitHub 객체의 일. */
+const closedItem = (id: number, fact: 'closed' | 'merged' = 'closed', overrides: Record<string, unknown> = {}) =>
+  item(id, { why: why({ facts: ['issue', fact] }), ...overrides })
 
 test('묶음 판정은 세션, 미룸, 기준선, 등급 순서다', () => {
   assert.equal(sectionOf(row(accepted(1))), 'running')
@@ -46,6 +48,19 @@ test('묶음 판정은 세션, 미룸, 기준선, 등급 순서다', () => {
   assert.equal(sectionOf(row(item(1, { tier: 'P1' }))), 'today')
   assert.equal(sectionOf(row(item(1, { tier: 'P2' }))), 'relaxed')
   assert.equal(sectionOf(row({ ...accepted(1), state: 'closed' })), 'running')
+})
+
+test('닫혔거나 병합된 객체의 일은 등급과 기준선보다 앞서 정리할 일로 모이고 세션과 미룸은 자리를 지킨다', () => {
+  assert.equal(sectionOf(row(closedItem(1))), 'cleanup')
+  assert.equal(sectionOf(row(closedItem(1, 'merged', { tier: 'P0' }))), 'cleanup')
+  assert.equal(sectionOf(row(closedItem(1, 'closed', { baseline: true }))), 'cleanup')
+  assert.equal(sectionOf(row({ ...closedItem(1), state: 'parked' })), 'parked')
+  assert.equal(sectionOf(row({ ...closedItem(1), run: { id: 'r', state: 'started' } })), 'running')
+  assert.equal(isClosedObject(row(closedItem(1))), true)
+  // 근거가 없거나 사실 코드가 열린 객체면 정리할 일이 아니다.
+  assert.equal(isClosedObject(row(item(1))), false)
+  assert.equal(isClosedObject(row(item(1, { why: why({ facts: ['issue', 'closedish'] }) }))), false)
+  assert.equal(sectionOf(row(item(1, { why: why({ facts: ['pull_request', 'approved'] }) }))), 'today')
 })
 
 test('제안은 등급보다 앞서 묶지만 긴급, 세션, 미룸, 기준선은 자리를 지킨다', () => {
@@ -113,23 +128,18 @@ test('자르기 순서에서는 세션이 긴급보다 앞이다', () => {
   assert.deepEqual(idsOf(sortRows(rows(item(1, { tier: 'P0' }), accepted(2)))), [2, 1])
 })
 
-test('탭은 묶음을 빠짐없이 한 번씩 나눠 갖고 긴급과 제안은 지금에 있다', () => {
-  assert.deepEqual(TAB_ORDER, ['now', 'waiting', 'sessions'])
-  assert.deepEqual(TAB_SECTIONS.now, ['urgent', 'offer', 'today'])
-  assert.deepEqual(TAB_SECTIONS.waiting, ['relaxed', 'parked', 'baseline'])
-  assert.deepEqual(TAB_SECTIONS.sessions, ['running'])
-  const all: Section[] = ['running', 'urgent', 'offer', 'today', 'relaxed', 'parked', 'baseline']
-  assert.deepEqual([...TAB_ORDER.flatMap(tab => TAB_SECTIONS[tab])].sort(), [...all].sort())
-  assert.deepEqual(all.map(tabOf), ['sessions', 'now', 'now', 'now', 'waiting', 'waiting', 'waiting'])
-  for (const value of ['now', 'waiting', 'sessions']) assert.equal(isTabId(value), true, value)
-  // 수집 상태는 탭이 아니라 머리말의 도구다.
-  for (const value of ['status', '', 'theory', 'constructor', '__proto__', null, undefined, 1]) assert.equal(isTabId(value), false, String(value))
+test('그리는 순서는 묶음을 빠짐없이 한 번씩 담고 긴급이 맨 위, 이전부터 있던 일이 맨 아래다', () => {
+  assert.deepEqual(SECTION_ORDER, ['urgent', 'running', 'offer', 'today', 'relaxed', 'parked', 'cleanup', 'baseline'])
+  const all: Section[] = ['running', 'urgent', 'offer', 'today', 'relaxed', 'parked', 'cleanup', 'baseline']
+  assert.deepEqual([...SECTION_ORDER].sort(), [...all].sort())
+  assert.deepEqual(Object.keys(groupRows([])).sort(), [...all].sort())
 })
 
-test('탭 건수는 그 탭의 묶음을 더하고 넘기지 않은 줄도 센다', () => {
-  const groups = groupRows(rows(item(1, { tier: 'P0' }), startable(2), item(3), item(4, { tier: 'P2' }), parked(5), item(6, { baseline: true }), accepted(7)))
-  assert.deepEqual([tabCount('now', groups, {}), tabCount('waiting', groups, {}), tabCount('sessions', groups, {})], [3, 3, 1])
-  assert.equal(tabCount('waiting', groups, { relaxed: 4, today: 9, constructor: 7 }), 7)
+test('세는 일은 손댈 열린 일뿐이고 넘기지 않은 줄도 그 묶음이면 센다', () => {
+  const list = rows(item(1, { tier: 'P0' }), startable(2), item(3), item(4, { tier: 'P2' }), parked(5), item(6, { baseline: true }), accepted(7), closedItem(8))
+  assert.deepEqual(list.filter(isCounted).map(each => each.id).sort((a, b) => a - b), [1, 2, 3, 4])
+  assert.equal(countedOf(list), 4)
+  assert.equal(countedOf(list, { relaxed: 4, today: 9, parked: 3, cleanup: 2, baseline: 5, running: 1, constructor: 7 }), 17)
 })
 
 test('접기 기본값은 기준선은 접힘이고 미룬 일은 여유 있을 때가 길 때만 접힌다', () => {
@@ -139,10 +149,11 @@ test('접기 기본값은 기준선은 접힘이고 미룬 일은 여유 있을 
       ...rows(...Array.from({ length: relaxed }, (_, index) => item(index + 100, { tier: 'P2' }))),
     ])
   assert.equal(defaultOpen('baseline', groupsOf(0, 0)), false)
+  assert.equal(defaultOpen('cleanup', groupsOf(0, 0)), false)
   assert.equal(defaultOpen('parked', groupsOf(0, 0)), true)
   assert.equal(defaultOpen('parked', groupsOf(3, 5)), true)
   assert.equal(defaultOpen('parked', groupsOf(0, 6)), false)
-  // 여유 있을 때는 대기 탭의 주인이라 늘 펼쳐져 있다.
+  // 손댈 일의 묶음은 접는 머리글이 없다.
   for (const section of ['urgent', 'running', 'offer', 'today', 'relaxed'] as const) assert.equal(defaultOpen(section, groupsOf(1, 6)), undefined)
 })
 
@@ -195,7 +206,7 @@ test('세션 소식은 실패, 질문, 확인, 준비됨, 끝남, 그 밖 순서
 })
 
 test('기다려도 되는 묶음만 한 줄로 그린다', () => {
-  assert.deepEqual(['urgent', 'running', 'offer', 'today', 'relaxed', 'parked', 'baseline'].filter(section => isCompact(section as never)), ['relaxed', 'parked', 'baseline'])
+  assert.deepEqual(SECTION_ORDER.filter(section => isCompact(section)), ['relaxed', 'parked', 'cleanup', 'baseline'])
 })
 
 test('프로바이더는 수집 소스 이름이고 직접 추가와 모르는 소스는 따로 둔다', () => {
@@ -233,8 +244,8 @@ test('처음 읽은 목록이 새 일의 기준이고 그 뒤에 열린 일만 �
   assert.deepEqual(marks, { floor: 5, seen: [], known: 5, unseen: 0 })
   // 이미 기준이 있으면 그대로 둔다.
   assert.equal(startMarks(marks, rows(item(9))), marks)
-  const later = rows(item(3), item(5), item(8), item(9, { baseline: true }), manual(10), parked(11), accepted(12), { ...item(13), state: 'accepted' })
-  // 기준선, 직접 추가, 미룬 일, 세션에 맡긴 일은 사용자가 이미 아는 일이다.
+  const later = rows(item(3), item(5), item(8), item(9, { baseline: true }), manual(10), parked(11), accepted(12), { ...item(13), state: 'accepted' }, closedItem(14))
+  // 기준선, 직접 추가, 미룬 일, 세션에 맡긴 일은 사용자가 이미 아는 일이다. 닫힌 객체의 일은 접힌 정리할 일에 있어 새 일로 치지 않는다.
   assert.deepEqual(fresh(marks, later), [8])
 })
 

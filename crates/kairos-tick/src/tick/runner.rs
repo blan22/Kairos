@@ -31,6 +31,18 @@ use crate::registry::not_connected_results;
 use crate::repo::TickRunRepo;
 use crate::watch::WatchFile;
 
+/// 수집 시간 밖이라 건너뛴 까닭. 설정한 요일과 시각을 그대로 쓴다.
+fn skip_reason() -> String {
+    let schedule = &kairos_core::profile::current().schedule;
+    let clock = |minutes: u32| format!("{:02}:{:02}", minutes / 60, minutes % 60);
+    let days = if schedule.days == kairos_core::profile::WorkDays::WEEKDAYS {
+        "근무일".to_owned()
+    } else {
+        schedule.days.names().join(",")
+    };
+    format!("수집 시간({days} {}~{}) 밖", clock(schedule.tick.start), clock(schedule.tick.end))
+}
+
 fn in_tick_window(now: Instant) -> bool {
     OffDates::new().is_workday(now.local_date())
         && (tick_start_minutes()..tick_end_minutes()).contains(&now.local_minutes())
@@ -139,7 +151,7 @@ impl TickRunner {
         home.ensure()?;
         if !force && !in_tick_window(now) {
             report.status = CollectStatus::Skipped;
-            report.reason = Some("수집 시간(근무일 09:00~20:00) 밖".to_owned());
+            report.reason = Some(skip_reason());
             report.tool_results = self.sweep_while_idle()?;
             return Ok(report);
         }

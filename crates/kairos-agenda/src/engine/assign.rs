@@ -2,9 +2,9 @@
 
 use std::collections::BTreeSet;
 
-use kairos_core::{Instant, KairosError, KairosResult, OffDates};
+use kairos_core::{Instant, KairosError, KairosResult, LocalDate, OffDates};
 use kairos_ledger::{EventRepo, ItemEvent, ObjectRepo, upcoming_deploys};
-use kairos_policy::{DeployLinkStatus, DeployLinker, Disposition, ItemReason, P1_DUE_MS, work_start_minutes};
+use kairos_policy::{DeployLinkStatus, DeployLinker, Disposition, ItemReason, P1_DUE_MS, morning_minutes};
 use kairos_store::Connection;
 
 use super::EngineReport;
@@ -42,14 +42,11 @@ fn due_at(
         }
         // ingest는 날짜 모양만 본다. 달력에 없는 날이어도 항목은 열어야 하므로 기한만 비운다.
         let start_date = object.as_ref().and_then(|object| object.start_date.as_deref());
-        return match start_date.filter(|date| Instant::parse(date).is_some()) {
-            Some(date) => {
-                let hour = work_start_minutes() / 60;
-                let minute = work_start_minutes() % 60;
-                iso_of(&format!("{date}T{hour:02}:{minute:02}:00+09:00")).map(Some)
-            }
-            None => Ok(None),
-        };
+        // 날짜만 있는 일정의 기한은 그날 아침이다. 프로필 시간대로 읽는다.
+        return Ok(start_date
+            .filter(|date| Instant::parse(date).is_some())
+            .and_then(LocalDate::parse)
+            .map(|date| Instant::at_local(date, morning_minutes()).to_iso()));
     }
     if tier == ItemTier::P2 {
         return Ok(None);

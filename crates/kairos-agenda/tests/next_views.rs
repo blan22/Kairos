@@ -103,6 +103,90 @@ fn 시작_버튼은_플레이북_조건을_통과한_담당_이슈에만_있다(
 }
 
 #[test]
+fn 제안이_없는_github_일은_까닭과_저장소를_근거에_싣는다() {
+    let db = seeded();
+    let repo = PLAYBOOK_REPOS[0];
+    let when = kst(MON, "10:00");
+    let shaped = |number, permalink: String, trust_tier| NormalizedObject {
+        permalink: Some(permalink),
+        trust_tier: Some(trust_tier),
+        ..issue(number)
+    };
+    let objects = vec![
+        shaped(1, format!("https://github.com/{PLAYBOOK_ORG}/{repo}/issues/1"), TrustTier::T1),
+        shaped(2, format!("https://github.com/{PLAYBOOK_ORG}/{repo}/issues/2"), TrustTier::T3),
+        shaped(3, format!("https://github.com/{PLAYBOOK_ORG}/other-repo/issues/3"), TrustTier::T1),
+        shaped(4, "https://github.com/acme/widget/issues/4".into(), TrustTier::T1),
+        NormalizedObject {
+            state: Some("closed".into()),
+            ..shaped(5, format!("https://github.com/{PLAYBOOK_ORG}/{repo}/issues/5"), TrustTier::T1)
+        },
+        // GitHub는 조직 이름의 대소문자를 그대로 준다. 설정은 소문자라도 같은 조직이다.
+        shaped(6, format!("https://github.com/{}/{repo}/issues/6", PLAYBOOK_ORG.to_uppercase()), TrustTier::T1),
+    ];
+    github(&when).objects(objects.clone()).run(&db);
+    for object in &objects {
+        let event = NormalizedEvent {
+            object_key: Some(object.object_key.clone()),
+            trust_tier: Some(TrustTier::T1),
+            ..comment(&format!("c{}", object.external_id), &when)
+        };
+        github(&when).events(vec![event]).run(&db);
+    }
+    refresh(&db, &when);
+    let mut rows = list(&db, &when).items;
+    kairos_agenda::Explainer::new(db.connection()).fill(&mut rows).unwrap();
+    let reasons: Vec<_> = rows
+        .iter()
+        .map(|row| {
+            let why = row.why.as_ref().unwrap();
+            why.no_offer.as_ref().map(|no| (no.code.as_str(), no.repo.clone()))
+        })
+        .collect();
+    let repo_of = |name: &str| Some(name.to_owned());
+    assert_eq!(rows.len(), 6, "닫힌 이슈의 글도 항목이 된다");
+    assert_eq!(reasons[0], None, "제안이 붙은 줄에는 까닭이 없다");
+    assert_eq!(reasons[1], Some(("untrusted_author", repo_of(&format!("{PLAYBOOK_ORG}/{repo}")))));
+    assert_eq!(reasons[2], Some(("unmapped", repo_of(&format!("{PLAYBOOK_ORG}/other-repo")))));
+    assert_eq!(reasons[3], Some(("unmapped", None)), "조직 밖 저장소는 더하라고 안내하지 않는다");
+    assert_eq!(reasons[4].as_ref().map(|reason| reason.0), Some("closed"));
+    assert_eq!(reasons[5], None, "대문자 조직 주소에도 제안이 붙는다");
+    assert!(rows[5].playbook.is_some());
+    assert!(rows[4].why.as_ref().unwrap().facts.contains(&"closed"), "닫힌 객체는 사실 코드로도 알린다");
+    let text = serde_json::to_string(rows[2].why.as_ref().unwrap()).unwrap();
+    assert!(text.contains(r#""noOffer":{"code":"unmapped","repo":"contoso/other-repo"}"#), "{text}");
+    assert!(!serde_json::to_string(rows[0].why.as_ref().unwrap()).unwrap().contains("noOffer"), "없으면 키를 뺀다");
+}
+
+#[test]
+fn 내_pr_확인은_맡을_플레이북이_없다고_알린다() {
+    let db = seeded();
+    let when = kst(MON, "10:00");
+    let url = format!("https://github.com/{PLAYBOOK_ORG}/{}/pull/9", PLAYBOOK_REPOS[0]);
+    let object = NormalizedObject {
+        permalink: Some(url),
+        trust_tier: Some(TrustTier::T0),
+        checks_state: Some("FAILURE".into()),
+        ..pull_request(9)
+    };
+    let key = object.object_key.clone();
+    github(&when).objects(vec![object]).run(&db);
+    let event = NormalizedEvent {
+        object_key: Some(key),
+        trust_tier: Some(TrustTier::T1),
+        event_type: EventType::GhCiFailed,
+        ..comment("ci9", &when)
+    };
+    github(&when).events(vec![event]).run(&db);
+    refresh(&db, &when);
+    let mut rows = list(&db, &when).items;
+    kairos_agenda::Explainer::new(db.connection()).fill(&mut rows).unwrap();
+    let row = rows.iter().find(|row| row.reason == ItemReason::MyPrAttention).expect("내 PR 확인 항목");
+    let no_offer = row.why.as_ref().unwrap().no_offer.as_ref().unwrap();
+    assert_eq!(no_offer.code.as_str(), "unsupported");
+}
+
+#[test]
 fn 세션이_잠겨_있으면_제안은_보이고_시작만_없다() {
     let db = seeded();
     let when = kst(MON, "10:00");
