@@ -83,6 +83,8 @@ rm -rf "$HOME/Library/Application Support/kairos/current/plugins/orca-panel/.orc
 orca plugin restart local.kairos
 ```
 
+**업데이트 뒤 패널이 `errored`이고 오류가 `plugin worker activation was cancelled`입니다.** 적재 직후 워커가 다시 뜨려던 때에 재시작이 겹쳐 멈춘 것입니다. setup과 업데이트는 재시작한 뒤 패널 상태를 읽고 세 번까지 다시 띄웁니다. 그래도 멈춰 있으면 `orca plugin restart local.kairos`를 실행하세요. 승인을 다시 받을 필요는 없습니다.
+
 **새 일 점이 사라지지 않습니다.** 그 칩을 고르고 2초 넘게 본 뒤 다른 칩으로 옮기세요. 잠깐 지나친 화면은 본 것으로 기록하지 않습니다. 패널 권한에 플러그인 저장소가 빠져 있으면 점이 아예 없습니다. 이때는 `kairos setup`으로 다시 승인하세요.
 
 **패널이 비어 있습니다.** 터미널에서 `kairos next`가 같은 내용을 출력하는지 확인하세요. 터미널에서도 비어 있다면 [카드나 항목이 보이지 않습니다](#카드나-항목이-보이지-않습니다)를 보세요.
