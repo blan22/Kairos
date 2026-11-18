@@ -17,10 +17,10 @@ kairos는 osascript로 알림을 보내지 않습니다. osascript 알림은 '�
 
 보통은 직접 할 일이 없습니다. `kairos setup`의 마지막 단계와 `kairos notify setup`이 아래 두 명령을 대신 실행합니다. 터미널에서 묻지 않고 바로 macOS 권한 창을 띄웁니다.
 
-손으로 하려면 다음 명령을 실행하세요. 경로의 `0.7.0`는 설치한 버전으로 바꿉니다.
+손으로 하려면 다음 명령을 실행하세요. 경로의 `0.7.1`는 설치한 버전으로 바꿉니다.
 
 ```sh
-app="$HOME/Library/Application Support/kairos/0.7.0/ops/notifier/KairosNotifier.app"
+app="$HOME/Library/Application Support/kairos/0.7.1/ops/notifier/KairosNotifier.app"
 /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -f "$app"
 "$app/Contents/MacOS/KairosNotifier" setup
 ```

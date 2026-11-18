@@ -15,10 +15,10 @@ Orca에서 kairos를 쓰는 플러그인입니다. 상태 표시줄에 제안 �
 > [!IMPORTANT]
 > 승인은 사용자가 합니다. 플러그인 목록에서 켜는 승인(`enable --approve`)으로는 개발 폴더의 승인이 풀리지 않습니다.
 
-직접 하려면 아래 명령을 실행하고, 출력에 나온 `--approve <지문>`을 붙여 한 번 더 실행하세요. 경로의 `0.7.0`는 설치한 버전으로 바꿉니다.
+직접 하려면 아래 명령을 실행하고, 출력에 나온 `--approve <지문>`을 붙여 한 번 더 실행하세요. 경로의 `0.7.1`는 설치한 버전으로 바꿉니다.
 
 ```sh
-orca plugin dev load "$HOME/Library/Application Support/kairos/0.7.0/plugins/orca-panel"
+orca plugin dev load "$HOME/Library/Application Support/kairos/0.7.1/plugins/orca-panel"
 ```
 
 setup은 로드하거나 승인한 뒤 설치본 패널의 `.orca`를 지우고 `orca plugin restart local.kairos`를 실행합니다. 손으로 로드했다면 이 두 단계도 직접 하세요. Orca(1.4.255에서 확인)는 개발 폴더를 승인할 때 `.orca`를 빼고 해시를 적지만, 워커를 띄울 때는 `.orca`까지 넣고 잽니다. components 패널이면 `dev load`가 매번 `.orca/types`를 쓰기 때문에, 그대로 두면 워커가 `content hash mismatch`로 뜨지 않습니다. 개발 트리에서 편집기 타입이 필요하면 `orca plugin types`로 다시 만드세요.
