@@ -29,6 +29,7 @@ impl Fakes {
 /// 데이터 폴더에 설치본 모양(`current -> 0.2.0`)과 가짜 헬퍼, lsregister, open, orca를 둔다. 호출은 한 파일에 남는다.
 /// `status`는 헬퍼의 권한 상태, `orca_approved`는 승인 없이 올라가는지다.
 /// 데이터 폴더에 `post-exit` 파일이 있으면 헬퍼의 `post`가 그 안의 코드로 끝난다.
+/// `plugin list --json`은 데이터 폴더의 `panel-status` 첫 줄을 패널 상태로 답하고 그 줄을 지운다. 줄이 없으면 `running`이다.
 fn fakes(status: &str, orca_approved: bool) -> Fakes {
     let mut cli = Cli::new();
     let root = cli.root.clone();
@@ -54,6 +55,8 @@ fn fakes(status: &str, orca_approved: bool) -> Fakes {
     let lsregister = root.join("lsregister");
     write_script(&lsregister, &format!("#!/bin/sh\nprintf 'lsregister %s\\n' \"$*\" >> '{log_text}'\n"));
     let orca = root.join("orca");
+    let statuses = root.join("panel-status");
+    let statuses = statuses.to_str().unwrap();
     let pending = if orca_approved {
         "printf 'local.kairos 0.1.0 loaded\\n'\nexit 0".to_owned()
     } else {
@@ -64,7 +67,7 @@ fn fakes(status: &str, orca_approved: bool) -> Fakes {
     write_script(
         &orca,
         &format!(
-            "#!/bin/sh\nprintf 'orca %s\\n' \"$*\" >> '{log_text}'\ncase \"$*\" in\n*--approve*) printf 'approved\\n'; exit 0 ;;\n'plugin restart '*) exit 0 ;;\nesac\n{pending}\n"
+            "#!/bin/sh\nprintf 'orca %s\\n' \"$*\" >> '{log_text}'\ncase \"$*\" in\n*--approve*) printf 'approved\\n'; exit 0 ;;\n'plugin restart '*) exit 0 ;;\n'plugin list --json') s=$(head -n 1 '{statuses}' 2>/dev/null); [ -f '{statuses}' ] && sed -i.bak 1d '{statuses}'; printf '{{\"ok\":true,\"result\":{{\"plugins\":[{{\"pluginKey\":\"local.kairos\",\"status\":\"%s\"}}]}}}}\\n' \"${{s:-running}}\"; exit 0 ;;\nesac\n{pending}\n"
         ),
     );
     cli.set("KAIROS_NOTIFIER", notifier.to_str().unwrap());
@@ -112,8 +115,9 @@ fn setup은_알림_권한을_받고_패널을_승인한다() {
             "notifier setup".to_owned(),
             format!("orca plugin dev load {panel}"),
             format!("orca plugin dev load {panel} --approve {FINGERPRINT}"),
-            // 타입 파일을 지운 뒤 워커를 새로 띄운다.
+            // 타입 파일을 지운 뒤 워커를 새로 띄우고, 떴는지 본다.
             "orca plugin restart local.kairos".to_owned(),
+            "orca plugin list --json".to_owned(),
         ],
         "{}",
         done.out
@@ -149,10 +153,37 @@ fn setup은_이미_받은_권한과_승인을_다시_묻지_않는다() {
     assert!(done.out.contains("Orca 패널을 올렸습니다"), "{}", done.out);
     let calls = fakes.calls();
     // 이미 승인돼 있어도 적재가 타입 파일을 다시 쓴다. 지우고 워커를 새로 띄운다.
-    assert_eq!(calls.len(), 3, "{calls:?}");
+    assert_eq!(calls.len(), 4, "{calls:?}");
     assert_eq!(calls[0], "notifier status");
     assert!(calls[1].starts_with("orca plugin dev load "), "{calls:?}");
-    assert_eq!(calls[2], "orca plugin restart local.kairos");
+    assert_eq!(calls[2..], ["orca plugin restart local.kairos", "orca plugin list --json"]);
+}
+
+/// 적재 직후의 재시도와 setup의 재시작이 겹치면 워커가 `errored`로 멈춘다. 다시 띄워 풀어 준다.
+#[cfg(target_os = "macos")]
+#[test]
+fn setup은_패널_워커가_멈춰_있으면_다시_띄운다() {
+    let fakes = fakes("authorized", true);
+    fs::write(fakes.cli.root.join("panel-status"), "errored\nerrored\n").unwrap();
+    let done = fakes.cli.pipe(&["setup"], b"");
+    assert_eq!(done.status, 0, "{}{}", done.out, done.err);
+    assert!(done.out.contains("Orca 패널을 올렸습니다"), "{}", done.out);
+    assert!(!done.out.contains("워커가 뜨지 않았습니다"), "{}", done.out);
+    let calls = fakes.calls();
+    let settle = ["orca plugin restart local.kairos", "orca plugin list --json"].repeat(3);
+    assert_eq!(calls[2..], settle[..], "{calls:?}");
+}
+
+#[cfg(target_os = "macos")]
+#[test]
+fn setup은_패널_워커가_계속_멈추면_할_일을_알린다() {
+    let fakes = fakes("authorized", true);
+    fs::write(fakes.cli.root.join("panel-status"), "errored\n".repeat(5)).unwrap();
+    let done = fakes.cli.pipe(&["setup"], b"");
+    assert_eq!(done.status, 0, "{}{}", done.out, done.err);
+    assert!(done.out.contains("워커가 뜨지 않았습니다. orca plugin restart local.kairos"), "{}", done.out);
+    // 세 번까지만 다시 띄운다.
+    assert_eq!(fakes.calls().iter().filter(|call| call.contains("plugin restart")).count(), 3);
 }
 
 #[test]
@@ -186,8 +217,8 @@ fn setup_yes는_묻지_않고_계정을_기록하고_패널까지_승인한다()
     let calls = fakes.calls();
     let panel = fakes.panel.to_str().unwrap();
     assert!(calls.contains(&"notifier setup".to_owned()), "{calls:?}");
-    assert_eq!(calls[calls.len() - 2], format!("orca plugin dev load {panel} --approve {FINGERPRINT}"));
-    assert_eq!(calls.last().unwrap(), "orca plugin restart local.kairos");
+    assert_eq!(calls[calls.len() - 3], format!("orca plugin dev load {panel} --approve {FINGERPRINT}"));
+    assert_eq!(calls[calls.len() - 2..], ["orca plugin restart local.kairos", "orca plugin list --json"]);
     let connections = fs::read_to_string(fakes.cli.root.join("connections.toml")).unwrap();
     assert!(connections.contains("someone@example.com"), "{connections}");
     assert!(connections.contains("U0TEST1234"), "{connections}");

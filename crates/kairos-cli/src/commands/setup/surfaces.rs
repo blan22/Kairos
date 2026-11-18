@@ -9,6 +9,7 @@ use std::fs;
 use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 use std::sync::LazyLock;
+use std::thread;
 use std::time::Duration;
 
 use kairos_core::KairosResult;
@@ -23,6 +24,10 @@ const PANEL_DIR: [&str; 2] = ["plugins", "orca-panel"];
 /// 패널의 플러그인 키(`orca-plugin.json`의 게시자와 이름).
 const PANEL_KEY: &str = "local.kairos";
 const SHORT_TIMEOUT: Duration = Duration::from_secs(30);
+/// 재시작한 뒤 상태를 읽기 전에 기다리는 시간. Orca는 실패한 시작을 500ms 뒤에 다시 시도한다.
+const SETTLE_WAIT: Duration = Duration::from_millis(1500);
+/// 워커가 멈춰 있으면 다시 띄우는 최대 횟수.
+const SETTLE_RESTARTS: usize = 3;
 /// Orca가 승인을 받을 때 보여 주는 지문 줄.
 static FINGERPRINT: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"(?m)^Fingerprint:\s*(ap1-[0-9a-f]{16,64})\s*$").expect("상수 정규식"));
@@ -149,6 +154,8 @@ impl Wizard<'_> {
     /// Orca(1.4.255에서 측정)는 개발 폴더를 승인할 때 `.orca`를 빼고 해시를 적지만, 워커를 띄울 때는 넣고 잰다.
     /// components 패널이면 `dev load`가 늘 `.orca/types`를 쓰므로, 두면 워커가 `content hash mismatch`로 뜨지 않는다.
     /// 타입 파일은 편집기용이라 설치본에는 없어도 된다. 재시작은 실패가 쌓여 멈춘 워커도 풀어 준다.
+    /// 적재 직후 워커는 `.orca`가 남은 채로 떠서 실패하고 500ms 뒤 다시 시도한다. 그 사이에 재시작하면
+    /// 예약된 시작이 취소되어 `errored`(activation was cancelled)로 멈춘다. 재시작한 뒤 상태를 읽고, 멈췄으면 다시 띄운다.
     fn settle(&self, orca: &str, dir: &Path) {
         match fs::remove_dir_all(dir.join(".orca")) {
             Ok(()) => {}
@@ -160,7 +167,29 @@ impl Wizard<'_> {
                 return;
             }
         }
-        self.run(orca, &["plugin", "restart", PANEL_KEY], SHORT_TIMEOUT);
+        for _ in 0..SETTLE_RESTARTS {
+            self.run(orca, &["plugin", "restart", PANEL_KEY], SHORT_TIMEOUT);
+            thread::sleep(SETTLE_WAIT);
+            if self.panel_status(orca).as_deref() != Some("errored") {
+                return;
+            }
+        }
+        self.console.print(&format!(
+            "Orca 패널의 워커가 뜨지 않았습니다. orca plugin restart {PANEL_KEY}를 실행하고, 그래도 안 되면 orca plugin logs {PANEL_KEY}를 보세요"
+        ));
+    }
+
+    /// `orca plugin list --json`에서 패널의 상태를 읽는다. 읽지 못하면 없다(멈췄다고 보지 않는다).
+    fn panel_status(&self, orca: &str) -> Option<String> {
+        let listed = self.run(orca, &["plugin", "list", "--json"], SHORT_TIMEOUT);
+        if !listed.success() {
+            return None;
+        }
+        let body: serde_json::Value = serde_json::from_str(&listed.stdout).ok()?;
+        let plugins = body.get("result")?.get("plugins")?.as_array()?;
+        let panel =
+            plugins.iter().find(|plugin| plugin.get("pluginKey").and_then(|key| key.as_str()) == Some(PANEL_KEY))?;
+        panel.get("status")?.as_str().map(str::to_owned)
     }
 
     fn print_orca(&self, text: &str) {
